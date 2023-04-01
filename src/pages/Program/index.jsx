@@ -1,5 +1,5 @@
 import React from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 const StylesConfig = {
   default: {
@@ -31,6 +31,13 @@ const Program = () => {
   const location = useLocation();
   const program = location?.state?.program;
 
+  const openProfile = (user) => {
+    window.open(
+      `https://www.zaio.io/app/zaio-profile/${user?.userid?.email}`,
+      "_blank"
+    );
+  };
+
   return (
     <div className="px-36 py-12">
       <h1 className="text-4xl font-bold text-gray-100">
@@ -51,10 +58,13 @@ const Program = () => {
           {program?.enrolledUsers?.map((user) => {
             const classes =
               StylesConfig[user?.currentPerformance]?.styles || "";
-            const color =
-              StylesConfig[user?.currentPerformance]?.color || "white";
+
             return (
-              <tr key={user?._id} className={`${classes}`}>
+              <tr
+                key={user?._id}
+                className={`${classes}`}
+                onClick={() => openProfile(user)}
+              >
                 <td className="py-2">{user?.userid?.username}</td>
                 <td>{user?.userid?.email}</td>
                 <td>{user?.completedChallengesCount}</td>

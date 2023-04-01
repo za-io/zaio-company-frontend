@@ -20,3 +20,9 @@ export const getAllBootcamps = () =>
     .get("/all")
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const addProgram = (payload) =>
+  api
+    .post(`/add`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
