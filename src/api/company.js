@@ -1,28 +1,26 @@
 import axios from "axios";
 
-const api = axios.create({
-  baseURL: "http://localhost:4000/bootcamp",
-});
+const API_URL = process.env.REACT_APP_BACKEND_URL + "/bootcamp";
 
 export const registerCompany = (payload) =>
-  api
-    .post(`/register`, payload)
+  axios
+    .post(`${API_URL}/register`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
 export const loginCompany = (payload) =>
-  api
-    .post(`/login`, payload)
+  axios
+    .post(`${API_URL}/login`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
 export const getAllBootcamps = () =>
-  api
-    .get("/all")
+  axios
+    .get(API_URL + "/all")
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
 export const addProgram = (payload) =>
-  api
-    .post(`/add`, payload)
+  axios
+    .post(`${API_URL}/add`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));

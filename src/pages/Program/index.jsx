@@ -1,5 +1,5 @@
-import React from "react";
-import { useLocation } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const StylesConfig = {
   completed: {
@@ -25,6 +25,7 @@ const StylesConfig = {
 };
 const Program = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const program = location?.state?.program;
 
   const openProfile = (user) => {
@@ -33,6 +34,16 @@ const Program = () => {
       "_blank"
     );
   };
+
+  useEffect(() => {
+    if (!program) {
+      navigate("/");
+    }
+
+    // return () => {
+    //   second;
+    // };
+  }, []);
 
   return (
     <div className="px-36 py-12">
