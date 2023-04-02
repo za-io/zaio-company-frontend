@@ -2,10 +2,6 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 
 const StylesConfig = {
-  default: {
-    styles: "bg-white",
-    color: "grey",
-  },
   completed: {
     styles: "bg-green-500 text-white",
     color: "white",
@@ -62,7 +58,7 @@ const Program = () => {
             return (
               <tr
                 key={user?._id}
-                className={`${classes}`}
+                className={`${classes} cursor-pointer`}
                 onClick={() => openProfile(user)}
               >
                 <td className="py-2">{user?.userid?.username}</td>

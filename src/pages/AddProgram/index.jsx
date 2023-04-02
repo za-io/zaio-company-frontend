@@ -1,26 +1,38 @@
+import { useState } from "react";
 import { addProgram } from "../../api/company";
+import Loader from "../../components/loader/loader";
 
 export const AddProgram = () => {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
   const handleSubmit = (e) => {
     e.preventDefault();
-
+    setMsg(null);
     const formData = new FormData(e.target);
     const programName = formData.get("programName");
     const learningPath = formData.get("learningPath");
     const emails = formData.get("emails");
-
-    console.log(programName, learningPath, emails);
-
+    setLoading(true);
     addProgram({
       programName,
       learningPath,
       emails,
-    }).then((res) => {
-      console.log(res);
-    });
-
-    e?.target?.reset();
+    })
+      .then((res) => {
+        if (res.status === 200) {
+          setMsg("Success");
+          e?.target?.reset();
+        } else {
+          setMsg(res?.errMsg);
+        }
+        console.log(res);
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoading(false);
+      });
   };
+
   return (
     <div className="mx-36 mt-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
@@ -81,7 +93,14 @@ export const AddProgram = () => {
         >
           Save
         </button>
+        {msg && <p className="text-white text-md mt-3">{msg}</p>}
       </form>
+
+      {loading && (
+        <div className="absolute left-0 right-0 top-0 bottom-0 flex align-center justify-center">
+          <Loader />
+        </div>
+      )}
     </div>
   );
 };
