@@ -37,20 +37,32 @@ const Program = () => {
   return (
     <div className="px-36 py-12">
       <h1 className="text-4xl font-bold text-gray-100">
-        Program {program?.bootcampName}
+        Program: {program?.bootcampName}
       </h1>
-      <table class="table-fixed w-full text-gray-100 mt-12 border rounded-xl">
-        <thead className="border-b text-2xl">
+      <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
+        <thead className="border-b text-2xl bg-gray-50">
           <tr className="">
-            <th className="py-2">Name</th>
-            <th>Email</th>
-            <th>Code done</th>
-            <th>Assignments done</th>
-            <th>MCQs done</th>
-            <th>Progress %</th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Name
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Email
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Code done
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Assignments done
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              MCQs done
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Progress %
+            </th>
           </tr>
         </thead>
-        <tbody className="text-center">
+        <tbody className="divide-y divide-gray-200">
           {program?.enrolledUsers?.map((user) => {
             const classes =
               StylesConfig[user?.currentPerformance]?.styles || "";
@@ -58,15 +70,27 @@ const Program = () => {
             return (
               <tr
                 key={user?._id}
-                className={`${classes} cursor-pointer`}
+                className={`${classes} cursor-pointer hover:bg-gray-100 cursor-pointer`}
                 onClick={() => openProfile(user)}
               >
-                <td className="py-2">{user?.userid?.username}</td>
-                <td>{user?.userid?.email}</td>
-                <td>{user?.completedChallengesCount}</td>
-                <td>0</td>
-                <td>{user?.completedAssignmentCount}</td>
-                <td>{user?.completedPercentage}%</td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  {user?.userid?.username}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  {user?.userid?.email}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  {user?.completedChallengesCount}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  0
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  {user?.completedAssignmentCount}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  {user?.completedPercentage}%
+                </td>
               </tr>
             );
           })}
