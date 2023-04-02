@@ -60,6 +60,9 @@ const Program = () => {
               Email
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Lectures Watched
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
               Code done
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
@@ -91,13 +94,16 @@ const Program = () => {
                   {user?.userid?.email}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                  {user?.completedLecturesCount}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-800">
                   {user?.completedChallengesCount}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                  0
+                  {user?.completedAssignmentCount}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                  {user?.completedAssignmentCount}
+                  {user?.completedMCQCount}
                 </td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-800">
                   {user?.completedPercentage}%
