@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import programImg from "../../assets/img/dashboard/reactjs.png";
+import programImg from "../../assets/img/dashboard/naspers.png";
 import { Link } from "react-router-dom";
 import { getAllBootcamps } from "../../api/company";
 import Loader from "../../components/loader/loader";
+import { useProgramStore } from "../../store/programStore";
 
 const Program = ({ program }) => {
   return (
@@ -13,9 +14,9 @@ const Program = ({ program }) => {
       <img src={programImg} alt="programImg" />
       <div className="p-2 flex flex-col items-center justify-center">
         <h1 className="text-4xl font-bold mt-2">{program.bootcampName}</h1>
-        <h1 className="text-2xl text-gray-500 mt-2">
+        {/* <h1 className="text-2xl text-gray-500 mt-2">
           {program.description || "No desc"}
-        </h1>
+        </h1> */}
         <Link
           to={`/program/${program._id}`}
           state={{
@@ -24,7 +25,7 @@ const Program = ({ program }) => {
           className="w-full"
         >
           <button className="bg-blue-700 w-full py-2 rounded-xl mt-2 text-gray-100">
-            Go Somewhere
+            View Users
           </button>
         </Link>
       </div>
@@ -35,6 +36,7 @@ const Program = ({ program }) => {
 const Dashboard = () => {
   const [bootcamps, setBootcamps] = useState(null);
   const [loading, setLoading] = useState(false);
+  const setPrograms = useProgramStore((state) => state.setPrograms);
 
   const init = () => {
     setLoading(true);
@@ -43,6 +45,7 @@ const Dashboard = () => {
         console.log(res);
         if (res?.status === 200) {
           setBootcamps(res?.allBootcamps);
+          setPrograms(res?.allBootcamps);
         }
       })
       .finally(() => {
