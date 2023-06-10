@@ -1,5 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { getBootcampDetails } from "../../api/company";
 
 const StylesConfig = {
   completed: {
@@ -23,10 +24,32 @@ const StylesConfig = {
     color: "white",
   },
 };
+
 const Program = () => {
+  const [bootcampDetails, setBootcampDetails] = useState(null);
+  const [loading, setLoading] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const program = location?.state?.program;
+
+  const init = () => {
+    setLoading(true);
+    console.log(program?._id)
+    getBootcampDetails(program?._id)
+      .then((res) => {
+        console.log(res?.bootcampDetails);
+        if (res?.status === 200) {
+          setBootcampDetails(res?.bootcampDetails);
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+  useEffect(() => {
+    if (bootcampDetails) return;
+    init();
+  }, []);
 
   const openProfile = (user) => {
     window.open(
@@ -39,11 +62,14 @@ const Program = () => {
     if (!program) {
       navigate("/");
     }
-
-    // return () => {
-    //   second;
-    // };
   }, []);
+
+
+  if(loading) {
+    return <div className="px-36 py-12">
+      <p className="text-white">Loading bootcamp details....</p>
+    </div>
+  }
 
   return (
     <div className="px-36 py-12">
@@ -77,7 +103,7 @@ const Program = () => {
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {program?.enrolledUsers?.map((user) => {
+          {bootcampDetails?.enrolledUsers?.map((user) => {
             const classes =
               StylesConfig[user?.currentPerformance]?.styles || "";
 

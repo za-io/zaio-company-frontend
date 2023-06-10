@@ -19,6 +19,12 @@ export const getAllBootcamps = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const getBootcampDetails = (bootcamp_id) =>
+  axios
+    .get(API_URL + `/details?bootcamp_id=${bootcamp_id}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const addProgram = (payload) =>
   axios
     .post(`${API_URL}/add`, payload)
