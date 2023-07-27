@@ -1,18 +1,42 @@
-import React from 'react'
-import logo from '../../assets/img/logo/zaio-logo-light.png'
-import { Link } from 'react-router-dom'
+import React from "react";
+import logo from "../../assets/img/logo/zaio-logo-light.png";
+import { Link, useNavigate } from "react-router-dom";
+import { useUserStore } from "../../store/UserProvider";
 
 const Navbar = () => {
-  // const history = unstable_HistoryRouter
+  const { user, setUser } = useUserStore();
+  const navigate = useNavigate();
+  const handleLogout = () => {
+    localStorage.removeItem("TOKEN");
+    navigate("/login");
+    setUser(null);
+  };
   return (
-    <div className='w-full flex justify-between items-center px-36 py-4 border-b border-gray-900'>
-        <img className='h-10' src={logo} alt=""/>
-        <div className="flex items-center gap-4">
-            {/* <Link to='/' className='text-gray-100 font-medium'>Programs</Link> */}
-            <Link to='/' className='bg-yellow-500 px-12 py-3 rounded font-medium'>Programs</Link>
-        </div>
-    </div>
-  )
-}
+    <div className="w-full flex justify-between items-center px-36 py-4 border-b border-gray-900">
+      <Link to="/" className="flex items-center">
+        <img className="h-10" src={logo} alt="" />
+        {user?.email && <p className="text-white m-0 ml-2 text-lg">Hi, {user?.company_name}</p>}
+      </Link>
 
-export default Navbar
+      <div className="flex items-center gap-4">
+        {/* <Link to='/' className='text-gray-100 font-medium'>Programs</Link> */}
+        {user?.email && (
+          <Link to="/program/add" className="bg-yellow-500 px-12 py-3 rounded font-medium">
+            New Program
+          </Link>
+        )}
+
+        {user?.email && (
+          <button
+            onClick={handleLogout}
+            className="bg-red-500 px-12 py-3 rounded font-medium"
+          >
+            Logout
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Navbar;
