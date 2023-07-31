@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { getAllBootcamps } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useProgramStore } from "../../store/programStore";
+import { useUserStore } from "../../store/UserProvider";
 
 const Program = ({ program }) => {
   return (
@@ -37,10 +38,13 @@ const Dashboard = () => {
   const [bootcamps, setBootcamps] = useState(null);
   const [loading, setLoading] = useState(false);
   const setPrograms = useProgramStore((state) => state.setPrograms);
-
+  const { user } = useUserStore();
+console.log(user?._id)
   const init = () => {
     setLoading(true);
-    getAllBootcamps()
+    getAllBootcamps({
+      company_id: user?._id,
+    })
       .then((res) => {
         console.log(res);
         if (res?.status === 200) {
@@ -53,7 +57,7 @@ const Dashboard = () => {
       });
   };
   useEffect(() => {
-    if (bootcamps) return;
+    if (bootcamps || !user?._id) return;
     init();
   }, []);
 
@@ -70,7 +74,9 @@ const Dashboard = () => {
 
       {!loading && bootcamps?.length === 0 && (
         <div className="mt-4">
-          <p className="text-xl text-center text-gray-100">No Bootcamps</p>
+          <p className="text-xl text-center text-gray-100">
+            No Bootcamps found for {user?.company_name}
+          </p>
         </div>
       )}
 

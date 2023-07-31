@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { addProgram } from "../../api/company";
 import Loader from "../../components/loader/loader";
+import { useUserStore } from "../../store/UserProvider";
 
 export const AddProgram = () => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
+  const { user } = useUserStore();
   const handleSubmit = (e) => {
     e.preventDefault();
     setMsg(null);
@@ -18,7 +20,9 @@ export const AddProgram = () => {
     addProgram({
       programName,
       learningPath,
-      emails,commitedMins
+      emails,
+      commitedMins,
+      company_id: user?._id,
     })
       .then((res) => {
         if (res.status === 200) {
