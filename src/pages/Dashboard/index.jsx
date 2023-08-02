@@ -12,7 +12,7 @@ const Program = ({ program }) => {
       key={program.id}
       className="flex flex-col w-full h-full bg-gray-200 rounded-xl"
     >
-      <img src={programImg} alt="programImg" />
+      {/* <img src={programImg} alt="programImg" /> */}
       <div className="p-2 flex flex-col items-center justify-center">
         <h1 className="text-4xl font-bold mt-2">{program.bootcampName}</h1>
         {/* <h1 className="text-2xl text-gray-500 mt-2">
