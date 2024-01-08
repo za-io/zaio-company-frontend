@@ -39,7 +39,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const setPrograms = useProgramStore((state) => state.setPrograms);
   const { user } = useUserStore();
-console.log(user?._id)
+  console.log(user?._id);
   const init = () => {
     setLoading(true);
     getAllBootcamps({
@@ -63,6 +63,13 @@ console.log(user?._id)
 
   return (
     <div className="px-36 py-12">
+      <div>
+        <Link to={`/student/analytics`} className="w-full">
+          <button className="bg-blue-700 w-full py-2 rounded-xl mt-2 text-gray-100">
+            View Bootcamps
+          </button>
+        </Link>
+      </div>
       <h1 className="text-4xl font-bold text-gray-100">My Programs</h1>
       {bootcamps?.length > 0 && (
         <div className="grid grid-cols-3 gap-16 mt-12">

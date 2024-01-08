@@ -10,6 +10,10 @@ import { checkAuthToken } from "./api/company";
 import { useNavigate } from "react-router-dom";
 import { useUserStore } from "./store/UserProvider";
 import Loader from "./components/loader/loader";
+import StudentBootcamp from "./pages/StudentBootcamp";
+import StudentLearningPath from "./pages/StudentLearningPath";
+import StudentAnalytics from "./pages/StudentAnalytics";
+import StudentMCQ from "./pages/StudentMCQ";
 
 const AppHelper = () => {
   return (
@@ -21,6 +25,17 @@ const AppHelper = () => {
         <Route path="/program/:id" element={<Program />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Signup />} />
+        <Route path="/student/bootcamp" element={<StudentBootcamp />} />
+        <Route path="/student/analytics" element={<StudentAnalytics />} />
+        <Route
+          path="/student/bootcamp/:bootcampid/learningpath/:learningpathid"
+          element={<StudentLearningPath />}
+        />
+        <Route
+          path="/student/learningpath/:learningpathid"
+          element={<StudentLearningPath />}
+        />
+        <Route path="/student/course/:courseid/mcq" element={<StudentMCQ />} />
       </Routes>
     </div>
   );
