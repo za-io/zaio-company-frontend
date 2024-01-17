@@ -2,9 +2,9 @@ import { Link, useNavigate } from "react-router-dom";
 
 const BootcampTable = ({ data, total, loading }) => {
   const navigate = useNavigate();
-  const handleLearningPath = (bootcampId, learningpathId) => {
+  const handleLearningPath = (bootcampId, learningpathId, userid) => {
     navigate(
-      `/student/bootcamp/${bootcampId}/learningpath/${learningpathId}?user_id=636d6613a75d3600222f1875`
+      `/student/bootcamp/${bootcampId}/learningpath/${learningpathId}?user_id=${userid}`
     );
   };
 
@@ -20,7 +20,7 @@ const BootcampTable = ({ data, total, loading }) => {
               MCQs
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Coding Challenges
+              Challenges
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
               Assignments
@@ -43,7 +43,8 @@ const BootcampTable = ({ data, total, loading }) => {
                   onClick={() => {
                     handleLearningPath(
                       data.bootcampDetails._id,
-                      data.bootcampDetails.learningpath
+                      data.bootcampDetails.learningpath,
+                      ba.userid?._id
                     );
                   }}
                 >

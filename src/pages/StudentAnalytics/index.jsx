@@ -69,7 +69,7 @@ const StudentAnalytics = () => {
   };
 
   const getBootcamps = () => {
-    // setLoading(true);
+    setLoading(true);
     getAllBootcamps()
       .then((res) => {
         setAllBootcamps(res?.bootcamps);
@@ -80,7 +80,7 @@ const StudentAnalytics = () => {
   };
 
   const getLearningpaths = () => {
-    // setLoading(true);
+    setLoading(true);
     getAllLearningpaths()
       .then((res) => {
         setAllLearningpaths(res?.learningpaths);
@@ -91,7 +91,7 @@ const StudentAnalytics = () => {
       });
   };
   const getCourses = () => {
-    // setLoading(true);
+    setLoading(true);
     getAllCourses()
       .then((res) => {
         setAllCourses(res?.courses);

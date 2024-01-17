@@ -63,13 +63,15 @@ const Dashboard = () => {
 
   return (
     <div className="px-36 py-12">
-      <div>
+      { user?.role === "SUPER_STUDENT_ADMIN" && <div>
         <Link to={`/student/analytics`} className="w-full">
-          <button className="bg-blue-700 w-full py-2 rounded-xl mt-2 text-gray-100">
+          <button className="bg-blue-700 w-full py-2 px-36 rounded-xl mt-2 text-gray-100">
             View Bootcamps
           </button>
         </Link>
-      </div>
+      </div>}
+
+    {user?.role !== "SUPER_STUDENT_ADMIN" &&  <>
       <h1 className="text-4xl font-bold text-gray-100">My Programs</h1>
       {bootcamps?.length > 0 && (
         <div className="grid grid-cols-3 gap-16 mt-12">
@@ -86,7 +88,9 @@ const Dashboard = () => {
           </p>
         </div>
       )}
-
+      
+      </>
+}
       {loading && <Loader />}
     </div>
   );

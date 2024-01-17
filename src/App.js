@@ -14,6 +14,8 @@ import StudentBootcamp from "./pages/StudentBootcamp";
 import StudentLearningPath from "./pages/StudentLearningPath";
 import StudentAnalytics from "./pages/StudentAnalytics";
 import StudentMCQ from "./pages/StudentMCQ";
+import StudentChallenges from "./pages/StudentChallenges";
+import StudentAssignments from "./pages/StudentAssignments";
 
 const AppHelper = () => {
   return (
@@ -35,7 +37,9 @@ const AppHelper = () => {
           path="/student/learningpath/:learningpathid"
           element={<StudentLearningPath />}
         />
-        <Route path="/student/course/:courseid/mcq" element={<StudentMCQ />} />
+        <Route path="/student/course/:courseid/mcq/:userid" element={<StudentMCQ />} />
+        <Route path="/student/course/:courseid/challenges/:userid" element={<StudentChallenges />} />
+        <Route path="/student/course/:courseid/assignments/:userid" element={<StudentAssignments />} />
       </Routes>
     </div>
   );
@@ -60,7 +64,7 @@ function App() {
           navigate("/login");
         } else {
           setUser(res?.data?.userDoc);
-          navigate("/");
+          navigate(window.location.pathname);
         }
       })
       .catch((err) => {})

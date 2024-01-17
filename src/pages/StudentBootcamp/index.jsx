@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getBootcampDetails } from "../../api/company";
 import { getAllBootcamps, getUserBootcampAnalytics } from "../../api/student";
 import Loader from "../../components/loader/loader";
@@ -29,19 +29,22 @@ const StylesConfig = {
 };
 
 const StudentBootcamp = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [loading, setLoading] = useState(false);
-  const [bootcampId, setBootcampId] = useState("642b6236fa796e00203ffe0b");
+  const [bootcampId, setBootcampId] = useState(searchParams.get("bootcampid") ? searchParams.get("bootcampid") : "642b6236fa796e00203ffe0b");
   const [userId, setUserId] = useState("636d6613a75d3600222f1875");
   const [allBootcamps, setAllBootcamps] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [bootcamp, setBootcamp] = useState(null);
   const [showTable, setShowTable] = useState(false);
   const [total, setTotal] = useState(null);
-
+const navigate = useNavigate()
   const handleChange = (event) => {
     console.log("ddsda", event.target.value);
     setBootcampId(event.target.value);
-  };
+  }
+
 
   const getBootcamps = () => {
     // setLoading(true);
@@ -56,6 +59,9 @@ const StudentBootcamp = () => {
   };
 
   const getBootcampAnalytics = () => {
+    navigate(`?bootcampid=${bootcampId}`, { replace: true })
+
+
     setLoading(true);
     console.log(userId, bootcampId);
     getUserBootcampAnalytics(userId, bootcampId)

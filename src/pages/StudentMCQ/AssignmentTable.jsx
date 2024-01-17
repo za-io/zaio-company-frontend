@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-const MCQTable = ({ data, total, loading, type, userId }) => {
+const AssignmentTable = ({ data, total, loading, type }) => {
   // console.log("uuuu", data.bootcampDetails.learningpath);
   console.log("uyuyuyyuyyuuyu", data);
   const [code, setCode] = useState(null)
 
   const showSubmittedCode = (code) => {
-    
-    window.open(`${window.location.hostname === "localhost" ? "http://localhost:3001/" : "https://www.zaio.io/"}watch/${code?.courseid}/${code?.courseunitid}/${code?.lectureid}?userid=${userId}`, '_blank');
-
+    setCode(code)
   }
 
   function decode(bytes) {
@@ -46,9 +44,6 @@ const MCQTable = ({ data, total, loading, type, userId }) => {
               Name
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Type
-            </th>
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
               Mark
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
@@ -75,15 +70,12 @@ const MCQTable = ({ data, total, loading, type, userId }) => {
                     {mc.lecturename}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {mc.type}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {type==="MCQ" ? `${mc.score}/${mc?.data?.questions?.length}` : <button onClick={() => {
                       showSubmittedCode(mc)
                     }}>View Code</button>}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {`${(mc.result / 1).toFixed(2) * 100}%`}
+                    {`${(mc.finalgrade / 100).toFixed(2) * 100}%`}
                   </td>
                 </tr>
               );
@@ -109,4 +101,4 @@ const MCQTable = ({ data, total, loading, type, userId }) => {
   );
 };
 
-export default MCQTable;
+export default AssignmentTable;

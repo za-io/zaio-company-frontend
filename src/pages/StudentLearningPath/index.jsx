@@ -47,7 +47,7 @@ const StudentLearningPath = () => {
   const [loading, setLoading] = useState(false);
   const [learningpathId, setLearningpathId] = useState(learningpathid);
   const [courseId, setCourseId] = useState(null);
-  const [userId, setUserId] = useState("636d6613a75d3600222f1875");
+  const [userId, setUserId] = useState(user_id ? user_id : "636d6613a75d3600222f1875");
   const [learningpath, setLearningpath] = useState(null);
 
   const getAnalytics = () => {
@@ -67,14 +67,16 @@ const StudentLearningPath = () => {
   }, []);
   return (
     <div className="px-36 py-12">
-      {/* <h1 className="text-4xl font-bold text-gray-100">
-        Program: {bootcamp?.bootcampName}
-      </h1> */}
+      {/* <button disabled={loading} onClick={getAnalytics} className="bg-blue-500 px-12 py-3 rounded font-medium">
+        Refresh
+      </button> */}
 
       <LearningpathTable
+      learningpath={learningpath}
         data={learningpath?.courses}
         total={learningpath?.total}
         loading={loading}
+        userId={userId}
       />
 
       {loading && <Loader />}

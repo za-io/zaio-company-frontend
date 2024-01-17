@@ -1,19 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { getBootcampDetails } from "../../api/company";
-import {
-  getAllBootcamps,
-  getAllCourses,
-  getAllLearningpaths,
-  getUserBootcampAnalytics,
-  getUserCourseAnalytics,
-  getUserLearningpathAnalytics,
-} from "../../api/student";
-import Loader from "../../components/loader/loader";
-import BootcampTable from "../StudentBootcamp/table";
-import LearningpathTable from "../StudentLearningPath/table";
-import CourseTable from "../StudentCourse/table";
-import MCQTable from "./table";
+import MCQTable from "./StudentMCQ/table";
+import Loader from "../components/loader/loader";
+import { getUserCourseAnalytics } from "../api/student";
 
 const StylesConfig = {
   completed: {
@@ -38,7 +27,7 @@ const StylesConfig = {
   },
 };
 
-const StudentMCQ = () => {
+const StudentChallenges = () => {
   const { courseid, userid } = useParams();
   const location = useLocation();
   const receivedData = location.state?.course;
@@ -69,11 +58,11 @@ const StudentMCQ = () => {
         Program: {bootcamp?.bootcampName}
       </h1> */}
 
-      <MCQTable userId={userId} data={course?.mcq} loading={loading} type="MCQ" />
+      <MCQTable userId={userId} data={course?.challenge} loading={loading} type="Challenges" />
 
       {loading && <Loader />}
     </div>
   );
 };
 
-export default StudentMCQ;
+export default StudentChallenges;
