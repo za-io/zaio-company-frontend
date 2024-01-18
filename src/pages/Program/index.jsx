@@ -34,7 +34,7 @@ const Program = () => {
 
   const init = () => {
     setLoading(true);
-    console.log(program?._id)
+    console.log(program?._id);
     getBootcampDetails(program?._id)
       .then((res) => {
         console.log(res?.bootcampDetails);
@@ -64,11 +64,12 @@ const Program = () => {
     }
   }, []);
 
-
-  if(loading) {
-    return <div className="px-36 py-12">
-      <p className="text-white">Loading bootcamp details....</p>
-    </div>
+  if (loading) {
+    return (
+      <div className="px-36 py-12">
+        <p className="text-white">Loading bootcamp details....</p>
+      </div>
+    );
   }
 
   return (

@@ -20,7 +20,7 @@ const Navbar = () => {
 
       <div className="flex items-center gap-4">
         {/* <Link to='/' className='text-gray-100 font-medium'>Programs</Link> */}
-        {user?.email && (
+        {user?.email && user?.role !=='SUPER_STUDENT_ADMIN' && (
           <Link to="/program/add" className="bg-yellow-500 px-12 py-3 rounded font-medium">
             New Program
           </Link>
