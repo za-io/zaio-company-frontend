@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
-const MCQTable = ({ data, total, loading, type, userId }) => {
+const MCQTable = ({ data, type, userId }) => {
   // console.log("uuuu", data.bootcampDetails.learningpath);
-  console.log("uyuyuyyuyyuuyu", data);
-  const [code, setCode] = useState(null)
+  const [code] = useState(null)
 
   const showSubmittedCode = (code) => {
     
@@ -62,8 +60,8 @@ const MCQTable = ({ data, total, loading, type, userId }) => {
               return (
                 <tr
                   className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${
-                    mc.attempted == true
-                      ? mc.result == 1
+                    mc.attempted===true
+                      ? mc.result===1
                         ? "bg-green-100"
                         : "bg-blue-100"
                       : "bg-red-100"

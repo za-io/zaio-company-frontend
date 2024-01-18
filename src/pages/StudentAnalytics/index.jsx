@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { getBootcampDetails } from "../../api/company";
 import {
   getAllBootcamps,
   getAllCourses,
@@ -10,33 +8,8 @@ import {
   getUserLearningpathAnalytics,
 } from "../../api/student";
 import Loader from "../../components/loader/loader";
-import BootcampTable from "../StudentBootcamp/table";
-import LearningpathTable from "../StudentLearningPath/table";
-import CourseTable from "../StudentCourse/table";
 import AnalyticsTable from "./table";
 
-const StylesConfig = {
-  completed: {
-    styles: "bg-green-500 text-white",
-    color: "white",
-  },
-  late: {
-    styles: "bg-yellow-500 text-white",
-    color: "white",
-  },
-  pending: {
-    styles: "bg-red-500 text-white",
-    color: "white",
-  },
-  blocked: {
-    styles: "bg-gray-500 text-white",
-    color: "white",
-  },
-  advanced: {
-    styles: "bg-blue-500 text-white",
-    color: "white",
-  },
-};
 
 const StudentAnalytics = () => {
   const [loading, setLoading] = useState(false);
@@ -44,11 +17,10 @@ const StudentAnalytics = () => {
   const [bootcampId, setBootcampId] = useState("642b6236fa796e00203ffe0b");
   const [learningpathId, setLearningpathId] = useState(null);
   const [courseId, setCourseId] = useState(null);
-  const [userId, setUserId] = useState("636d6613a75d3600222f1875");
+  const [userId] = useState("636d6613a75d3600222f1875");
   const [allBootcamps, setAllBootcamps] = useState([]);
   const [allLearningpaths, setAllLearningpaths] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
-  const [allUsers, setAllUsers] = useState([]);
   const [bootcamp, setBootcamp] = useState(null);
   const [learningpath, setLearningpath] = useState(null);
   const [course, setCourse] = useState(null);
@@ -109,7 +81,7 @@ const StudentAnalytics = () => {
     setCourse(null);
     console.log(searchType);
 
-    if (searchType == "bootcamp") {
+    if (searchType==="bootcamp") {
       getUserBootcampAnalytics(userId, bootcampId)
         .then((res) => {
           setBootcamp(res);
@@ -117,7 +89,7 @@ const StudentAnalytics = () => {
         .finally(() => {
           setLoading(false);
         });
-    } else if (searchType == "learningpath") {
+    } else if (searchType==="learningpath") {
       getUserLearningpathAnalytics(userId, learningpathId)
         .then((res) => {
           console.log("learningpathcouruoeuzoudsouasdou", res);
@@ -126,7 +98,7 @@ const StudentAnalytics = () => {
         .finally(() => {
           setLoading(false);
         });
-    } else if (searchType == "course") {
+    } else if (searchType==="course") {
       getUserCourseAnalytics(userId, courseId)
         .then((res) => {
           console.log("coursejhsjdbshjghjsbjsxz", res);
@@ -150,7 +122,7 @@ const StudentAnalytics = () => {
           value={bootcampId}
           onChange={handleBootcampChange}
           className={`py-2 rounded
-            ${searchType == "bootcamp" ? "bg-red-700 text-gray-100" : null}
+            ${searchType==="bootcamp" ? "bg-red-700 text-gray-100" : null}
           `}
           style={{ marginRight: "20px" }}
         >
@@ -164,7 +136,7 @@ const StudentAnalytics = () => {
           onChange={handleLearningpathChange}
           className={`py-2 rounded
             ${
-              searchType == "learningpath" ? "bg-red-700 text-gray-100" : null
+              searchType==="learningpath" ? "bg-red-700 text-gray-100" : null
             }`}
           style={{ marginRight: "20px" }}
         >
@@ -177,7 +149,7 @@ const StudentAnalytics = () => {
           value={courseId}
           onChange={handleCourseChange}
           className={`py-2 rounded
-            ${searchType == "course" ? "bg-red-700 text-gray-100" : null}`}
+            ${searchType==="course" ? "bg-red-700 text-gray-100" : null}`}
         >
           {allCourses.map((ab) => {
             return <option value={ab._id}>{ab.coursename.trim()}</option>;
@@ -194,7 +166,7 @@ const StudentAnalytics = () => {
       {/* <h1 className="text-4xl font-bold text-gray-100">
         Program: {bootcamp?.bootcampName}
       </h1> */}
-      {searchType == "bootcamp" && (
+      {searchType==="bootcamp" && (
         <AnalyticsTable
           data={bootcamp?.bootcamp}
           total={bootcamp?.total}
@@ -202,7 +174,7 @@ const StudentAnalytics = () => {
           searchType="bootcamp"
         />
       )}
-      {searchType == "learningpath" && (
+      {searchType==="learningpath" && (
         <AnalyticsTable
           data={learningpath?.learningpath}
           total={learningpath?.total}
@@ -210,7 +182,7 @@ const StudentAnalytics = () => {
           searchType="learningpath"
         />
       )}
-      {searchType == "course" && (
+      {searchType==="course" && (
         <AnalyticsTable
           data={course?.course}
           total={course?.total}

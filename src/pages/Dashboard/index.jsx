@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import programImg from "../../assets/img/dashboard/naspers.png";
 import { Link } from "react-router-dom";
 import { getAllBootcamps } from "../../api/company";
 import Loader from "../../components/loader/loader";
@@ -59,6 +58,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (bootcamps || !user?._id) return;
     init();
+     // eslint-disable-next-line 
   }, []);
 
   return (

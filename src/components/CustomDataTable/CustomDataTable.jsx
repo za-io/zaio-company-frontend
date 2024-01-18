@@ -24,7 +24,7 @@ const CustomDataTable = ({ data, total, loading }) => {
             </th>
           </tr>
         </thead>
-        {data && data.analytics.length != 0 && (
+        {data && data.analytics.length!== 0 && (
           <tbody className="divide-y divide-gray-200">
             {data.analytics?.map((ba) => {
               // const classes =
@@ -70,7 +70,7 @@ const CustomDataTable = ({ data, total, loading }) => {
         </td>
       </tr> */}
       </table>
-      {data && data.analytics.length == 0 && (
+      {data && data.analytics.length===0 && (
         <div className="text-gray-100">Not enrolled in this bootcamp</div>
       )}
     </div>

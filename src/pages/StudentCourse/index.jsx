@@ -1,32 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { getBootcampDetails } from "../../api/company";
 import { getAllBootcamps, getUserBootcampAnalytics } from "../../api/student";
 import CustomDataTable from "../../components/CustomDataTable/CustomDataTable";
 import Loader from "../../components/loader/loader";
 
-const StylesConfig = {
-  completed: {
-    styles: "bg-green-500 text-white",
-    color: "white",
-  },
-  late: {
-    styles: "bg-yellow-500 text-white",
-    color: "white",
-  },
-  pending: {
-    styles: "bg-red-500 text-white",
-    color: "white",
-  },
-  blocked: {
-    styles: "bg-gray-500 text-white",
-    color: "white",
-  },
-  advanced: {
-    styles: "bg-blue-500 text-white",
-    color: "white",
-  },
-};
 
 const StudentLearningPath = () => {
   const [loading, setLoading] = useState(false);

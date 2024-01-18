@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 const AssignmentTable = ({ data, total, loading, type }) => {
   // console.log("uuuu", data.bootcampDetails.learningpath);
@@ -57,8 +56,8 @@ const AssignmentTable = ({ data, total, loading, type }) => {
               return (
                 <tr
                   className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${
-                    mc.attempted == true
-                      ? mc.result == 1
+                    mc.attempted===true
+                      ? mc.result===1
                         ? "bg-green-100"
                         : "bg-blue-100"
                       : "bg-red-100"
