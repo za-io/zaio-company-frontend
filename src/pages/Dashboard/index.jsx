@@ -58,7 +58,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (bootcamps || !user?._id) return;
     init();
-     // eslint-disable-next-line 
+    // eslint-disable-next-line 
   }, []);
 
   return (

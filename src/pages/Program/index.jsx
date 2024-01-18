@@ -49,6 +49,7 @@ const Program = () => {
   useEffect(() => {
     if (bootcampDetails) return;
     init();
+    // eslint-disable-next-line 
   }, []);
 
   const openProfile = (user) => {
@@ -62,6 +63,7 @@ const Program = () => {
     if (!program) {
       navigate("/");
     }
+    // eslint-disable-next-line 
   }, []);
 
   if (loading) {
