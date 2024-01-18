@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const AnalyticsTable = ({ data, total, loading, searchType }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,9 +57,12 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
               Progress
             </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              View Progress
+            </th>
           </tr>
         </thead>
-        {data && data.analytics.length != 0 && (
+        {data && data.analytics.length!== 0 && (
           <tbody className="divide-y divide-gray-200">
             {data.analytics
               ?.filter((ba) => ba?.userid?.username?.includes(searchQuery))
@@ -72,13 +75,13 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                     key={ba?._id}
                     className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
                     onClick={() => {
-                      searchType == "bootcamp" &&
+                      searchType==="bootcamp" &&
                         handleBootcamp(
                           data.bootcampDetails._id,
                           data.bootcampDetails.learningpath,
                           ba?.userid?._id
                         );
-                      searchType == "learningpath" &&
+                      searchType==="learningpath" &&
                         handleLearningpath(data._id);
                     }}
                   >
@@ -88,7 +91,7 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                     <td
                       className="px-6 py-4 text-sm font-medium text-gray-800"
                       onClick={() => {
-                        searchType == "course" && handleCourse(data._id, "mcq");
+                        searchType==="course" && handleCourse(data._id, "mcq");
                       }}
                     >
                       {`${ba?.completedMCQCount}/${total?.mcq || 0}`}
@@ -105,6 +108,11 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                     </td>
                     <td className="px-6 py-4 text-sm font-medium text-gray-800">
                       {ba?.completedPercentage}%
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                    <a rel="noreferrer" className="bg-blue-200 py-2 px-5 my-2 rounded font-small" target="_blank" href={`https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`}>
+                        Calendar
+                        </a>
                     </td>
                   </tr>
                 );
@@ -123,7 +131,7 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
         </td>
       </tr> */}
       </table>
-      {data && data.analytics.length == 0 && (
+      {data && data.analytics.length===0 && (
         <div className="text-gray-100">Not enrolled in this bootcamp</div>
       )}
     </div>
