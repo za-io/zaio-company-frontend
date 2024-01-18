@@ -7,12 +7,14 @@ const LearningpathTable = ({ data, total, loading ,userId,learningpath}) => {
   const navigate = useNavigate()
   return (
     <div>
+    { !loading &&  <div>
       <p className="text-white">
       Challenges Avg: {roundOff((learningpath?.learningpath?.analytics[0]?.score?.challenge?.marks / learningpath?.learningpath?.analytics[0]?.score?.challenge?.total) * 100) || 0}%
       </p>
       <p className="text-white">
       MCQ Avg: {roundOff((learningpath?.learningpath?.analytics[0]?.score?.mcq?.marks / learningpath?.learningpath?.analytics[0]?.score?.mcq?.total) * 100) || 0}%
       </p>
+      </div>}
       <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
         <thead className="border-b text-2xl bg-gray-50">
           <tr className="">
