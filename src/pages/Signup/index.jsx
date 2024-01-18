@@ -1,11 +1,9 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 // import { Button } from "react-bootstrap";
 // import AuthService from "actions/services/auth.service";
 import { useState } from "react";
-import GoogleLogin from "react-google-login";
 
-import googleLoginIcon from "../../assets/img/dashboard/googleLoginIcon.svg";
 import { useUserStore } from "../../store/UserProvider";
 import { registerCompany } from "../../api/company";
 import { useMutation } from "react-query";
@@ -14,8 +12,7 @@ import { useMutation } from "react-query";
 const Signup = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const queries = new URLSearchParams(location.search);
-  const { user, setUser } = useUserStore((state) => state);
+  const { user } = useUserStore((state) => state);
   const [state, setState] = useState({
     name: "",
     email: "",
@@ -111,7 +108,7 @@ const Signup = () => {
     //       .then(() => setLoading(false));
   };
 
-  const responseSuccessGoogle = (response) => {
+  // const responseSuccessGoogle = (response) => {
     // setLoading(true);
     // AuthService.googleLogin(response.tokenId)
     //   .then((response) => {
@@ -153,11 +150,11 @@ const Signup = () => {
     //   .catch((reject) => alert("somethingwentwrong"))
     //   .then(() => setLoading(false));
     // console.log(response);
-  };
+  // };
 
-  const responseErrorGoogle = (response) => {
-    console.log(response);
-  };
+  // const responseErrorGoogle = (response) => {
+  //   console.log(response);
+  // };
 
   if (state.success && user?.success) {
     // alert("REDIRECTING NOW...")

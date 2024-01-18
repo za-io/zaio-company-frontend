@@ -74,6 +74,7 @@ function App() {
   };
   useEffect(() => {
     checkAuth();
+    // eslint-disable-next-line 
   }, []);
 
   return loading ? <Loader /> : <AppHelper />;

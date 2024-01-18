@@ -1,12 +1,11 @@
-import React, { useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useState } from "react";
 import { loginCompany } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 
 const Login = () => {
-  const location = useLocation();
   const navigate = useNavigate();
   const [state, setState] = useState({
     name: "",

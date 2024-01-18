@@ -1,42 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { getBootcampDetails } from "../../api/company";
+import { useLocation, useParams } from "react-router-dom";
 import {
-  getAllBootcamps,
-  getAllCourses,
-  getAllLearningpaths,
-  getUserBootcampAnalytics,
   getUserCourseAnalytics,
-  getUserLearningpathAnalytics,
 } from "../../api/student";
 import Loader from "../../components/loader/loader";
-import BootcampTable from "../StudentBootcamp/table";
-import LearningpathTable from "../StudentLearningPath/table";
-import CourseTable from "../StudentCourse/table";
 import MCQTable from "./table";
 
-const StylesConfig = {
-  completed: {
-    styles: "bg-green-500 text-white",
-    color: "white",
-  },
-  late: {
-    styles: "bg-yellow-500 text-white",
-    color: "white",
-  },
-  pending: {
-    styles: "bg-red-500 text-white",
-    color: "white",
-  },
-  blocked: {
-    styles: "bg-gray-500 text-white",
-    color: "white",
-  },
-  advanced: {
-    styles: "bg-blue-500 text-white",
-    color: "white",
-  },
-};
 
 const StudentMCQ = () => {
   const { courseid, userid } = useParams();
@@ -44,9 +13,9 @@ const StudentMCQ = () => {
   const receivedData = location.state?.course;
 
   const [loading, setLoading] = useState(false);
-  const [courseId, setCourseId] = useState(courseid);
+  const [courseId] = useState(courseid);
   const [course, setCourse] = useState(receivedData);
-  const [userId, setUserId] = useState(userid ? userid : "636d6613a75d3600222f1875");
+  const [userId] = useState(userid ? userid : "636d6613a75d3600222f1875");
 
   const getAnalytics = () => {
     setLoading(true);
@@ -62,6 +31,7 @@ const StudentMCQ = () => {
 
   useEffect(() => {
     getAnalytics();
+    // eslint-disable-next-line 
   }, []);
   return (
     <div className="px-36 py-12">
