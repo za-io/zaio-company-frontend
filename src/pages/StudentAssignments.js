@@ -19,8 +19,7 @@ const StudentAssignments = () => {
     setLoading(true);
     getUserCourseAnalytics(userId, courseId)
       .then((res) => {
-        setCourse(res.submissions);
-        console.log("res,course", res.submissions);
+        setCourse(res);
       })
       .finally(() => {
         setLoading(false);
@@ -50,7 +49,7 @@ const StudentAssignments = () => {
       )}
 
       <AssignmentTable
-        data={course?.assignment}
+        data={course?.submissions?.assignment}
         loading={loading}
         type="Challenges"
       />
