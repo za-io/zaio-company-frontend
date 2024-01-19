@@ -56,7 +56,7 @@ const Dashboard = () => {
       });
   };
   useEffect(() => {
-    if (bootcamps || !user?._id) return;
+    if (user?.role === "SUPER_STUDENT_ADMIN" || bootcamps || !user?._id) return;
     init();
     // eslint-disable-next-line 
   }, []);
@@ -65,9 +65,9 @@ const Dashboard = () => {
     <div className="px-36 py-12">
       { user?.role === "SUPER_STUDENT_ADMIN" && <div>
         <Link to={`/student/analytics`} className="w-full">
-          <button className="bg-blue-700 w-full py-2 px-36 rounded-xl mt-2 text-gray-100">
-            View Bootcamps
-          </button>
+          <button className="bg-blue-700 py-2 px-16 rounded-xl mt-2 text-gray-100">
+            Student Progress Dashboard
+               </button>
         </Link>
       </div>}
 

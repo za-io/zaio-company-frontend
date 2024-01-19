@@ -11,7 +11,6 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
   };
 
   const handleLearningpath = (learningpathId) => {
-    // alert("hjhjhjhjh");
     navigate(
       `/student/learningpath/${learningpathId}?user_id=636d6613a75d3600222f1875`
     );
@@ -21,7 +20,7 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
     navigate(`/student/course/${courseId}/${type}`);
   };
 
-  console.log("dadadada", data);
+  if (loading) return <></>;
 
   return (
     <div>
@@ -39,87 +38,99 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
           ))}
         </datalist>
       </div>
-      <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
-        <thead className="border-b text-2xl bg-gray-50">
-          <tr className="">
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Username
-            </th>
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              MCQs
-            </th>
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Coding Challenges
-            </th>
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Assignments
-            </th>
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Progress
-            </th>
-            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              View Progress
-            </th>
-          </tr>
-        </thead>
-        {data && data.analytics.length!== 0 && (
-          <tbody className="divide-y divide-gray-200">
-            {data.analytics
-              ?.filter((ba) => ba?.userid?.username?.includes(searchQuery))
-              ?.map((ba) => {
-                // const classes =
-                //   StylesConfig[user?.currentPerformance]?.styles || "";
+      {data?.analytics?.length > 0 && (
+        <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
+          <thead className="border-b text-2xl bg-gray-50">
+            <tr className="">
+              <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                Username
+              </th>
+              <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                MCQs
+              </th>
+              <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                Coding Challenges
+              </th>
+              <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                Assignments
+              </th>
+              <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                Progress
+              </th>
+              <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                View Progress
+              </th>
+            </tr>
+          </thead>
+          {data && data.analytics.length !== 0 && (
+            <tbody className="divide-y divide-gray-200">
+              {data.analytics
+                ?.filter((ba) => ba?.userid?.username?.includes(searchQuery))
+                ?.map((ba) => {
+                  // const classes =
+                  //   StylesConfig[user?.currentPerformance]?.styles || "";
 
-                return (
-                  <tr
-                    key={ba?._id}
-                    className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
-                    onClick={() => {
-                      searchType==="bootcamp" &&
-                        handleBootcamp(
-                          data.bootcampDetails._id,
-                          data.bootcampDetails.learningpath,
-                          ba?.userid?._id
-                        );
-                      searchType==="learningpath" &&
-                        handleLearningpath(data._id);
-                    }}
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                      {ba?.userid?.username}
-                    </td>
-                    <td
-                      className="px-6 py-4 text-sm font-medium text-gray-800"
+                  return (
+                    <tr
+                      key={ba?._id}
+                      className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
                       onClick={() => {
-                        searchType==="course" && handleCourse(data._id, "mcq");
+                        searchType === "bootcamp" &&
+                          handleBootcamp(
+                            data.bootcampDetails._id,
+                            data.bootcampDetails.learningpath,
+                            ba?.userid?._id
+                          );
+                        searchType === "learningpath" &&
+                          handleLearningpath(data._id);
                       }}
                     >
-                      {`${ba?.completedMCQCount}/${total?.mcq || 0}`}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                      {`${ba?.completedChallengesCount}/${
-                        total?.challenge || 0
-                      }`}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                      {`${ba?.completedAssignmentCount}/${
-                        total?.assignment || 0
-                      }`}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                      {ba?.completedPercentage}%
-                    </td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    <a rel="noreferrer" className="bg-blue-200 py-2 px-5 my-2 rounded font-small" target="_blank" href={`https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`}>
-                        Calendar
-                        </a>
-                    </td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        )}
-        {/* <tr>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        {ba?.userid?.username}
+                      </td>
+                      <td
+                        className="px-6 py-4 text-sm font-medium text-gray-800"
+                        onClick={() => {
+                          searchType === "course" &&
+                            handleCourse(data._id, "mcq");
+                        }}
+                      >
+                        {`${ba?.completedMCQCount}/${total?.mcq || 0}`}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        {`${ba?.completedChallengesCount}/${
+                          total?.challenge || 0
+                        }`}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        {`${ba?.completedAssignmentCount}/${
+                          total?.assignment || 0
+                        }`}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        {ba?.completedPercentage}%
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <button
+                          className="bg-blue-200 py-2 px-5 my-2 rounded font-small"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            window.open(
+                              `https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`,
+                              "_blank"
+                            );
+
+                          }}
+                        >
+                          View Calendar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          )}
+          {/* <tr>
         <td></td>
         <td></td>
         <td>
@@ -130,8 +141,9 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
           )}
         </td>
       </tr> */}
-      </table>
-      {data && data.analytics.length===0 && (
+        </table>
+      )}
+      {data && data.analytics.length === 0 && (
         <div className="text-gray-100">Not enrolled in this bootcamp</div>
       )}
     </div>

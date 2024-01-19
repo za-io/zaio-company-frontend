@@ -9,15 +9,37 @@ import {
 } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import AnalyticsTable from "./table";
+import { useSearchParams } from "react-router-dom";
 
+const calcSearchType = (bootcampid, learningpathid, courseid) => {
+  if (bootcampid) {
+    return "bootcamp";
+  } else if (learningpathid) {
+    return "learningpath";
+  } else if (courseid) {
+    return "course";
+  } else {
+    return null;
+  }
+};
 
 const StudentAnalytics = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const bootcampid = searchParams.get("bootcamp");
+  const learningpathid = searchParams.get("learningpath");
+  const courseid = searchParams.get("course");
+
   const [loading, setLoading] = useState(false);
-  const [searchType, setSearchType] = useState("bootcamp");
-  const [bootcampId, setBootcampId] = useState("642b6236fa796e00203ffe0b");
-  const [learningpathId, setLearningpathId] = useState(null);
-  const [courseId, setCourseId] = useState(null);
+  const [bootcampId, setBootcampId] = useState(bootcampid ? bootcampid : null);
+  const [learningpathId, setLearningpathId] = useState(
+    learningpathid ? learningpathid : null
+  );
+  const [courseId, setCourseId] = useState(courseid ? courseid : null);
   const [userId] = useState("636d6613a75d3600222f1875");
+  const [searchType, setSearchType] = useState(
+    calcSearchType(bootcampid, learningpathid, courseid)
+  );
   const [allBootcamps, setAllBootcamps] = useState([]);
   const [allLearningpaths, setAllLearningpaths] = useState([]);
   const [allCourses, setAllCourses] = useState([]);
@@ -40,38 +62,25 @@ const StudentAnalytics = () => {
     setSearchType("course");
   };
 
-  const getBootcamps = () => {
-    setLoading(true);
-    getAllBootcamps()
-      .then((res) => {
-        setAllBootcamps(res?.bootcamps);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
+  const fetchDropdownData = async () => {
+    setLoading("Please wait fetching all Bootcamps");
+    const bootcamps = await getAllBootcamps();
 
-  const getLearningpaths = () => {
-    setLoading(true);
-    getAllLearningpaths()
-      .then((res) => {
-        setAllLearningpaths(res?.learningpaths);
-        console.log("learningpaths", res.learningpaths);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
-  const getCourses = () => {
-    setLoading(true);
-    getAllCourses()
-      .then((res) => {
-        setAllCourses(res?.courses);
-        console.log("sasa", res.courses);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    setLoading("Please wait fetching all learningpaths");
+    const learningpaths = await getAllLearningpaths();
+
+    setLoading("Please wait fetching all courses");
+    const courses = await getAllCourses();
+
+    setAllBootcamps(bootcamps?.bootcamps);
+    setAllLearningpaths(learningpaths?.learningpaths);
+    setAllCourses(courses?.courses);
+
+    if (searchType) {
+      getAnalytics();
+    } else {
+      setLoading(false);
+    }
   };
 
   const getAnalytics = () => {
@@ -81,7 +90,12 @@ const StudentAnalytics = () => {
     setCourse(null);
     console.log(searchType);
 
-    if (searchType==="bootcamp") {
+    if (searchType === "bootcamp") {
+      setLoading("Please wait fetching bootcamp data");
+
+      searchParams.set("bootcamp", bootcampId);
+      setSearchParams(searchParams);
+
       getUserBootcampAnalytics(userId, bootcampId)
         .then((res) => {
           setBootcamp(res);
@@ -89,19 +103,25 @@ const StudentAnalytics = () => {
         .finally(() => {
           setLoading(false);
         });
-    } else if (searchType==="learningpath") {
+    } else if (searchType === "learningpath") {
+      setLoading("Please wait fetching learningpath data");
+      searchParams.set("learningpath", learningpathId);
+      setSearchParams(searchParams);
+
       getUserLearningpathAnalytics(userId, learningpathId)
         .then((res) => {
-          console.log("learningpathcouruoeuzoudsouasdou", res);
           setLearningpath(res);
         })
         .finally(() => {
           setLoading(false);
         });
-    } else if (searchType==="course") {
+    } else if (searchType === "course") {
+      setLoading("Please wait fetching course data");
+      searchParams.set("course", courseId);
+      setSearchParams(searchParams);
+
       getUserCourseAnalytics(userId, courseId)
         .then((res) => {
-          console.log("coursejhsjdbshjghjsbjsxz", res);
           setCourse(res);
         })
         .finally(() => {
@@ -111,62 +131,63 @@ const StudentAnalytics = () => {
   };
 
   useEffect(() => {
-    getBootcamps();
-    getLearningpaths();
-    getCourses();
+    fetchDropdownData();
+    // eslint-disable-next-line
   }, []);
   return (
     <div className="px-36 py-12">
-      <div>
-        <select
-          value={bootcampId}
-          onChange={handleBootcampChange}
-          className={`py-2 rounded
-            ${searchType==="bootcamp" ? "bg-red-700 text-gray-100" : null}
+      {!loading && (
+        <div>
+          <select
+            value={bootcampId}
+            onChange={handleBootcampChange}
+            className={`py-2 rounded
+            ${searchType === "bootcamp" ? "bg-red-700 text-gray-100" : null}
           `}
-          style={{ marginRight: "20px" }}
-        >
-          {allBootcamps.map((ab) => {
-            return <option value={ab._id}>{ab.bootcampName}</option>;
-          })}
-        </select>
-        <select
-          defaultValue="Select learningpath"
-          value={learningpathId}
-          onChange={handleLearningpathChange}
-          className={`py-2 rounded
+            style={{ marginRight: "20px" }}
+          >
+            {allBootcamps.map((ab) => {
+              return <option value={ab._id}>{ab.bootcampName}</option>;
+            })}
+          </select>
+          <select
+            defaultValue="Select learningpath"
+            value={learningpathId}
+            onChange={handleLearningpathChange}
+            className={`py-2 rounded
             ${
-              searchType==="learningpath" ? "bg-red-700 text-gray-100" : null
+              searchType === "learningpath" ? "bg-red-700 text-gray-100" : null
             }`}
-          style={{ marginRight: "20px" }}
-        >
-          {allLearningpaths.map((ab) => {
-            return <option value={ab._id}>{ab.learningpathname}</option>;
-          })}
-        </select>
-        <select
-          defaultValue="Select course"
-          value={courseId}
-          onChange={handleCourseChange}
-          className={`py-2 rounded
-            ${searchType==="course" ? "bg-red-700 text-gray-100" : null}`}
-        >
-          {allCourses.map((ab) => {
-            return <option value={ab._id}>{ab.coursename.trim()}</option>;
-          })}
-        </select>
-        <button
-          onClick={getAnalytics}
-          className="bg-blue-200 py-2 px-5 my-2 rounded font-small"
-        >
-          Get Details
-        </button>
-      </div>
+            style={{ marginRight: "20px" }}
+          >
+            {allLearningpaths.map((ab) => {
+              return <option value={ab._id}>{ab.learningpathname}</option>;
+            })}
+          </select>
+          <select
+            defaultValue="Select course"
+            value={courseId}
+            onChange={handleCourseChange}
+            className={`py-2 rounded
+            ${searchType === "course" ? "bg-red-700 text-gray-100" : null}`}
+          >
+            {allCourses.map((ab) => {
+              return <option value={ab._id}>{ab.coursename.trim()}</option>;
+            })}
+          </select>
+          <button
+            onClick={getAnalytics}
+            className="bg-blue-200 py-2 px-5 my-2 rounded font-small"
+          >
+            Get Details
+          </button>
+        </div>
+      )}
 
       {/* <h1 className="text-4xl font-bold text-gray-100">
         Program: {bootcamp?.bootcampName}
       </h1> */}
-      {searchType==="bootcamp" && (
+      {searchType === "bootcamp" && (
         <AnalyticsTable
           data={bootcamp?.bootcamp}
           total={bootcamp?.total}
@@ -174,7 +195,7 @@ const StudentAnalytics = () => {
           searchType="bootcamp"
         />
       )}
-      {searchType==="learningpath" && (
+      {searchType === "learningpath" && (
         <AnalyticsTable
           data={learningpath?.learningpath}
           total={learningpath?.total}
@@ -182,7 +203,7 @@ const StudentAnalytics = () => {
           searchType="learningpath"
         />
       )}
-      {searchType==="course" && (
+      {searchType === "course" && (
         <AnalyticsTable
           data={course?.course}
           total={course?.total}
@@ -190,7 +211,12 @@ const StudentAnalytics = () => {
           searchType="course"
         />
       )}
-      {loading && <Loader />}
+      {loading && (
+        <div className="flex flex-col content-center">
+          <Loader />
+          <p className="m-0 text-white text-center">{loading}</p>
+        </div>
+      )}
     </div>
   );
 };
