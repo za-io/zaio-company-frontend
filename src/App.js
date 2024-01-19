@@ -64,7 +64,7 @@ function App() {
           navigate("/login");
         } else {
           setUser(res?.data?.userDoc);
-          navigate(window.location.pathname);
+          navigate(window.location.pathname + window.location.search);
         }
       })
       .catch((err) => {})

@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import MCQTable from "./StudentMCQ/table";
 import Loader from "../components/loader/loader";
 import { getUserCourseAnalytics } from "../api/student";
 
-
 const StudentChallenges = () => {
   const { courseid, userid } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const receivedData = location.state?.course;
 
   const [loading, setLoading] = useState(false);
@@ -28,15 +28,32 @@ const StudentChallenges = () => {
 
   useEffect(() => {
     getAnalytics();
-    // eslint-disable-next-line 
+    // eslint-disable-next-line
   }, []);
   return (
     <div className="px-36 py-12">
-      <h1 className="text-l font-bold text-gray-100">
-        Course Name : {course?.course?.courseName}
-      </h1>
+      {!loading && (
+        <div>
+          <div
+            onClick={() => {
+              navigate(-1);
+            }}
+            className="cursor-pointer"
+          >
+            <i class="bi bi-arrow-left text-white text-4xl"></i>
+          </div>
+          <h1 className="text-l font-bold text-gray-100">
+            Course Name : {course?.course?.courseName}
+          </h1>
+        </div>
+      )}
 
-      <MCQTable userId={userId} data={course?.submissions?.challenge} loading={loading} type="Challenges" />
+      <MCQTable
+        userId={userId}
+        data={course?.submissions?.challenge}
+        loading={loading}
+        type="Challenges"
+      />
 
       {loading && <Loader />}
     </div>

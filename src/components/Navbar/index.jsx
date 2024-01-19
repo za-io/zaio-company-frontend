@@ -12,7 +12,7 @@ const Navbar = () => {
     setUser(null);
   };
   return (
-    <div className="w-full flex justify-between items-center px-36 py-4 border-b border-gray-900">
+    <div className="w-full flex justify-between items-center px-36 py-4 border-b border-gray-500">
       <Link to="/" className="flex items-center">
         <img className="h-10" src={logo} alt="" />
         {user?.email && <p className="text-white m-0 ml-2 text-lg">Hi, {user?.company_name}</p>}
