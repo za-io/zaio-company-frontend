@@ -83,6 +83,16 @@ const StudentAnalytics = () => {
     }
   };
 
+  const setParams = (key, value, deleteArr) => {
+    searchParams.set(key, value);
+
+    deleteArr?.forEach((key) => {
+      searchParams.delete(key);
+    });
+
+    setSearchParams(searchParams);
+  };
+
   const getAnalytics = () => {
     setLoading(true);
     setBootcamp(null);
@@ -93,8 +103,7 @@ const StudentAnalytics = () => {
     if (searchType === "bootcamp") {
       setLoading("Please wait fetching bootcamp data");
 
-      searchParams.set("bootcamp", bootcampId);
-      setSearchParams(searchParams);
+      setParams("bootcamp", bootcampId, ["learningpath", "course"]);
 
       getUserBootcampAnalytics(userId, bootcampId)
         .then((res) => {
@@ -105,8 +114,8 @@ const StudentAnalytics = () => {
         });
     } else if (searchType === "learningpath") {
       setLoading("Please wait fetching learningpath data");
-      searchParams.set("learningpath", learningpathId);
-      setSearchParams(searchParams);
+
+      setParams("learningpath", learningpathId, ["bootcamp", "course"]);
 
       getUserLearningpathAnalytics(userId, learningpathId)
         .then((res) => {
@@ -117,8 +126,8 @@ const StudentAnalytics = () => {
         });
     } else if (searchType === "course") {
       setLoading("Please wait fetching course data");
-      searchParams.set("course", courseId);
-      setSearchParams(searchParams);
+
+      setParams("course", courseId, ["bootcamp", "learningpath"]);
 
       getUserCourseAnalytics(userId, courseId)
         .then((res) => {
@@ -139,40 +148,74 @@ const StudentAnalytics = () => {
       {!loading && (
         <div>
           <select
+            placeholder="sdad"
             value={bootcampId}
             onChange={handleBootcampChange}
-            className={`py-2 rounded
-            ${searchType === "bootcamp" ? "bg-red-700 text-gray-100" : null}
+            className={`p-2 rounded
+            ${
+              searchType === "bootcamp"
+                ? "bg-gradient-to-bl from-green-400 to-blue-400 text-gray-100 font-bold"
+                : null
+            }
           `}
             style={{ marginRight: "20px" }}
           >
+            <option disabled selected value>
+              {" "}
+              -- select a bootcamp --{" "}
+            </option>
             {allBootcamps.map((ab) => {
-              return <option value={ab._id}>{ab.bootcampName}</option>;
+              return (
+                <option value={ab._id} className="text-red-500">
+                  {ab.bootcampName}
+                </option>
+              );
             })}
           </select>
+
           <select
-            defaultValue="Select learningpath"
             value={learningpathId}
             onChange={handleLearningpathChange}
             className={`py-2 rounded
             ${
-              searchType === "learningpath" ? "bg-red-700 text-gray-100" : null
+              searchType === "learningpath"
+                ? "bg-gradient-to-bl from-green-400 to-blue-400 text-gray-100 font-bold"
+                : null
             }`}
             style={{ marginRight: "20px" }}
           >
+            <option disabled selected value>
+              {" "}
+              -- select a learningpath --{" "}
+            </option>
             {allLearningpaths.map((ab) => {
-              return <option value={ab._id}>{ab.learningpathname}</option>;
+              return (
+                <option value={ab._id} className="text-red-500">
+                  {ab.learningpathname}
+                </option>
+              );
             })}
           </select>
           <select
-            defaultValue="Select course"
             value={courseId}
             onChange={handleCourseChange}
             className={`py-2 rounded
-            ${searchType === "course" ? "bg-red-700 text-gray-100" : null}`}
+            ${
+              searchType === "course"
+                ? "bg-gradient-to-bl from-green-400 to-blue-400 text-gray-100 font-bold"
+                : null
+            }`}
           >
+            <option disabled selected value>
+              {" "}
+              -- select a course --{" "}
+            </option>
             {allCourses.map((ab) => {
-              return <option value={ab._id}>{ab.coursename.trim()}</option>;
+              return (
+                <option value={ab._id} className="text-red-500">
+                  {ab.coursename.trim()}
+                </option>
+              );
             })}
           </select>
           <button
