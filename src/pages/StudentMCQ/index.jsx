@@ -21,8 +21,7 @@ const StudentMCQ = () => {
     setLoading(true);
     getUserCourseAnalytics(userId, courseId)
       .then((res) => {
-        setCourse(res.submissions);
-        console.log("res,course", res.submissions);
+        setCourse(res);
       })
       .finally(() => {
         setLoading(false);
@@ -35,11 +34,11 @@ const StudentMCQ = () => {
   }, []);
   return (
     <div className="px-36 py-12">
-      {/* <h1 className="text-4xl font-bold text-gray-100">
-        Program: {bootcamp?.bootcampName}
-      </h1> */}
+      <h1 className="text-l font-bold text-gray-100">
+        Course Name : {course?.course?.courseName}
+      </h1>
 
-      <MCQTable userId={userId} data={course?.mcq} loading={loading} type="MCQ" />
+      <MCQTable userId={userId} data={course?.submissions?.mcq} loading={loading} type="MCQ" />
 
       {loading && <Loader />}
     </div>
