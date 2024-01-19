@@ -1,42 +1,24 @@
-import { useState } from "react";
+const calcClasses = (type, mc) => {
+  if(type === "MCQ") {
+    return  mc.attempted===true ? "bg-green-100" : "bg-red-100";
+  }
+  else {
+    return  mc.attempted===true
+    ? mc.result===1
+      ? "bg-green-100"
+      : "bg-blue-100"
+    : "bg-red-100"
+  }
+}
 
 const MCQTable = ({ data, type, userId }) => {
-  // console.log("uuuu", data.bootcampDetails.learningpath);
-  const [code] = useState(null)
 
-  const showSubmittedCode = (code) => {
-    
+  const showSubmittedCode = (code) => {    
     window.open(`${window.location.hostname === "localhost" ? "http://localhost:3001/" : "https://www.zaio.io/"}watch/${code?.courseid}/${code?.courseunitid}/${code?.lectureid}?userid=${userId}`, '_blank');
-
   }
-
-  function decode(bytes) {
-    var escaped = "";
-
-    try {
-      escaped = escape(atob(bytes || ""));
-    } catch (e) {
-      console.log("ERROR", e);
-      return "";
-    }
-
-    try {
-      return decodeURIComponent(escaped);
-    } catch (e) {
-      console.log("ERROR", e);
-      return unescape(escaped);
-    }
-  }
-  
 
   return (
     <div>
-     {
-      code && <code className="text-white">
-{decode(code?.data?.sourcefiles?.[0]?.sourcecode)}
-
-      </code>
-     }
       <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
         <thead className="border-b text-2xl bg-gray-50">
           <tr className="">
@@ -59,13 +41,7 @@ const MCQTable = ({ data, type, userId }) => {
             {data.map((mc) => {
               return (
                 <tr
-                  className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${
-                    mc.attempted===true
-                      ? mc.result===1
-                        ? "bg-green-100"
-                        : "bg-blue-100"
-                      : "bg-red-100"
-                  }`}
+                  className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${calcClasses(type, mc)}`}
                   key={mc._id}
                 >
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
@@ -73,7 +49,7 @@ const MCQTable = ({ data, type, userId }) => {
                     {mc.lecturename}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {mc.type}
+                    {mc.type || "MCQ"}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {type==="MCQ" ? `${mc.score}/${mc?.data?.questions?.length}` : <button onClick={() => {
