@@ -1,7 +1,13 @@
 import { Link, useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
 
-const LearningpathTable = ({ data, total, loading, userId, learningpath }) => {
+const LearningpathTable = ({
+  data,
+  userData,
+  loading,
+  userId,
+  learningpath,
+}) => {
   const navigate = useNavigate();
   return (
     <div>
@@ -15,6 +21,8 @@ const LearningpathTable = ({ data, total, loading, userId, learningpath }) => {
           >
             <i class="bi bi-arrow-left text-white text-4xl"></i>
           </div>
+
+          <h5 className="text-red-500 font-bold">Student Name : {userData?.username}</h5>
           <p className="text-white">
             Challenges Avg:{" "}
             {roundOff(
