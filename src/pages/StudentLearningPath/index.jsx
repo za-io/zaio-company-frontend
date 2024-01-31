@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import {
-  getUserLearningpathAnalytics,
-} from "../../api/student";
+import { getUserLearningpathAnalytics } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import LearningpathTable from "../StudentLearningPath/table";
 
@@ -31,7 +29,7 @@ const StudentLearningPath = () => {
 
   useEffect(() => {
     getAnalytics();
-     // eslint-disable-next-line 
+    // eslint-disable-next-line
   }, []);
   return (
     <div className="px-36 py-12">
@@ -40,11 +38,12 @@ const StudentLearningPath = () => {
       </button> */}
 
       <LearningpathTable
-      learningpath={learningpath}
+        learningpath={learningpath}
         data={learningpath?.courses}
         total={learningpath?.total}
         loading={loading}
         userId={userId}
+        userData={learningpath?.userData}
       />
 
       {loading && <Loader />}

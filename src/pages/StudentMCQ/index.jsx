@@ -42,6 +42,9 @@ const StudentMCQ = () => {
           >
             <i class="bi bi-arrow-left text-white text-4xl"></i>
           </div>
+          <h1 className="text-l font-bold text-red-500">
+            Student Name : {course?.userData?.username}
+          </h1>
           <h1 className="text-l font-bold text-gray-100">
             Course Name : {course?.course?.courseName}
           </h1>

@@ -32,7 +32,7 @@ const MCQTable = ({ data, type, userId }) => {
               Mark
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-              Progress
+              Percentage
             </th>
           </tr>
         </thead>
