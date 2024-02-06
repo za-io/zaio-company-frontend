@@ -1,12 +1,23 @@
 import axios from "axios";
 
-const API_URL =
-  process.env.REACT_APP_BACKEND_URL + "/student-analytics";
+const API_URL = process.env.REACT_APP_BACKEND_URL + "/student-analytics";
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
 export const getUserBootcampAnalytics = (user_id, bootcamp_id) =>
   axios
     .get(API_URL + `/${user_id}/bootcamp/${bootcamp_id}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getLearningpathEnrolledUser = (learningpath_id) =>
+  axios
+    .get(API_URL + `/learningpathsenrolledusers/${learningpath_id}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getCourseEnrolledUser = (courseid) =>
+  axios
+    .get(API_URL + `/courseenrolledusers/${courseid}`)
     .then((res) => res.data)
     .catch((err) => console.log(err));
 

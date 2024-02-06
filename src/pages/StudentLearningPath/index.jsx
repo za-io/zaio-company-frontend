@@ -19,7 +19,6 @@ const StudentLearningPath = () => {
     setLoading(true);
     getUserLearningpathAnalytics(userId, learningpathId)
       .then((res) => {
-        console.log("learningpathcouruoeuzoudsouasdou", res);
         setLearningpath(res);
       })
       .finally(() => {

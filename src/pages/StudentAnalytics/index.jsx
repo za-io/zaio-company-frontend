@@ -3,13 +3,15 @@ import {
   getAllBootcamps,
   getAllCourses,
   getAllLearningpaths,
+  getCourseEnrolledUser,
+  getLearningpathEnrolledUser,
   getUserBootcampAnalytics,
-  getUserCourseAnalytics,
-  getUserLearningpathAnalytics,
 } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import AnalyticsTable from "./table";
 import { useSearchParams } from "react-router-dom";
+import LPAnalyticsTable from "./learningpath.index";
+import CourseAnalyticsTable from "./course.index";
 
 const calcSearchType = (bootcampid, learningpathid, courseid) => {
   if (bootcampid) {
@@ -117,7 +119,7 @@ const StudentAnalytics = () => {
 
       setParams("learningpath", learningpathId, ["bootcamp", "course"]);
 
-      getUserLearningpathAnalytics(userId, learningpathId)
+      getLearningpathEnrolledUser(learningpathId)
         .then((res) => {
           setLearningpath(res);
         })
@@ -129,7 +131,7 @@ const StudentAnalytics = () => {
 
       setParams("course", courseId, ["bootcamp", "learningpath"]);
 
-      getUserCourseAnalytics(userId, courseId)
+      getCourseEnrolledUser(courseId)
         .then((res) => {
           setCourse(res);
         })
@@ -239,19 +241,17 @@ const StudentAnalytics = () => {
         />
       )}
       {searchType === "learningpath" && (
-        <AnalyticsTable
-          data={learningpath?.learningpath}
+        <LPAnalyticsTable
+          data={learningpath}
           total={learningpath?.total}
           loading={loading}
-          searchType="learningpath"
         />
       )}
       {searchType === "course" && (
-        <AnalyticsTable
-          data={course?.course}
+        <CourseAnalyticsTable
+          data={course}
           total={course?.total}
           loading={loading}
-          searchType="course"
         />
       )}
       {loading && (
