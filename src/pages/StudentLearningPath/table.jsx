@@ -22,7 +22,9 @@ const LearningpathTable = ({
             <i class="bi bi-arrow-left text-white text-4xl"></i>
           </div>
 
-          <h5 className="text-red-500 font-bold">Student Name : {userData?.username}</h5>
+          <h5 className="text-red-500 font-bold">
+            Student Name : {userData?.username}
+          </h5>
           <p className="text-white">
             Challenges Avg:{" "}
             {roundOff(
@@ -84,12 +86,7 @@ const LearningpathTable = ({
                   >
                     <td className="px-6 py-4 text-sm font-medium text-gray-800">
                       {`${course?.analytics[0]?.completedMCQCount}/${course?.total?.mcq}`}{" "}
-                      (
-                      {roundOff(
-                        (course?.analytics[0]?.completedMCQCount /
-                          course?.total?.mcq) *
-                          100
-                      ) || 0}
+                      ({roundOff(course?.analytics[0]?.avgMcqMarks) || 0}
                       %)
                     </td>
                   </Link>

@@ -1,21 +1,28 @@
 const calcClasses = (type, mc) => {
-  if(type === "MCQ") {
-    return  mc.attempted===true ? "bg-green-100" : "bg-red-100";
+  if (type === "MCQ") {
+    return mc.attempted === true ? "bg-green-100" : "bg-red-100";
+  } else {
+    return mc.attempted === true
+      ? mc.result === 1
+        ? "bg-green-100"
+        : "bg-blue-100"
+      : "bg-red-100";
   }
-  else {
-    return  mc.attempted===true
-    ? mc.result===1
-      ? "bg-green-100"
-      : "bg-blue-100"
-    : "bg-red-100"
-  }
-}
+};
 
 const MCQTable = ({ data, type, userId }) => {
-
-  const showSubmittedCode = (code) => {    
-    window.open(`${window.location.hostname === "localhost" ? "http://localhost:3001/" : "https://www.zaio.io/"}watch/${code?.courseid}/${code?.courseunitid}/${code?.lectureid}?userid=${userId}`, '_blank');
-  }
+  const showSubmittedCode = (code) => {
+    window.open(
+      `${
+        window.location.hostname === "localhost"
+          ? "http://localhost:3001/"
+          : "https://www.zaio.io/"
+      }watch/${code?.courseid}/${code?.courseunitid}/${
+        code?.lectureid
+      }?userid=${userId}`,
+      "_blank"
+    );
+  };
 
   return (
     <div>
@@ -41,7 +48,10 @@ const MCQTable = ({ data, type, userId }) => {
             {data.map((mc) => {
               return (
                 <tr
-                  className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${calcClasses(type, mc)}`}
+                  className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${calcClasses(
+                    type,
+                    mc
+                  )}`}
                   key={mc._id}
                 >
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
@@ -52,9 +62,17 @@ const MCQTable = ({ data, type, userId }) => {
                     {mc.type || "MCQ"}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {type==="MCQ" ? `${mc.score}/${mc?.data?.questions?.length}` : <button onClick={() => {
-                      showSubmittedCode(mc)
-                    }}>View Code</button>}
+                    {type === "MCQ" ? (
+                      `${mc.score}/${mc?.data?.questions?.length}`
+                    ) : (
+                      <button
+                        onClick={() => {
+                          showSubmittedCode(mc);
+                        }}
+                      >
+                        View Code
+                      </button>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {`${(mc.result / 1).toFixed(2) * 100}%`}
@@ -64,21 +82,8 @@ const MCQTable = ({ data, type, userId }) => {
             })}
           </tbody>
         )}
-        {/* <tr>
-        <td></td>
-        <td></td>
-        <td>
-          {loading && (
-            <div>
-              <Loader />
-            </div>
-          )}
-        </td>
-      </tr> */}
       </table>
-      {/* {!data && (
-        <div className="text-gray-100">Not enrolled in this bootcamp</div>
-      )} */}
+      {!data && <div className="text-gray-100">No data found</div>}
     </div>
   );
 };
