@@ -10,7 +10,7 @@ const calcClasses = (type, mc) => {
   }
 };
 
-const MCQTable = ({ data, type, userId }) => {
+const MCQTable = ({ loading, data, type, userId }) => {
   const showSubmittedCode = (code) => {
     window.open(
       `${
@@ -83,7 +83,9 @@ const MCQTable = ({ data, type, userId }) => {
           </tbody>
         )}
       </table>
-      {!data && <div className="text-gray-100">No data found</div>}
+      {data?.length === 0 && !loading && (
+        <div className="text-gray-100">No data found</div>
+      )}
     </div>
   );
 };
