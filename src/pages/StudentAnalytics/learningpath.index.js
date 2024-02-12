@@ -5,9 +5,9 @@ const LPAnalyticsTable = ({ data, total, loading, searchType }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
 
-  const handleLearningpath = (learningpathId) => {
+  const handleLearningpath = (learningpathId, userid) => {
     navigate(
-      `/student/learningpath/${learningpathId}?user_id=636d6613a75d3600222f1875`
+      `/student/learningpath/${learningpathId}?user_id=${userid}`
     );
   };
 
@@ -50,7 +50,7 @@ const LPAnalyticsTable = ({ data, total, loading, searchType }) => {
                         key={ba?._id}
                         className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
                         onClick={() => {
-                          handleLearningpath(ba.learningpathid);
+                          handleLearningpath(ba.learningpathid, ba?.userid?._id);
                         }}
                       >
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
