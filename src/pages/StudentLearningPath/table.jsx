@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
+import { useUserStore } from "../../store/UserProvider";
 
 const LearningpathTable = ({
   data,
@@ -9,18 +10,19 @@ const LearningpathTable = ({
   learningpath,
 }) => {
   const navigate = useNavigate();
+  const { user, setUser } = useUserStore();
   return (
     <div>
       {!loading && (
         <div>
-          <div
+          {user?.email && <div
             onClick={() => {
               navigate(-1);
             }}
             className="cursor-pointer"
           >
             <i class="bi bi-arrow-left text-white text-4xl"></i>
-          </div>
+          </div> }
 
           <h5 className="text-red-500 font-bold">
             Student Name : {userData?.username}
