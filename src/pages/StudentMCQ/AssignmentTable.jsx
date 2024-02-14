@@ -3,11 +3,11 @@ import { useState } from "react";
 const AssignmentTable = ({ data, total, loading, type }) => {
   // console.log("uuuu", data.bootcampDetails.learningpath);
   console.log("uyuyuyyuyyuuyu", data);
-  const [code, setCode] = useState(null)
+  const [code, setCode] = useState(null);
 
   const showSubmittedCode = (code) => {
-    setCode(code)
-  }
+    setCode(code);
+  };
 
   function decode(bytes) {
     var escaped = "";
@@ -26,16 +26,14 @@ const AssignmentTable = ({ data, total, loading, type }) => {
       return unescape(escaped);
     }
   }
-  
 
   return (
     <div>
-     {
-      code && <code className="text-white">
-{decode(code?.data?.sourcefiles?.[0]?.sourcecode)}
-
-      </code>
-     }
+      {code && (
+        <code className="text-white">
+          {decode(code?.data?.sourcefiles?.[0]?.sourcecode)}
+        </code>
+      )}
       <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
         <thead className="border-b text-2xl bg-gray-50">
           <tr className="">
@@ -56,8 +54,8 @@ const AssignmentTable = ({ data, total, loading, type }) => {
               return (
                 <tr
                   className={`cursor-pointer hover:bg-gray-100 cursor-pointer ${
-                    mc.attempted===true
-                      ? mc.result===1
+                    mc.attempted === true
+                      ? mc.result === 1
                         ? "bg-green-100"
                         : "bg-blue-100"
                       : "bg-red-100"
@@ -69,9 +67,17 @@ const AssignmentTable = ({ data, total, loading, type }) => {
                     {mc.lecturename}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {type==="MCQ" ? `${mc.score}/${mc?.data?.questions?.length}` : <button onClick={() => {
-                      showSubmittedCode(mc)
-                    }}>View Code</button>}
+                    {type === "MCQ" ? (
+                      `${mc.score}/${mc?.data?.questions?.length}`
+                    ) : (
+                      <button
+                        onClick={() => {
+                          showSubmittedCode(mc);
+                        }}
+                      >
+                        View Code
+                      </button>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {`${(mc.finalgrade / 100).toFixed(2) * 100}%`}
@@ -81,21 +87,10 @@ const AssignmentTable = ({ data, total, loading, type }) => {
             })}
           </tbody>
         )}
-        {/* <tr>
-        <td></td>
-        <td></td>
-        <td>
-          {loading && (
-            <div>
-              <Loader />
-            </div>
-          )}
-        </td>
-      </tr> */}
       </table>
-      {/* {!data && (
-        <div className="text-gray-100">Not enrolled in this bootcamp</div>
-      )} */}
+      {data?.length === 0 && !loading && (
+        <div className="text-gray-100">No assignments found</div>
+      )}
     </div>
   );
 };

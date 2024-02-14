@@ -72,6 +72,25 @@ const LearningpathTable = ({
         {data && (
           <tbody className="divide-y divide-gray-200">
             {data.map((course) => {
+              const challAvg =
+                roundOff(
+                  (course?.analytics[0]?.completedChallengesCount /
+                    course?.total?.challenge) *
+                    100
+                ) || 0;
+
+              const AssiAvg =
+                roundOff(
+                  (course?.analytics[0]?.completedAssignmentCount /
+                    course?.total?.assignment) *
+                    100
+                ) || 0;
+
+              const mcqAvg = roundOff(course?.analytics[0]?.avgMcqMarks) || 0;
+
+              const progressPer = roundOff(
+                ((challAvg || 100) + (AssiAvg || 100) + (mcqAvg || 100)) / 3
+              );
               return (
                 <tr
                   className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
@@ -88,8 +107,7 @@ const LearningpathTable = ({
                   >
                     <td className="px-6 py-4 text-sm font-medium text-gray-800">
                       {`${course?.analytics[0]?.completedMCQCount}/${course?.total?.mcq}`}{" "}
-                      ({roundOff(course?.analytics[0]?.avgMcqMarks) || 0}
-                      %)
+                      ({mcqAvg}%)
                     </td>
                   </Link>
                   <td
@@ -101,13 +119,7 @@ const LearningpathTable = ({
                     className="px-6 py-4 text-sm font-medium text-gray-800"
                   >
                     {`${course?.analytics[0]?.completedChallengesCount}/${course?.total?.challenge}`}{" "}
-                    (
-                    {roundOff(
-                      (course?.analytics[0]?.completedChallengesCount /
-                        course?.total?.challenge) *
-                        100
-                    ) || 0}
-                    %)
+                    ({challAvg}%)
                   </td>
                   <td
                     onClick={() => {
@@ -118,9 +130,10 @@ const LearningpathTable = ({
                     className="px-6 py-4 text-sm font-medium text-gray-800"
                   >
                     {`${course?.analytics[0]?.completedAssignmentCount}/${course?.total?.assignment}`}
+                    ({AssiAvg}%)
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {course?.analytics[0]?.completedPercentage}%
+                    {progressPer}%
                   </td>
                 </tr>
               );

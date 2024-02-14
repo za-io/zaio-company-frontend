@@ -10,13 +10,13 @@ const StudentLearningPath = () => {
   const queryParams = new URLSearchParams(location.search);
   const user_id = queryParams.get("user_id");
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [learningpathId] = useState(learningpathid);
   const [userId] = useState(user_id ? user_id : "636d6613a75d3600222f1875");
   const [learningpath, setLearningpath] = useState(null);
 
   const getAnalytics = () => {
-    setLoading(true);
+    // setLoading(true);
     getUserLearningpathAnalytics(userId, learningpathId)
       .then((res) => {
         setLearningpath(res);
