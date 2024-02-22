@@ -54,6 +54,9 @@ const LearningpathTable = ({
               Course Name
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              Lectures
+            </th>
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
               MCQs
             </th>
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
@@ -84,10 +87,17 @@ const LearningpathTable = ({
                     100
                 ) || 0;
 
+              const lecsAvg =
+                roundOff(
+                  (course?.analytics[0]?.completedLecturesCount /
+                    course?.total?.lectures) *
+                    100
+                ) || 0;
+
               const mcqAvg = roundOff(course?.analytics[0]?.avgMcqMarks) || 0;
 
               const progressPer = roundOff(
-                ((challAvg || 100) + (AssiAvg || 100) + (mcqAvg || 100)) / 3
+                ((challAvg || 100) + (AssiAvg || 100) + (mcqAvg || 100) + (lecsAvg || 100)) / 4
               );
               return (
                 <tr
@@ -98,6 +108,12 @@ const LearningpathTable = ({
                     {/* {user?.userid?.username} */}
                     {course.courseName}
                   </td>
+
+                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                    {`${course?.analytics[0]?.completedLecturesCount}/${course?.total?.lectures}`}{" "}
+                    ({lecsAvg}%)
+                  </td>
+
                   <Link
                     to={{
                       pathname: `/student/course/${course._id}/mcq/${userId}`,
