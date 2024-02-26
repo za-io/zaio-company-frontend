@@ -4,22 +4,24 @@ import { getAllBootcamps, getUserBootcampAnalytics } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import CustomDataTable from "./table";
 
-
 const StudentBootcamp = () => {
   const [searchParams] = useSearchParams();
 
   const [loading, setLoading] = useState(false);
-  const [bootcampId, setBootcampId] = useState(searchParams.get("bootcampid") ? searchParams.get("bootcampid") : "642b6236fa796e00203ffe0b");
+  const [bootcampId, setBootcampId] = useState(
+    searchParams.get("bootcampid")
+      ? searchParams.get("bootcampid")
+      : "642b6236fa796e00203ffe0b"
+  );
   const [userId] = useState("636d6613a75d3600222f1875");
   const [allBootcamps, setAllBootcamps] = useState([]);
   const [bootcamp, setBootcamp] = useState(null);
   const [total, setTotal] = useState(null);
-const navigate = useNavigate()
+  const navigate = useNavigate();
   const handleChange = (event) => {
     console.log("ddsda", event.target.value);
     setBootcampId(event.target.value);
-  }
-
+  };
 
   const getBootcamps = () => {
     // setLoading(true);
@@ -34,8 +36,7 @@ const navigate = useNavigate()
   };
 
   const getBootcampAnalytics = () => {
-    navigate(`?bootcampid=${bootcampId}`, { replace: true })
-
+    navigate(`?bootcampid=${bootcampId}`, { replace: true });
 
     setLoading(true);
     console.log(userId, bootcampId);

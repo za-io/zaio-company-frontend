@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { roundOff } from "../../utils/mathUtils";
 
 const AnalyticsTable = ({ data, total, loading, searchType }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,6 +49,9 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                   Username
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Lectures
+                </th>
+                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   MCQs
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
@@ -71,7 +75,9 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                   ?.map((ba) => {
                     // const classes =
                     //   StylesConfig[user?.currentPerformance]?.styles || "";
-
+                    const lecturesProgress =
+                      (ba?.completedLecturesCount / (total?.lectures || 0)) *
+                      100;
                     return (
                       <tr
                         key={ba?._id}
@@ -90,6 +96,13 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           {ba?.userid?.username}
                         </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          {total?.lectures !== 0
+                            ? `${ba?.completedLecturesCount}/${
+                                total?.lectures || 0
+                              }`
+                            : "NA"}
+                        </td>
                         <td
                           className="px-6 py-4 text-sm font-medium text-gray-800"
                           onClick={() => {
@@ -97,20 +110,27 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                               handleCourse(data._id, "mcq");
                           }}
                         >
-                          {`${ba?.completedMCQCount}/${total?.mcq || 0}`}
+                          {total?.mcq !== 0
+                            ? `${ba?.completedMCQCount}/${total?.mcq || 0}`
+                            : "NA"}
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                          {`${ba?.completedChallengesCount}/${
-                            total?.challenge || 0
-                          }`}
+                          {total?.challenge !== 0
+                            ? `${ba?.completedChallengesCount}/${
+                                total?.challenge || 0
+                              }`
+                            : "NA"}
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                          {`${ba?.completedAssignmentCount}/${
-                            total?.assignment || 0
-                          }`}
+                          {total?.assignment !== 0
+                            ? `${ba?.completedAssignmentCount}/${
+                                total?.assignment || 0
+                              } ${total?.assignment}`
+                            : "NA"}
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                          {ba?.completedPercentage}%
+                          {roundOff(ba?.completedPercentage + lecturesProgress)}
+                          %
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           <button
