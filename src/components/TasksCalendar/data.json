@@ -1,0 +1,526 @@
+[
+  {
+    "key": "DAY_1",
+    "totalDuration": 178,
+    "tasks": [
+      {
+        "lectureId": "626120601dd7340022788dec",
+        "type": "lecture",
+        "lecturename": "Introduction To Coding With Web Development",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62611f3e1dd73400227887b2",
+        "duration": 1,
+        "status": "completed"
+      },
+      {
+        "lectureId": "6261208c1dd7340022788dfa",
+        "type": "lecture",
+        "lecturename": "Welcome! A Few Things To Keep In Mind",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62611f3e1dd73400227887b2",
+        "duration": 4,
+        "status": "late"
+      },
+      {
+        "lectureId": "626120dc1dd7340022788e0a",
+        "type": "lecture",
+        "lecturename": "Whats Cooking In This Course",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62611f3e1dd73400227887b2",
+        "duration": 3,
+        "status": "pending"
+      },
+      {
+        "lectureId": "6261598da8f3d900227ccb43",
+        "type": "lecture",
+        "lecturename": "Interactive Environment",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "626121351dd7340022788f5c",
+        "duration": 4,
+        "status": "blocked"
+      },
+      {
+        "lectureId": "626159b1a8f3d900227ccb6b",
+        "type": "lecture",
+        "lecturename": "Tutor Support",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "626121351dd7340022788f5c",
+        "duration": 2
+      },
+      {
+        "lectureId": "62615a61a8f3d900227ccbd9",
+        "type": "lecture",
+        "lecturename": "Building Blocks On The Web",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "626121351dd7340022788f5c",
+        "duration": 5
+      },
+      {
+        "lectureId": "62615a8fa8f3d900227ccbe7",
+        "type": "lecture",
+        "lecturename": "Getting Setup",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "626121351dd7340022788f5c",
+        "duration": 6
+      },
+      {
+        "lectureId": "62615c65a8f3d900227cce2d",
+        "type": "lecture",
+        "lecturename": "HTML Basics",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62615b38a8f3d900227ccbfa",
+        "duration": 9
+      },
+      {
+        "lectureId": "62615d5ba8f3d900227ccf1f",
+        "type": "lecture",
+        "lecturename": "HTML File Structure",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62615b38a8f3d900227ccbfa",
+        "duration": 8
+      },
+      {
+        "lectureId": "62615d7ea8f3d900227ccf2d",
+        "type": "lecture",
+        "lecturename": "Headings and Paragraphs",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62615b38a8f3d900227ccbfa",
+        "duration": 7
+      },
+      {
+        "lectureId": "6261b65aa8f3d900227d1e0a",
+        "type": "lecture",
+        "lecturename": "Ensure To Use VS Code & Zaio Platform",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 2
+      },
+      {
+        "lectureId": "6261b693a8f3d900227d1f03",
+        "type": "lecture",
+        "lecturename": "Anchor Tag for Touchless Delivery on Tesla Page",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 10
+      },
+      {
+        "lectureId": "6261b6d6a8f3d900227d1fb8",
+        "type": "lecture",
+        "lecturename": "Images",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 8
+      },
+      {
+        "lectureId": "6261b6f3a8f3d900227d1fd2",
+        "type": "lecture",
+        "lecturename": "Layout",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 5
+      },
+      {
+        "lectureId": "6261b70ba8f3d900227d1fe2",
+        "type": "lecture",
+        "lecturename": "Lists",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 6
+      },
+      {
+        "lectureId": "6261b72ea8f3d900227d1ff2",
+        "type": "lecture",
+        "lecturename": "Buttons",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 3
+      },
+      {
+        "lectureId": "6261b745a8f3d900227d20a7",
+        "type": "lecture",
+        "lecturename": "Span Tag",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 5
+      },
+      {
+        "lectureId": "6261b79fa8f3d900227d233e",
+        "type": "lecture",
+        "lecturename": "Commenting Code, Summary & Let's Checkin",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b776a8f3d900227d22bc",
+        "duration": 6
+      },
+      {
+        "lectureId": "6261bc16a8f3d900227d271b",
+        "type": "lecture",
+        "lecturename": "CSS Basics",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe7a8f3d900227d26db",
+        "duration": 12
+      },
+      {
+        "lectureId": "6261bc6aa8f3d900227d275a",
+        "type": "lecture",
+        "lecturename": "Favicon",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe7a8f3d900227d26db",
+        "duration": 1
+      },
+      {
+        "lectureId": "6261bc81a8f3d900227d276a",
+        "type": "lecture",
+        "lecturename": "Simple Selectors",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe7a8f3d900227d26db",
+        "duration": 4
+      },
+      {
+        "lectureId": "6261bca7a8f3d900227d294e",
+        "type": "lecture",
+        "lecturename": "Box Model and Box Sizing",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 13
+      },
+      {
+        "lectureId": "6261bce4a8f3d900227d296c",
+        "type": "lecture",
+        "lecturename": "Getting The Background To Work",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 5
+      },
+      {
+        "lectureId": "6261bcfda8f3d900227d2989",
+        "type": "lecture",
+        "lecturename": "Getting The Tesla Logo",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 3
+      },
+      {
+        "lectureId": "6261bd1ea8f3d900227d2999",
+        "type": "lecture",
+        "lecturename": "Using Flexbox To Cleanup The Navbar",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 6
+      },
+      {
+        "lectureId": "6261bd6da8f3d900227d29ed",
+        "type": "lecture",
+        "lecturename": "Cleaning up Main Section Structure With Text-Align, Calc & Flex",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 9
+      },
+      {
+        "lectureId": "6261bd84a8f3d900227d2a31",
+        "type": "lecture",
+        "lecturename": "Cleaning Up Fonts",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 10
+      },
+      {
+        "lectureId": "6261bdb9a8f3d900227d2c48",
+        "type": "lecture",
+        "lecturename": "Nav-Items With Hover Effect",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 7
+      },
+      {
+        "lectureId": "6261bddea8f3d900227d2c58",
+        "type": "lecture",
+        "lecturename": "Styling The Buttons & Fixing Minor Margin Issues",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 11
+      },
+      {
+        "lectureId": "6261be0da8f3d900227d2c97",
+        "type": "lecture",
+        "lecturename": "Making Your Project Accessible By Deploying On Netlify",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf9a8f3d900227d270b",
+        "duration": 3
+      }
+    ],
+    "remTime": 2,
+    "date": "2023-03-13T19:12:16.936Z"
+  },
+  {
+    "key": "DAY_2",
+    "totalDuration": 177,
+    "tasks": [
+      {
+        "lectureId": "6261c903e7b42200225e4003",
+        "type": "lecture",
+        "lecturename": "See why web development is the perfect choice for you",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62611f3e1dd73400227887b2",
+        "duration": 21
+      },
+      {
+        "lectureId": "62b41d89b9a4a52db64fa084",
+        "type": "lecture",
+        "lecturename": "lect",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf9a8f3d900227d270b",
+        "duration": 2
+      },
+      {
+        "lectureId": "6408ad3fdc57ec808c6604b1",
+        "type": "coursemcq",
+        "lecturename": "Test",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 22
+      },
+      {
+        "lectureId": "640a2b17cd75fa027825ae6e",
+        "type": "coursemcq",
+        "lecturename": "Test",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 22
+      },
+      {
+        "lectureId": "640a2b3bcd75fa027825ae98",
+        "type": "coursemcq",
+        "lecturename": "Test2",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 22
+      },
+      {
+        "lectureId": "640a2b88cd75fa027825aed0",
+        "type": "coursemcq",
+        "lecturename": "Challenge name",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 22
+      },
+      {
+        "lectureId": "640a2baacd75fa027825aeda",
+        "type": "coursemcq",
+        "lecturename": "Challenge 2",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 22
+      },
+      {
+        "lectureId": "640a2bfecd75fa027825aeee",
+        "type": "challenge",
+        "lecturename": "YOLO",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b462a8f3d900227d186a",
+        "duration": 22
+      },
+      {
+        "lectureId": "640c43a599df457183c478c9",
+        "type": "coursemcq",
+        "lecturename": "This is a test mcq 1",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "626121351dd7340022788f5c",
+        "duration": 5
+      },
+      {
+        "lectureId": "640c44a699df457183c478d5",
+        "type": "coursemcq",
+        "lecturename": "This is a test mcq 2",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "626121351dd7340022788f5c",
+        "duration": 7
+      },
+      {
+        "lectureId": "640c4629787fcf74ffdda29b",
+        "type": "challenge",
+        "lecturename": "This is a test challenge",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62615b38a8f3d900227ccbfa",
+        "duration": 10
+      }
+    ],
+    "remTime": 3,
+    "date": "2023-03-14T19:12:16.936Z"
+  },
+  {
+    "key": "DAY_3",
+    "totalDuration": 167,
+    "tasks": [
+      {
+        "lectureId": "640c47dd787fcf74ffdda2af",
+        "type": "challenge",
+        "lecturename": "challenge Headings and P tags",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "62615b38a8f3d900227ccbfa",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4842787fcf74ffdda2bb",
+        "type": "coursemcq",
+        "lecturename": "This is a test mcq 2",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 7
+      },
+      {
+        "lectureId": "640c4897787fcf74ffdda2c5",
+        "type": "challenge",
+        "lecturename": "challenge Anchor tags",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 20
+      },
+      {
+        "lectureId": "640c48ce787fcf74ffdda2cf",
+        "type": "challenge",
+        "lecturename": "challenge Img tags",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 10
+      },
+      {
+        "lectureId": "640c4901787fcf74ffdda2db",
+        "type": "coursemcq",
+        "lecturename": "This is a test mcq 3",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4943787fcf74ffdda2e7",
+        "type": "coursemcq",
+        "lecturename": "This is a test mcq 3",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4992787fcf74ffdda2f1",
+        "type": "challenge",
+        "lecturename": "challenge Layout",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c49b9787fcf74ffdda2fb",
+        "type": "challenge",
+        "lecturename": "challenge List",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 20
+      },
+      {
+        "lectureId": "640c49da787fcf74ffdda305",
+        "type": "challenge",
+        "lecturename": "challenge Button",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 10
+      },
+      {
+        "lectureId": "640c4a4d787fcf74ffdda30f",
+        "type": "challenge",
+        "lecturename": "challenge Span",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261b46fa8f3d900227d187a",
+        "duration": 10
+      },
+      {
+        "lectureId": "640c4ab3787fcf74ffdda319",
+        "type": "challenge",
+        "lecturename": "challenge CSS basics",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe7a8f3d900227d26db",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4acb787fcf74ffdda325",
+        "type": "coursemcq",
+        "lecturename": "This is a test mcq 3",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe7a8f3d900227d26db",
+        "duration": 15
+      }
+    ],
+    "remTime": 13,
+    "date": "2023-03-15T19:12:16.936Z"
+  },
+  {
+    "key": "DAY_4",
+    "totalDuration": 100,
+    "tasks": [
+      {
+        "lectureId": "640c4bba787fcf74ffdda33b",
+        "type": "challenge",
+        "lecturename": "challenge CSS box sizing",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4bd7787fcf74ffdda345",
+        "type": "challenge",
+        "lecturename": "challenge CSS bockground",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4d31787fcf74ffdda34f",
+        "type": "challenge",
+        "lecturename": "challenge CSS bockground",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbe0a8f3d900227d26cb",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4f15787fcf74ffdda359",
+        "type": "challenge",
+        "lecturename": "challenge main section clean up",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c4f3e787fcf74ffdda365",
+        "type": "coursemcq",
+        "lecturename": "This is a test CSS selectors",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 5
+      },
+      {
+        "lectureId": "640c4f7e787fcf74ffdda371",
+        "type": "coursemcq",
+        "lecturename": "This is a test Hover",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 10
+      },
+      {
+        "lectureId": "640c4fb9787fcf74ffdda37b",
+        "type": "challenge",
+        "lecturename": "Styling the buttons",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf2a8f3d900227d26fb",
+        "duration": 15
+      },
+      {
+        "lectureId": "640c5008787fcf74ffdda387",
+        "type": "coursemcq",
+        "lecturename": "This is a test Netlify",
+        "courseId": "626055a21dd7340022782fbb",
+        "courseunit": "6261bbf9a8f3d900227d270b",
+        "duration": 10
+      }
+    ],
+    "remTime": 80,
+    "date": "2023-03-16T19:12:16.936Z"
+  }
+]

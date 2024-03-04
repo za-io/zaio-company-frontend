@@ -32,6 +32,18 @@ export const addProgram = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const addIntoExiting = (payload) =>
+  axios
+    .post(`${API_URL}/exitsing/enroll`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const fetchCalPreviewData = (payload) =>
+  axios
+    .post(`${API_URL}/preview-calendar`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const checkAuthToken = (payload) =>
   axios
     .post(`${BASE_URL}/company/checkAuthToken`, payload)

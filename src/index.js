@@ -1,27 +1,28 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
-import { BrowserRouter } from 'react-router-dom';
-import {
-  QueryClient,
-  QueryClientProvider,
-} from "react-query";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import { BrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "react-query";
 import { ReactQueryDevtools } from "react-query/devtools";
+
 import "bootstrap-icons/font/bootstrap-icons.css";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap/dist/js/bootstrap.min.js";
+import { TasksProvider } from "./context/TasksProvider";
 
-
+import "./index.css";
 const queryClient = new QueryClient();
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-        <ReactQueryDevtools initialIsOpen />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <TasksProvider>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+          <ReactQueryDevtools initialIsOpen />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </TasksProvider>
   </React.StrictMode>
 );
-
