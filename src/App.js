@@ -17,6 +17,7 @@ import StudentMCQ from "./pages/StudentMCQ";
 import StudentChallenges from "./pages/StudentChallenges";
 import StudentAssignments from "./pages/StudentAssignments";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { AddExiting } from "./pages/AddExisting";
 
 const AppHelper = () => {
   return (
@@ -31,6 +32,12 @@ const AppHelper = () => {
           path="/program/add"
           element={
             <ProtectedRoute path="/program/add" component={<AddProgram />} />
+          }
+        />
+         <Route
+          path="/program/add/exiting"
+          element={
+            <ProtectedRoute path="/program/add/exiting" component={<AddExiting />} />
           }
         />
         <Route

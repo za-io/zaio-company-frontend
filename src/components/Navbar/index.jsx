@@ -15,14 +15,30 @@ const Navbar = () => {
     <div className="w-full flex justify-between items-center px-36 py-4 border-b border-gray-500">
       <Link to="/" className="flex items-center">
         <img className="h-10" src={logo} alt="" />
-        {user?.email && <p className="text-white m-0 ml-2 text-lg font-bold text-purple-200">Hello, {user?.company_name}</p>}
+        {user?.email && (
+          <p className="text-white m-0 ml-2 text-lg font-bold text-purple-200">
+            Hello, {user?.company_name}
+          </p>
+        )}
       </Link>
 
       <div className="flex items-center gap-4">
         {/* <Link to='/' className='text-gray-100 font-medium'>Programs</Link> */}
-        {user?.email && user?.role !=='SUPER_STUDENT_ADMIN' && (
-          <Link to="/program/add" className="bg-yellow-500 px-12 py-3 rounded font-medium">
+        {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
+          <Link
+            to="/program/add"
+            className="bg-yellow-500 px-12 py-3 rounded font-medium"
+          >
             New Program
+          </Link>
+        )}
+
+        {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
+          <Link
+            to="/program/add/exiting"
+            className="bg-yellow-500 px-12 py-3 rounded font-medium"
+          >
+            Exiting Program
           </Link>
         )}
 
