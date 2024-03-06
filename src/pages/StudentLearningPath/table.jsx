@@ -99,7 +99,7 @@ const LearningpathTable = ({
               const mcqAvg = roundOff(course?.analytics[0]?.avgMcqMarks) || 0;
 
               const progressPer = roundOff(
-                ((challAvg || 100) + (AssiAvg || 100) + (mcqAvg || 100) + (lecsAvg || 100)) / 4
+                ((challAvg || 0) + (AssiAvg || 0) + (mcqAvg || 0) + (lecsAvg || 0)) / 4
               );
               return (
                 <tr
