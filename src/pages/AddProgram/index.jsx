@@ -75,7 +75,7 @@ export const AddProgram = () => {
   };
 
   return (
-    <div className="mx-36 mt-8">
+    <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
         <div className="flex flex-wrap -mx-3 mb-6">
           <div className="w-full px-3">
@@ -185,8 +185,8 @@ export const AddProgram = () => {
       </form>
 
       {calendarData && preview && (
-        <div className="mt-4">
-          <p className="text-white text-md my-2">Calendar Preview: </p>
+        <div className="mt-5 pb-5 mx-3">
+          <p className="text-white text-md my-4">Calendar Preview: </p>
           <Calendar tasks={calendarData} date={date} />
         </div>
       )}

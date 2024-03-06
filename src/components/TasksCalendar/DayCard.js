@@ -27,7 +27,7 @@ const DayCard = ({ date, events, status }) => {
 
   return (
     <div
-      className={`relative flex flex-col group w-100 ${
+      className={`relative flex flex-col group w-100 p-2 ${
         sameDayCheck ? "border-[2px] border-purple-300" : ""
       } ${classes}`}
     >

@@ -1,12 +1,34 @@
-import { useState } from "react";
-import { addIntoExiting } from "../../api/company";
+import { useEffect, useState } from "react";
+import { addIntoExiting, getAllBootcamps } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import useDate from "../../hooks/useDate";
+import { useUserStore } from "../../store/UserProvider";
 export const AddExiting = () => {
   const [loading, setLoading] = useState(false);
+  const [bootcampList, setBootcampList] = useState(null);
   const date = useDate();
+  const { user } = useUserStore();
 
   const [msg, setMsg] = useState(null);
+  useEffect(() => {
+    const init = () => {
+      setLoading(true);
+      getAllBootcamps({
+        company_id: user?._id,
+      })
+        .then((res) => {
+          console.log(res);
+          if (res?.status === 200) {
+            setBootcampList(res?.allBootcamps);
+          }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+
+    init();
+  }, []);
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -40,7 +62,7 @@ export const AddExiting = () => {
   };
 
   return (
-    <div className="mx-36 mt-8">
+    <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
         <div className="flex flex-wrap -mx-3 mb-6">
           <div className="w-full px-3">
@@ -53,7 +75,13 @@ export const AddExiting = () => {
               type="text"
               placeholder="Bootcamp Doc ID"
               required
+              list="bootcamp_suggestions"
             />
+            <datalist id="bootcamp_suggestions">
+              {bootcampList?.map((bootcamp) => (
+                <option value={bootcamp?.bootcampName} />
+              ))}
+            </datalist>
           </div>
         </div>
 
