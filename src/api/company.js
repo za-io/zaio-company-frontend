@@ -20,6 +20,12 @@ export const getAllBootcamps = ({ company_id }) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const getAllLPs = () =>
+  axios
+    .get(API_URL + `/all/learningpaths`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const getBootcampDetails = (bootcamp_id) =>
   axios
     .get(API_URL + `/details?bootcamp_id=${bootcamp_id}`)
@@ -41,6 +47,18 @@ export const addIntoExiting = (payload) =>
 export const fetchCalPreviewData = (payload) =>
   axios
     .post(`${API_URL}/preview-calendar`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const checkEnrollmentEligibility = (payload) =>
+  axios
+    .post(`${API_URL}/check-enroll-eligiblity`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const enrollStudentsIntoLP = (payload) =>
+  axios
+    .post(`${BASE_URL}/dashboard/enrollmany`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
 

@@ -11,7 +11,10 @@ import "bootstrap/dist/js/bootstrap.min.js";
 import { TasksProvider } from "./context/TasksProvider";
 
 import "./index.css";
+import {Chart, ArcElement, Tooltip} from 'chart.js'
 const queryClient = new QueryClient();
+
+Chart.register(ArcElement, Tooltip);
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
