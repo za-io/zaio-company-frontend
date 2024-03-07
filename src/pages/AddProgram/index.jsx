@@ -1,22 +1,57 @@
-import { useState } from "react";
-import { addProgram, fetchCalPreviewData } from "../../api/company";
+import { useEffect, useState } from "react";
+import {
+  addProgram,
+  checkEnrollmentEligibility,
+  enrollStudentsIntoLP,
+  fetchCalPreviewData,
+  getAllLPs,
+} from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useUserStore } from "../../store/UserProvider";
 import Calendar from "../../components/TasksCalendar/Calendar";
 import useDate from "../../hooks/useDate";
 import { TasksModal } from "../../components/TasksCalendar/TasksModal";
+
+const flowTypes = {
+  preview_cal: "preview_cal",
+  enroll_students: "enroll_students",
+  bootcamp_api: "bootcamp_api",
+};
+
 export const AddProgram = () => {
   const [loading, setLoading] = useState(false);
   const date = useDate();
 
   const [msg, setMsg] = useState(null);
   const { user } = useUserStore();
-  const [preview, setPreview] = useState(false);
+  const [flow, setFlow] = useState(null);
   const [calendarData, setCalendarData] = useState(null);
+  const [lpList, setLpList] = useState(null);
+  const [allEnrolled, setAllEnrolled] = useState(null);
+
+  useEffect(() => {
+    const init = () => {
+      setLoading(true);
+      getAllLPs()
+        .then((res) => {
+          console.log(res);
+          if (res?.status === 200) {
+            setLpList(res?.allLps);
+          }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+
+    init();
+  }, []);
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (preview) return fetchCalPreview(e);
+    if (flow === flowTypes.preview_cal) return fetchCalPreview(e);
+    if (flow === flowTypes.enroll_students) return checkAndEnrollStudents(e);
 
     setMsg(null);
     const formData = new FormData(e.target);
@@ -25,6 +60,12 @@ export const AddProgram = () => {
     const emails = formData.get("emails");
     const commitedMins = formData.get("commitedMins");
     const startDate = formData.get("startDate");
+
+    if (!allEnrolled) {
+      return setMsg(
+        "Please enroll all the students into the learningpath first."
+      );
+    }
 
     setLoading(true);
     addProgram({
@@ -74,6 +115,46 @@ export const AddProgram = () => {
       });
   };
 
+  const checkAndEnrollStudents = (e) => {
+    const formData = new FormData(e.target);
+    const learningPath = formData.get("learningPath");
+    const emails = formData.get("emails");
+
+    console.log(learningPath, emails, "learningpath");
+    if (!learningPath || !emails) return;
+    setLoading(true);
+    checkEnrollmentEligibility({
+      learningPath,
+      emails,
+    })
+      .then(async (res) => {
+        if (res?.missingEmails?.length > 0) {
+          //show the list of missing users
+          setMsg(`Please ask the below students to make an account as they can not be seen in the Zaio system:\n
+          ${res?.missingEmails?.join(", ")}
+          `);
+        } else {
+          //call the enrollment api
+          const enrollRes = await enrollStudentsIntoLP({
+            emails,
+            learningpathid: learningPath,
+          });
+
+          console.log(enrollRes, "enrollRes");
+          if (enrollRes?.status === 200) {
+            setAllEnrolled(true);
+            setMsg(enrollRes?.message);
+          } else {
+            setMsg("Error enrolling the students.");
+          }
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
   return (
     <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
@@ -106,7 +187,13 @@ export const AddProgram = () => {
               type="text"
               placeholder="Learning Path ID"
               required
+              list="lp_suggestions"
             />
+            <datalist id="lp_suggestions">
+              {lpList?.map((lp) => (
+                <option value={lp?._id}>{lp?.learningpathname}</option>
+              ))}
+            </datalist>
           </div>
         </div>
 
@@ -164,7 +251,7 @@ export const AddProgram = () => {
 
         <button
           onClick={() => {
-            setPreview(false);
+            setFlow(flowTypes.bootcamp_api);
           }}
           className="shadow bg-purple-500 hover:bg-purple-400 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded"
           type="submit"
@@ -174,17 +261,34 @@ export const AddProgram = () => {
 
         <button
           onClick={() => {
-            setPreview(true);
+            setFlow(flowTypes.preview_cal);
           }}
           className="shadow ml-3 bg-purple-500 hover:bg-purple-400 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded"
           type="submit"
         >
           Preview
         </button>
-        {msg && <p className="text-white text-md mt-3">{msg}</p>}
+
+        <button
+          onClick={() => {
+            setFlow(flowTypes.enroll_students);
+          }}
+          className="shadow ml-3 bg-purple-500 hover:bg-purple-400 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded"
+          type="submit"
+        >
+          Enroll into learningpath
+        </button>
+        {msg && (
+          <p
+            dangerouslySetInnerHTML={{
+              __html: msg,
+            }}
+            className="text-white text-md mt-3"
+          />
+        )}
       </form>
 
-      {calendarData && preview && (
+      {calendarData && flow === flowTypes.preview_cal && (
         <div className="mt-5 pb-5 mx-3">
           <p className="text-white text-md my-4">Calendar Preview: </p>
           <Calendar tasks={calendarData} date={date} />
