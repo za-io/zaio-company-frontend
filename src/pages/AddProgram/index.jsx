@@ -141,12 +141,8 @@ export const AddProgram = () => {
           });
 
           console.log(enrollRes, "enrollRes");
-          if (enrollRes?.status === 200) {
-            setAllEnrolled(true);
-            setMsg(enrollRes?.message);
-          } else {
-            setMsg("Error enrolling the students.");
-          }
+          setAllEnrolled(true);
+          setMsg(enrollRes?.message || "Error enrolling the students.");
         }
       })
       .catch((err) => console.error(err))
