@@ -34,10 +34,13 @@ const AppHelper = () => {
             <ProtectedRoute path="/program/add" component={<AddProgram />} />
           }
         />
-         <Route
+        <Route
           path="/program/add/exiting"
           element={
-            <ProtectedRoute path="/program/add/exiting" component={<AddExiting />} />
+            <ProtectedRoute
+              path="/program/add/exiting"
+              component={<AddExiting />}
+            />
           }
         />
         <Route
@@ -146,20 +149,20 @@ function App() {
 
   const checkAuth = () => {
     const token = localStorage.getItem("TOKEN");
-    // if (!token) {
-    //   navigate("/login");
-    // }
+    if (!token) {
+      return navigate("/login");
+    }
 
-    // setLoading(true);
+    setLoading(true);
     checkAuthToken({ token })
       .then((res) => {
         console.log(res);
-        // if (!res?.success) {
-        //   navigate("/login");
-        // } else {
+        if (!res?.success) {
+          navigate("/login");
+        }
+
         setUser(res?.data?.userDoc);
-        // navigate(window.location.pathname + window.location.search);
-        // }
+        navigate(window.location.pathname + window.location.search);
       })
       .catch((err) => {})
       .finally(() => {

@@ -75,8 +75,15 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                   ?.map((ba) => {
                     // const classes =
                     //   StylesConfig[user?.currentPerformance]?.styles || "";
-                    const lecturesProgress =
-                      (ba?.completedLecturesCount / (total?.lectures || 0)) *
+                    const totalProgress =
+                      (((ba?.completedLecturesCount || 0) +
+                        (ba?.completedChallengesCount || 0) +
+                        (ba?.completedMCQCount || 0) +
+                        (ba?.completedAssignmentCount || 0)) /
+                        Object.values(total).reduce(
+                          (val, tot) => (val ?? 0) + tot,
+                          0
+                        )) *
                       100;
                     return (
                       <tr
@@ -129,8 +136,7 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                             : "NA"}
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                          {roundOff(ba?.completedPercentage + lecturesProgress)}
-                          %
+                          {roundOff(totalProgress)}%
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           <button
