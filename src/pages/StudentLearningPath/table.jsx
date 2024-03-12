@@ -11,18 +11,21 @@ const LearningpathTable = ({
 }) => {
   const navigate = useNavigate();
   const { user, setUser } = useUserStore();
+
   return (
     <div>
       {!loading && (
         <div>
-          {user?.email && <div
-            onClick={() => {
-              navigate(-1);
-            }}
-            className="cursor-pointer"
-          >
-            <i class="bi bi-arrow-left text-white text-4xl"></i>
-          </div> }
+          {user?.email && (
+            <div
+              onClick={() => {
+                navigate(-1);
+              }}
+              className="cursor-pointer"
+            >
+              <i class="bi bi-arrow-left text-white text-4xl"></i>
+            </div>
+          )}
 
           <h5 className="text-red-500 font-bold">
             Student Name : {userData?.username}
@@ -98,9 +101,18 @@ const LearningpathTable = ({
 
               const mcqAvg = roundOff(course?.analytics[0]?.avgMcqMarks) || 0;
 
-              const progressPer = roundOff(
-                ((challAvg || 0) + (AssiAvg || 0) + (mcqAvg || 0) + (lecsAvg || 0)) / 4
+              const totalProgress = roundOff(
+                (((course?.analytics[0]?.completedChallengesCount || 0) +
+                  (course?.analytics[0]?.completedMCQCount || 0) +
+                  (course?.analytics[0]?.completedLecturesCount || 0) +
+                  (course?.analytics[0]?.completedAssignmentCount || 0)) /
+                  Object.values(course?.total).reduce(
+                    (val, tot) => (val ?? 0) + tot,
+                    0
+                  )) *
+                  100
               );
+
               return (
                 <tr
                   className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
@@ -149,7 +161,7 @@ const LearningpathTable = ({
                     ({AssiAvg}%)
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {progressPer}%
+                    {totalProgress}%
                   </td>
                 </tr>
               );
