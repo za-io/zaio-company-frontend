@@ -50,6 +50,20 @@ export const fetchCalPreviewData = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const syncUserProgress = ({ learningpath, userid, date }) =>
+  axios
+    .get(
+      `${API_URL}/sync-user-bootcamp-progress?learningpath=${learningpath}&userid=${userid}`
+    )
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getUserStats = ({ learningpath, userid, date }) =>
+  axios
+    .get(`${API_URL}/user-stats?learningpath=${learningpath}&userid=${userid}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const checkEnrollmentEligibility = (payload) =>
   axios
     .post(`${API_URL}/check-enroll-eligiblity`, payload)
