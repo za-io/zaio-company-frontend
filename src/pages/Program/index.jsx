@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getBootcampDetails } from "../../api/company";
 import { Pie } from "react-chartjs-2";
+import { MoreDetailsModal } from "./MoreDetailsModal";
 
-const StylesConfig = {
+export const StylesConfig = {
   completed: {
     styles: "bg-green-500 text-white",
     color: "white",
@@ -45,6 +46,7 @@ const Program = () => {
   const [loading, setLoading] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const [showDetailsModal, setShowDetailsModal] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [filterType, setFilterType] = useState(null);
@@ -80,6 +82,15 @@ const Program = () => {
     );
   };
 
+  const showMoreDetails = (e, user) => {
+    setShowDetailsModal({
+      userid: user?.userid?._id,
+      learningpath: user?.learningpath,
+      email: user?.userid?.email
+    });
+    e?.stopPropagation();
+  };
+
   useEffect(() => {
     if (!program) {
       navigate("/");
@@ -98,6 +109,11 @@ const Program = () => {
   return (
     <div className="px-36 py-12">
       <div className="flex justify-between">
+        <MoreDetailsModal
+          showDetailsModal={showDetailsModal}
+          setShowDetailsModal={setShowDetailsModal}
+          init={init}
+        />
         <h1 className="text-4xl font-bold text-gray-100">
           Program: {program?.bootcampName}
         </h1>
@@ -162,7 +178,9 @@ const Program = () => {
             ))}
           </div>
 
-          <p className="text-white mt-2">Note: Click on the Pie Arc to filter the data.</p>
+          <p className="text-white mt-2">
+            Note: Click on the Pie Arc to filter the data.
+          </p>
         </div>
       )}
       <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
@@ -189,6 +207,10 @@ const Program = () => {
             <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
               Progress %
             </th>
+
+            <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+              More
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
@@ -207,7 +229,7 @@ const Program = () => {
                   onClick={() => openProfile(user)}
                 >
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {user?.userid?.username}  ({user?.commitedTime} mins)
+                    {user?.userid?.username} ({user?.commitedTime} mins)
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {user?.userid?.email}
@@ -226,6 +248,15 @@ const Program = () => {
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {user?.completedPercentage}%
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                    <button
+                      onClick={(e) => {
+                        showMoreDetails(e, user);
+                      }}
+                    >
+                      <i class="bi bi-three-dots-vertical pointer"></i>
+                    </button>
                   </td>
                 </tr>
               );
