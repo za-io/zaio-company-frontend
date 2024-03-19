@@ -32,6 +32,12 @@ export const getBootcampDetails = (bootcamp_id) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const addCompany = (payload) =>
+  axios
+    .post(`${BASE_URL}/company/register`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const addProgram = (payload) =>
   axios
     .post(`${API_URL}/add`, payload)

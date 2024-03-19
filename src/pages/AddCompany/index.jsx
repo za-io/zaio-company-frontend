@@ -1,53 +1,33 @@
-import { useEffect, useState } from "react";
-import { addIntoExiting, getAllBootcamps } from "../../api/company";
+import { useState } from "react";
+import { addCompany } from "../../api/company";
 import Loader from "../../components/loader/loader";
-import useDate from "../../hooks/useDate";
-import { useUserStore } from "../../store/UserProvider";
-export const AddExiting = () => {
+
+export const AddCompany = () => {
   const [loading, setLoading] = useState(false);
-  const [bootcampList, setBootcampList] = useState(null);
-  const date = useDate();
-  const { user } = useUserStore();
-
   const [msg, setMsg] = useState(null);
-  useEffect(() => {
-    const init = () => {
-      setLoading(true);
-      getAllBootcamps({
-        company_id: user?._id,
-      })
-        .then((res) => {
-          console.log(res);
-          if (res?.status === 200) {
-            setBootcampList(res?.allBootcamps);
-          }
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    };
 
-    init();
-  }, []);
   const handleSubmit = (e) => {
     e.preventDefault();
 
     setMsg(null);
+
     const formData = new FormData(e.target);
-    const bootcampDocId = formData.get("bootcampDocId");
-    const emails = formData.get("emails");
-    const startDate = formData.get("startDate");
-    const commitedMins = formData.get("commitedMins");
+
+    const company_username = formData.get("company_username");
+    const password = formData.get("password");
+    const email = formData.get("email");
+    const company_name = formData.get("company_name");
 
     setLoading(true);
-    addIntoExiting({
-      bootcampDocId,
-      emails,
-      startDate,
-      commitedMins,
+    addCompany({
+      company_name,
+      company_username,
+      email,
+      password,
+      role: "SUPER_STUDENT_ADMIN",
     })
       .then((res) => {
-        if (res.status === 200) {
+        if (res.success) {
           setMsg("Success");
           e?.target?.reset();
         } else {
@@ -64,61 +44,55 @@ export const AddExiting = () => {
   return (
     <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
-        <p className="uppercase text-white text-large font-bold mb-4">
-          Add Into Existing Program
+        <p
+          className="uppercase text-white text-large font-bold mb-4"
+        >
+          Create Company Account
         </p>
         <div className="flex flex-wrap -mx-3 mb-6">
           <div className="w-full px-3">
-            <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
-              Bootcamp Doc Id
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              name="bootcampDocId"
-              type="text"
-              placeholder="Bootcamp Doc Id"
-              required
-              list="bootcamp_suggestions"
-            />
-            <datalist id="bootcamp_suggestions">
-              {bootcampList?.map((bootcamp) => (
-                <option value={bootcamp?._id}>{bootcamp?.bootcampName}</option>
-              ))}
-            </datalist>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap -mx-3 mb-6">
-          <div className="w-full px-3">
-            <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
-              Emails of Learners
-            </label>
-            <textarea
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              name="emails"
-              type="text"
-              placeholder="Emails of Learners"
-              required
-            ></textarea>
-            <p className="text-white text-xs italic">
-              Please enter emails of learners as a comma seperated value
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap -mx-3 mb-6">
-          <div className="w-full px-3">
             <label
               className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
               for="grid-password"
             >
-              Commited Minutes
+              Company Username
             </label>
             <input
               className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              name="commitedMins"
-              type="number"
-              placeholder="Commited Minutes"
+              name="company_username"
+              type="text"
+              placeholder="Company Username"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
+              Company Email
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="email"
+              type="text"
+              placeholder="Company Email"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
+              Password
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="password"
+              type="text"
+              placeholder="Password"
+              required
             />
           </div>
         </div>
@@ -129,13 +103,13 @@ export const AddExiting = () => {
               className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
               for="grid-password"
             >
-              Start Date (MM-DD-YYYY)
+              Company Name
             </label>
             <input
               className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              name="startDate"
+              name="company_name"
               type="text"
-              placeholder="MM-DD-YYYY"
+              placeholder="Company Name"
             />
           </div>
         </div>
@@ -144,10 +118,17 @@ export const AddExiting = () => {
           className="shadow bg-purple-500 hover:bg-purple-400 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded"
           type="submit"
         >
-          Save
+          Create
         </button>
 
-        {msg && <p className="text-white text-md mt-3">{msg}</p>}
+        {msg && (
+          <p
+            dangerouslySetInnerHTML={{
+              __html: msg,
+            }}
+            className="text-white text-md mt-3"
+          />
+        )}
       </form>
 
       {loading && (

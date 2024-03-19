@@ -154,6 +154,11 @@ export const AddProgram = () => {
   return (
     <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
+      <p
+          className="uppercase text-white text-large font-bold mb-4"
+        >
+          Add New Program
+        </p>
         <div className="flex flex-wrap -mx-3 mb-6">
           <div className="w-full px-3">
             <label

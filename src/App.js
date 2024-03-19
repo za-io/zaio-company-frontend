@@ -18,6 +18,7 @@ import StudentChallenges from "./pages/StudentChallenges";
 import StudentAssignments from "./pages/StudentAssignments";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AddExiting } from "./pages/AddExisting";
+import { AddCompany } from "./pages/AddCompany";
 
 const AppHelper = () => {
   return (
@@ -32,6 +33,13 @@ const AppHelper = () => {
           path="/program/add"
           element={
             <ProtectedRoute path="/program/add" component={<AddProgram />} />
+          }
+        />
+
+        <Route
+          path="/company/add"
+          element={
+            <ProtectedRoute path="/company/add" component={<AddCompany />} />
           }
         />
         <Route
