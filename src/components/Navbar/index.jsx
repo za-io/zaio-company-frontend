@@ -13,39 +13,52 @@ const Navbar = () => {
   };
   return (
     <div className="w-full flex justify-between items-center px-36 py-4 border-b border-gray-500">
-      <Link to="/" className="flex items-center">
+      <Link to="/" className="flex items-end">
         <img className="h-10" src={logo} alt="" />
         {user?.email && (
-          <p className="text-white m-0 ml-2 text-lg font-bold text-purple-200">
-            Hello, {user?.company_name}
+          <p className="text-white m-0 ms-3 text-lg font-bold text-purple-200">
+            Hello, {user?.company_username}
           </p>
         )}
       </Link>
 
-      <div className="flex items-center gap-4">
-        {/* <Link to='/' className='text-gray-100 font-medium'>Programs</Link> */}
-        {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
-          <Link
-            to="/program/add"
-            className="bg-yellow-500 px-12 py-3 rounded font-medium"
-          >
-            New Program
-          </Link>
-        )}
+      <div className="flex">
+        {user?.email && user?.role === "SUPER_ADMIN" && (
+          <select
+            className="bg-gray-800 border text-white px-4 py-2 rounded font-medium"
+            onChange={(event) => {
+              const selectedOption = event.target.value;
+              // Handle selected option
+              switch (selectedOption) {
+                case "/program/add":
+                case "/program/add/exiting":
+                case "/company/add":
+                  navigate(selectedOption);
+                  break;
 
-        {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
-          <Link
-            to="/program/add/exiting"
-            className="bg-yellow-500 px-12 py-3 rounded font-medium"
+                default:
+                  break;
+              }
+            }}
           >
-            Exiting Program
-          </Link>
+            <option value="" disabled>
+              --options--
+            </option>
+            {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
+              <option value="/program/add">New Program</option>
+            )}
+            {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
+              <option value="/program/add/exiting">Exiting Program</option>
+            )}
+            {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
+              <option value="/company/add">New Company</option>
+            )}
+          </select>
         )}
-
         {user?.email && (
           <button
             onClick={handleLogout}
-            className="bg-red-500 px-12 py-3 rounded font-medium"
+            className="bg-red-500 ms-4 px-12 py-3 rounded font-medium"
           >
             Logout
           </button>
