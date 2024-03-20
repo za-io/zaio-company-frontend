@@ -23,38 +23,43 @@ const Navbar = () => {
       </Link>
 
       <div className="flex">
-        {user?.email && user?.role === "SUPER_ADMIN" && (
-          <select
-            className="bg-gray-800 border text-white px-4 py-2 rounded font-medium"
-            onChange={(event) => {
-              const selectedOption = event.target.value;
-              // Handle selected option
-              switch (selectedOption) {
-                case "/program/add":
-                case "/program/add/exiting":
-                case "/company/add":
-                  navigate(selectedOption);
-                  break;
+        {user?.email &&
+          ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(user?.role) && (
+            <select
+              className="bg-gray-800 border text-white px-4 py-2 rounded font-medium"
+              onChange={(event) => {
+                const selectedOption = event.target.value;
+                // Handle selected option
+                switch (selectedOption) {
+                  case "/program/add":
+                  case "/program/add/exiting":
+                  case "/company/add":
+                    navigate(selectedOption);
+                    break;
 
-                default:
-                  break;
-              }
-            }}
-          >
-            <option value="" disabled>
-              --options--
-            </option>
-            {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
-              <option value="/program/add">New Program</option>
-            )}
-            {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
-              <option value="/program/add/exiting">Exiting Program</option>
-            )}
-            {user?.email && user?.role !== "SUPER_STUDENT_ADMIN" && (
-              <option value="/company/add">New Company</option>
-            )}
-          </select>
-        )}
+                  default:
+                    break;
+                }
+              }}
+            >
+              <option value="" disabled>
+                --options--
+              </option>
+              {user?.email &&
+                ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(
+                  user?.role
+                ) && <option value="/program/add">New Program</option>}
+              {user?.email &&
+                ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(
+                  user?.role
+                ) && (
+                  <option value="/program/add/exiting">Exiting Program</option>
+                )}
+              {user?.email && ["SUPER_ADMIN"]?.includes(user?.role) && (
+                <option value="/company/add">New Company</option>
+              )}
+            </select>
+          )}
         {user?.email && (
           <button
             onClick={handleLogout}
