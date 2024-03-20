@@ -158,6 +158,7 @@ function App() {
   const checkAuth = () => {
     const token = localStorage.getItem("TOKEN");
     if (!token) {
+      setLoading(false);
       return navigate("/login");
     }
 
