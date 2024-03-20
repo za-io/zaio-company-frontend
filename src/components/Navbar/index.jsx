@@ -53,7 +53,7 @@ const Navbar = () => {
                 ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(
                   user?.role
                 ) && (
-                  <option value="/program/add/exiting">Exiting Program</option>
+                  <option value="/program/add/exiting">Add to existing program</option>
                 )}
               {user?.email && ["SUPER_ADMIN"]?.includes(user?.role) && (
                 <option value="/company/add">New Company</option>
