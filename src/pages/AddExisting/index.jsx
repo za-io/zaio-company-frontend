@@ -1,45 +1,108 @@
 import { useEffect, useState } from "react";
-import { addIntoExiting, getAllBootcamps } from "../../api/company";
+import {
+  addIntoExiting,
+  checkEnrollmentEligibility,
+  enrollStudentsIntoLP,
+  getAllBootcamps,
+  getAllLPs,
+} from "../../api/company";
 import Loader from "../../components/loader/loader";
-import useDate from "../../hooks/useDate";
 import { useUserStore } from "../../store/UserProvider";
+import { flowTypes } from "../AddProgram";
 export const AddExiting = () => {
   const [loading, setLoading] = useState(false);
   const [bootcampList, setBootcampList] = useState(null);
-  const date = useDate();
+  const [allEnrolled, setAllEnrolled] = useState(null);
+  const [flow, setFlow] = useState(null);
+  const [lpList, setLpList] = useState(null);
+
   const { user } = useUserStore();
 
   const [msg, setMsg] = useState(null);
   useEffect(() => {
-    const init = () => {
-      setLoading(true);
-      getAllBootcamps({
-        company_id: user?._id,
-      })
-        .then((res) => {
-          console.log(res);
-          if (res?.status === 200) {
-            setBootcampList(res?.allBootcamps);
-          }
-        })
-        .finally(() => {
-          setLoading(false);
+    const init = async () => {
+      try {
+        setLoading(true);
+        const allBootcampsRes = await getAllBootcamps({
+          company_id: user?._id,
         });
+
+        const allLPsRes = await getAllLPs();
+
+        console.log(allBootcampsRes);
+        if (allBootcampsRes?.status === 200) {
+          setBootcampList(allBootcampsRes?.allBootcamps);
+        }
+
+        if (allLPsRes?.status === 200) {
+          setLpList(allLPsRes?.allLps);
+        }
+      } catch (err) {
+      } finally {
+        setLoading(false);
+      }
     };
 
     init();
   }, []);
+
+  const checkAndEnrollStudents = (e) => {
+    const formData = new FormData(e.target);
+    const learningPath = formData.get("learningPath");
+    const emails = formData.get("emails");
+
+    if (!learningPath || !emails)
+      return setMsg("Please enter learningpath and emails.");
+    setLoading(true);
+    checkEnrollmentEligibility({
+      learningPath,
+      emails,
+    })
+      .then(async (res) => {
+        if (res?.missingEmails?.length > 0) {
+          //show the list of missing users
+          setMsg(`Please ask the below students to make an account as they can not be seen in the Zaio system:\n
+          ${res?.missingEmails?.join(", ")}
+          `);
+        } else {
+          //call the enrollment api
+          const enrollRes = await enrollStudentsIntoLP({
+            emails,
+            learningpathid: learningPath,
+          });
+
+          console.log(enrollRes, "enrollRes");
+          setAllEnrolled(true);
+          setMsg(enrollRes?.message || "Error enrolling the students.");
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    if (flow === flowTypes.enroll_students) return checkAndEnrollStudents(e);
+
     setMsg(null);
+
     const formData = new FormData(e.target);
     const bootcampDocId = formData.get("bootcampDocId");
     const emails = formData.get("emails");
     const startDate = formData.get("startDate");
     const commitedMins = formData.get("commitedMins");
 
+    if (!allEnrolled) {
+      return setMsg(
+        "Please enroll all the students into the learningpath first."
+      );
+    }
+
     setLoading(true);
+
     addIntoExiting({
       bootcampDocId,
       emails,
@@ -65,7 +128,7 @@ export const AddExiting = () => {
     <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
         <p className="uppercase text-white text-large font-bold mb-4">
-          Add Into Existing Program
+          Add to Existing Program
         </p>
         <div className="flex flex-wrap -mx-3 mb-6">
           <div className="w-full px-3">
@@ -83,6 +146,26 @@ export const AddExiting = () => {
             <datalist id="bootcamp_suggestions">
               {bootcampList?.map((bootcamp) => (
                 <option value={bootcamp?._id}>{bootcamp?.bootcampName}</option>
+              ))}
+            </datalist>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
+              learning path ID
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="learningPath"
+              type="text"
+              placeholder="Learning Path ID"
+              list="lp_suggestions"
+            />
+            <datalist id="lp_suggestions">
+              {lpList?.map((lp) => (
+                <option value={lp?._id}>{lp?.learningpathname}</option>
               ))}
             </datalist>
           </div>
@@ -141,10 +224,23 @@ export const AddExiting = () => {
         </div>
 
         <button
+          onClick={() => {
+            setFlow(flowTypes.bootcamp_api);
+          }}
           className="shadow bg-purple-500 hover:bg-purple-400 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded"
           type="submit"
         >
           Save
+        </button>
+
+        <button
+          onClick={() => {
+            setFlow(flowTypes.enroll_students);
+          }}
+          className="shadow ml-3 bg-purple-500 hover:bg-purple-400 focus:shadow-outline focus:outline-none text-white font-bold py-2 px-4 rounded"
+          type="submit"
+        >
+          Enroll into learningpath
         </button>
 
         {msg && <p className="text-white text-md mt-3">{msg}</p>}

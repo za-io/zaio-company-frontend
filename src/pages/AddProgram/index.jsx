@@ -12,7 +12,7 @@ import Calendar from "../../components/TasksCalendar/Calendar";
 import useDate from "../../hooks/useDate";
 import { TasksModal } from "../../components/TasksCalendar/TasksModal";
 
-const flowTypes = {
+export const flowTypes = {
   preview_cal: "preview_cal",
   enroll_students: "enroll_students",
   bootcamp_api: "bootcamp_api",
