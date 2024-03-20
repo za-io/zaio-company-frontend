@@ -24,7 +24,7 @@ export const AddCompany = () => {
       company_username,
       email,
       password,
-      role: "SUPER_STUDENT_ADMIN",
+      role: "COMPANY_ADMIN",
     })
       .then((res) => {
         if (res.success) {
