@@ -90,7 +90,7 @@ const LPAnalyticsTable = ({
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           <div className="d-flex">
                             <button
-                              className="bg-blue-200 me-2 py-2 px-5 my-2 rounded font-small"
+                              className={`bg-${ba?.userid?.accBlocked  ? "green" : "red"}-200 me-2 py-2 px-5 my-2 rounded font-small`}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleBlockUnBlock(event, ba);
