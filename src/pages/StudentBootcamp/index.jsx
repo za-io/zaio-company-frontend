@@ -72,7 +72,7 @@ const StudentBootcamp = () => {
       <h1 className="text-4xl font-bold text-gray-100">
         Program: {bootcamp?.bootcampName}
       </h1>
-      <CustomDataTable data={bootcamp} total={total} loading={loading} />
+      <CustomDataTable setBootcamp={setBootcamp} data={bootcamp} total={total} loading={loading} />
       {loading && <Loader />}
     </div>
   );

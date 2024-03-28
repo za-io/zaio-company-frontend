@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
+import { blockUser, unblockUser } from "../../api/student";
+import Loader from "../../components/loader/loader";
 
-const AnalyticsTable = ({ data, total, loading, searchType }) => {
+const AnalyticsTable = ({ data, total, loading, searchType, getAnalytics }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [rowLoading, setRowLoading] = useState(false);
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
     navigate(
@@ -19,6 +22,23 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
 
   const handleCourse = (courseId, type) => {
     navigate(`/student/course/${courseId}/${type}`);
+  };
+
+  const handleBlockUnBlock = async (e, user) => {
+    e?.preventDefault();
+    console.log(user);
+    setRowLoading(user?.userid?._id);
+    if (user?.userid?.accBlocked) {
+      await unblockUser({
+        userid: user?.userid?._id,
+      });
+    } else {
+      await blockUser({
+        userid: user?.userid?._id,
+      });
+    }
+    getAnalytics();
+    setRowLoading(null);
   };
 
   if (loading) return <></>;
@@ -65,6 +85,10 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   View Progress
+                </th>
+
+                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Account Status
                 </th>
               </tr>
             </thead>
@@ -151,6 +175,23 @@ const AnalyticsTable = ({ data, total, loading, searchType }) => {
                           >
                             View Calendar
                           </button>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          <div className="d-flex">
+                            <button
+                              className="bg-blue-200 me-2 py-2 px-5 my-2 rounded font-small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleBlockUnBlock(event, ba);
+                              }}
+                            >
+                              {ba?.userid?.accBlocked ? "Unblock" : "Block"}
+                            </button>
+                            {rowLoading === ba?.userid?._id && (
+                              <Loader size={20} />
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

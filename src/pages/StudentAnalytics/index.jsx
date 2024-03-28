@@ -238,6 +238,7 @@ const StudentAnalytics = () => {
           total={bootcamp?.total}
           loading={loading}
           searchType="bootcamp"
+          getAnalytics={getAnalytics}
         />
       )}
       {searchType === "learningpath" && (

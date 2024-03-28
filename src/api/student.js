@@ -51,6 +51,18 @@ export const getAllCourses = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const blockUser = (data) =>
+  axios
+    .post(BASE_URL + `/company/block-user`, data)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const unblockUser = (data) =>
+  axios
+    .post(BASE_URL + `/company/unblock-user`, data)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const addProgram = (payload) =>
   axios
     .post(`${API_URL}/add`, payload)
