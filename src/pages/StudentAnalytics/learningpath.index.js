@@ -1,14 +1,39 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { blockUser, unblockUser } from "../../api/student";
+import Loader from "../../components/loader/loader";
 
-const LPAnalyticsTable = ({ data, total, loading, searchType }) => {
+const LPAnalyticsTable = ({
+  data,
+  total,
+  loading,
+  searchType,
+  getAnalytics,
+}) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [rowLoading, setRowLoading] = useState(false);
+
   const navigate = useNavigate();
 
   const handleLearningpath = (learningpathId, userid) => {
-    navigate(
-      `/student/learningpath/${learningpathId}?user_id=${userid}`
-    );
+    navigate(`/student/learningpath/${learningpathId}?user_id=${userid}`);
+  };
+
+  const handleBlockUnBlock = async (e, user) => {
+    e?.preventDefault();
+    console.log(user);
+    setRowLoading(user?.userid?._id);
+    if (user?.userid?.accBlocked) {
+      await unblockUser({
+        userid: user?.userid?._id,
+      });
+    } else {
+      await blockUser({
+        userid: user?.userid?._id,
+      });
+    }
+    getAnalytics();
+    setRowLoading(null);
   };
 
   if (loading) return <></>;
@@ -38,6 +63,9 @@ const LPAnalyticsTable = ({ data, total, loading, searchType }) => {
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Username
                 </th>
+                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Account Status
+                </th>
               </tr>
             </thead>
             {data && data.learningpathenrolledusers.length !== 0 && (
@@ -50,11 +78,30 @@ const LPAnalyticsTable = ({ data, total, loading, searchType }) => {
                         key={ba?._id}
                         className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
                         onClick={() => {
-                          handleLearningpath(ba.learningpathid, ba?.userid?._id);
+                          handleLearningpath(
+                            ba.learningpathid,
+                            ba?.userid?._id
+                          );
                         }}
                       >
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           {ba?.userid?.username}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          <div className="d-flex">
+                            <button
+                              className="bg-blue-200 me-2 py-2 px-5 my-2 rounded font-small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleBlockUnBlock(event, ba);
+                              }}
+                            >
+                              {ba?.userid?.accBlocked ? "Unblock" : "Block"}
+                            </button>
+                            {rowLoading === ba?.userid?._id && (
+                              <Loader size={20} />
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

@@ -246,6 +246,7 @@ const StudentAnalytics = () => {
           data={learningpath}
           total={learningpath?.total}
           loading={loading}
+          getAnalytics={getAnalytics}
         />
       )}
       {searchType === "course" && (
