@@ -36,6 +36,9 @@ const CourseAnalyticsTable = ({ data, total, loading, searchType }) => {
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Username
                 </th>
+                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Email
+                </th>
 
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Challenges
@@ -53,7 +56,15 @@ const CourseAnalyticsTable = ({ data, total, loading, searchType }) => {
             {data && data.courseenrolledusers.length !== 0 && (
               <tbody className="divide-y divide-gray-200">
                 {data.courseenrolledusers
-                  ?.filter((ba) => ba?.userid?.username?.includes(searchQuery))
+                  ?.filter(
+                    (ba) =>
+                      ba?.userid?.username
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase()) ||
+                      ba?.userid?.email
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase())
+                  )
                   ?.map((ba) => {
                     return (
                       <tr
@@ -62,6 +73,9 @@ const CourseAnalyticsTable = ({ data, total, loading, searchType }) => {
                       >
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           {ba?.userid?.username}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          {ba?.userid?.email}
                         </td>
                         <td
                           onClick={() => {

@@ -11,6 +11,8 @@ const calcClasses = (type, mc) => {
 };
 
 const MCQTable = ({ loading, data, type, userId }) => {
+  const { user } = useUserStore();
+
   const showSubmittedCode = (code) => {
     window.open(
       `${
@@ -19,7 +21,7 @@ const MCQTable = ({ loading, data, type, userId }) => {
           : "https://www.zaio.io/"
       }watch/${code?.courseid}/${code?.courseunitid}/${
         code?.lectureid
-      }?userid=${userId}`,
+      }?userid=${userId}${user?.role === "TUTOR" ? "&tutor=true" : ""}`,
       "_blank"
     );
   };

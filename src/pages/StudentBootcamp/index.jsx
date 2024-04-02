@@ -19,7 +19,6 @@ const StudentBootcamp = () => {
   const [total, setTotal] = useState(null);
   const navigate = useNavigate();
   const handleChange = (event) => {
-    console.log("ddsda", event.target.value);
     setBootcampId(event.target.value);
   };
 
@@ -54,7 +53,7 @@ const StudentBootcamp = () => {
     getBootcamps();
   }, []);
   return (
-    <div className="px-36 py-12">
+    <div className="py-12">
       <div>
         <select value={bootcampId} onChange={handleChange}>
           {allBootcamps.map((ab) => {
