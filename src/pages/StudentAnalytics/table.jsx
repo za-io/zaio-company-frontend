@@ -4,7 +4,14 @@ import { roundOff } from "../../utils/mathUtils";
 import { blockUser, unblockUser } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
-const AnalyticsTable = ({ data, total, loading, searchType, getAnalytics }) => {
+const AnalyticsTable = ({
+  data,
+  total,
+  loading,
+  searchType,
+  getAnalytics,
+  user,
+}) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
   const navigate = useNavigate();
@@ -62,40 +69,50 @@ const AnalyticsTable = ({ data, total, loading, searchType, getAnalytics }) => {
             </datalist>
           </div>
 
-          <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
+          <table class="table-fixed w-100 overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
             <thead className="border-b text-2xl bg-gray-50">
               <tr className="">
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="w-1/5 text-center px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Username
                 </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Lectures
                 </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   MCQs
                 </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Coding Challenges
                 </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Assignments
                 </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Progress
                 </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   View Progress
                 </th>
 
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Account Status
-                </th>
+                {!["TUTOR"]?.includes(user?.role) && (
+                  <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                    Account Status
+                  </th>
+                )}
               </tr>
             </thead>
             {data && data.analytics.length !== 0 && (
               <tbody className="divide-y divide-gray-200">
                 {data.analytics
-                  ?.filter((ba) => ba?.userid?.username?.includes(searchQuery))
+                  ?.filter(
+                    (ba) =>
+                      ba?.userid?.username
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase()) ||
+                      ba?.userid?.email
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase())
+                  )
                   ?.map((ba) => {
                     // const classes =
                     //   StylesConfig[user?.currentPerformance]?.styles || "";
@@ -125,7 +142,11 @@ const AnalyticsTable = ({ data, total, loading, searchType, getAnalytics }) => {
                         }}
                       >
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                          {ba?.userid?.username}
+                          {ba?.userid?.username}{" "}
+                          <span className="text-purple-600">
+                            {" "}
+                            ({ba?.userid?.email})
+                          </span>
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           {total?.lectures !== 0
@@ -162,7 +183,7 @@ const AnalyticsTable = ({ data, total, loading, searchType, getAnalytics }) => {
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           {roundOff(totalProgress)}%
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <td className="px-2 py-4 text-sm font-medium text-gray-800">
                           <button
                             className="bg-blue-200 py-2 px-5 my-2 rounded font-small"
                             onClick={(event) => {
@@ -177,22 +198,26 @@ const AnalyticsTable = ({ data, total, loading, searchType, getAnalytics }) => {
                           </button>
                         </td>
 
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                          <div className="d-flex">
-                            <button
-                              className={`bg-${ba?.userid?.accBlocked  ? "green" : "red"}-200 me-2 py-2 px-5 my-2 rounded font-small`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleBlockUnBlock(event, ba);
-                              }}
-                            >
-                              {ba?.userid?.accBlocked ? "Unblock" : "Block"}
-                            </button>
-                            {rowLoading === ba?.userid?._id && (
-                              <Loader size={20} />
-                            )}
-                          </div>
-                        </td>
+                        {!["TUTOR"]?.includes(user?.role) && (
+                          <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                            <div className="d-flex">
+                              <button
+                                className={`bg-${
+                                  ba?.userid?.accBlocked ? "green" : "red"
+                                }-200 me-2 py-2 px-5 my-2 rounded font-small`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleBlockUnBlock(event, ba);
+                                }}
+                              >
+                                {ba?.userid?.accBlocked ? "Unblock" : "Block"}
+                              </button>
+                              {rowLoading === ba?.userid?._id && (
+                                <Loader size={20} />
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

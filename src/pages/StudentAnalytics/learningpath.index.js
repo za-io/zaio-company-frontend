@@ -64,6 +64,9 @@ const LPAnalyticsTable = ({
                   Username
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Account Status
                 </th>
               </tr>
@@ -71,7 +74,15 @@ const LPAnalyticsTable = ({
             {data && data.learningpathenrolledusers.length !== 0 && (
               <tbody className="divide-y divide-gray-200">
                 {data.learningpathenrolledusers
-                  ?.filter((ba) => ba?.userid?.username?.includes(searchQuery))
+                  ?.filter(
+                    (ba) =>
+                      ba?.userid?.username
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase()) ||
+                      ba?.userid?.email
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase())
+                  )
                   ?.map((ba) => {
                     return (
                       <tr
@@ -88,9 +99,14 @@ const LPAnalyticsTable = ({
                           {ba?.userid?.username}
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          {ba?.userid?.email}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           <div className="d-flex">
                             <button
-                              className={`bg-${ba?.userid?.accBlocked  ? "green" : "red"}-200 me-2 py-2 px-5 my-2 rounded font-small`}
+                              className={`bg-${
+                                ba?.userid?.accBlocked ? "green" : "red"
+                              }-200 me-2 py-2 px-5 my-2 rounded font-small`}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleBlockUnBlock(event, ba);

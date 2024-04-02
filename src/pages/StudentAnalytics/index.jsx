@@ -12,6 +12,7 @@ import AnalyticsTable from "./table";
 import { useSearchParams } from "react-router-dom";
 import LPAnalyticsTable from "./learningpath.index";
 import CourseAnalyticsTable from "./course.index";
+import { useUserStore } from "../../store/UserProvider";
 
 const calcSearchType = (bootcampid, learningpathid, courseid) => {
   if (bootcampid) {
@@ -48,6 +49,7 @@ const StudentAnalytics = () => {
   const [bootcamp, setBootcamp] = useState(null);
   const [learningpath, setLearningpath] = useState(null);
   const [course, setCourse] = useState(null);
+  const { user } = useUserStore();
 
   const handleBootcampChange = (event) => {
     setBootcampId(event.target.value);
@@ -147,7 +149,7 @@ const StudentAnalytics = () => {
   }, []);
   return (
     <div className="px-36 py-12">
-      {!loading && (
+      {!loading && !["TUTOR"]?.includes(user?.role) && (
         <div>
           <select
             placeholder="sdad"
@@ -239,6 +241,7 @@ const StudentAnalytics = () => {
           loading={loading}
           searchType="bootcamp"
           getAnalytics={getAnalytics}
+          user={user}
         />
       )}
       {searchType === "learningpath" && (
