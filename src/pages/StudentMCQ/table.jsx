@@ -1,3 +1,5 @@
+import { useUserStore } from "../../store/UserProvider";
+
 const calcClasses = (type, mc) => {
   if (type === "MCQ") {
     return mc.attempted === true ? "bg-green-100" : "bg-red-100";
