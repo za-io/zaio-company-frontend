@@ -34,6 +34,7 @@ const Navbar = () => {
                   case "/program/add":
                   case "/program/add/exiting":
                   case "/company/add":
+                  case "/tutor/add":
                     navigate(selectedOption);
                     break;
 
@@ -46,17 +47,20 @@ const Navbar = () => {
                 --options--
               </option>
               {user?.email &&
-                ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(
-                  user?.role
-                ) && <option value="/program/add">New Program</option>}
+                ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(user?.role) && (
+                  <option value="/program/add">New Program</option>
+                )}
               {user?.email &&
-                ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(
-                  user?.role
-                ) && (
-                  <option value="/program/add/exiting">Add to existing program</option>
+                ["SUPER_ADMIN", "COMPANY_ADMIN"]?.includes(user?.role) && (
+                  <option value="/program/add/exiting">
+                    Add to existing program
+                  </option>
                 )}
               {user?.email && ["SUPER_ADMIN"]?.includes(user?.role) && (
                 <option value="/company/add">New Company</option>
+              )}
+              {user?.email && ["SUPER_ADMIN"]?.includes(user?.role) && (
+                <option value="/tutor/add">New Tutor</option>
               )}
             </select>
           )}

@@ -19,6 +19,8 @@ import StudentAssignments from "./pages/StudentAssignments";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AddExiting } from "./pages/AddExisting";
 import { AddCompany } from "./pages/AddCompany";
+import TutorAnalytics from "./pages/StudentAnalytics/TutorAnalytics";
+import { AddTutor } from "./pages/AddTutor";
 
 const AppHelper = () => {
   return (
@@ -28,6 +30,15 @@ const AppHelper = () => {
         <Route
           path="/"
           element={<ProtectedRoute path="/" component={<Dashboard />} />}
+        />
+        <Route
+          path="/tutor/analytics"
+          element={
+            <ProtectedRoute
+              path="/tutor/analytics"
+              component={<TutorAnalytics />}
+            />
+          }
         />
         <Route
           path="/program/add"
@@ -40,6 +51,13 @@ const AppHelper = () => {
           path="/company/add"
           element={
             <ProtectedRoute path="/company/add" component={<AddCompany />} />
+          }
+        />
+
+        <Route
+          path="/tutor/add"
+          element={
+            <ProtectedRoute path="/tutor/add" component={<AddTutor />} />
           }
         />
         <Route
@@ -80,6 +98,7 @@ const AppHelper = () => {
             />
           }
         />
+
         <Route
           path="/student/bootcamp/:bootcampid/learningpath/:learningpathid"
           element={

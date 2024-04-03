@@ -8,6 +8,13 @@ export const registerCompany = (payload) =>
     .post(`${API_URL}/register`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const registerTutor = (payload) =>
+  axios
+    .post(`${BASE_URL}/company/registerTutor`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const loginCompany = (payload) =>
   axios
     .post(`${BASE_URL}/company/login`, payload)
