@@ -128,7 +128,7 @@ const Dashboard = () => {
             to={"/tutor/analytics"}
             className="bg-blue-500 ms-4 px-12 py-3 rounded font-medium text-white"
           >
-            Analtics
+            Analytics
           </Link>
         </>
       )}
