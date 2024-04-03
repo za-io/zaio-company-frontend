@@ -95,7 +95,7 @@ const Dashboard = () => {
 
       {["TUTOR"]?.includes(user?.role) && (
         <>
-          <h1 className="text-4xl font-bold text-gray-100">Bootcamps:</h1>
+          {/* <h1 className="text-4xl font-bold text-gray-100">Bootcamps:</h1>
           {user?.bootcamps?.length > 0 && (
             <div className="grid grid-cols-3 gap-16 mt-12">
               {user?.bootcamps?.map((program) => (
@@ -123,7 +123,13 @@ const Dashboard = () => {
                 </div>
               ))}
             </div>
-          )}
+          )} */}
+          <Link
+            to={"/tutor/analytics"}
+            className="bg-blue-500 ms-4 px-12 py-3 rounded font-medium text-white"
+          >
+            Analtics
+          </Link>
         </>
       )}
 
