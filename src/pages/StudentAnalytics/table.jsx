@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
 import { blockUser, unblockUser } from "../../api/student";
 import Loader from "../../components/loader/loader";
+import { SORTING } from "./learningpath.index";
 
 const AnalyticsTable = ({
   data,
@@ -14,6 +15,8 @@ const AnalyticsTable = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
+  const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
+
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
     navigate(
@@ -48,6 +51,10 @@ const AnalyticsTable = ({
     setRowLoading(null);
   };
 
+  const handleChange = (event) => {
+    setSortBy(event.target.value);
+  };
+
   if (loading) return <></>;
 
   return (
@@ -68,7 +75,22 @@ const AnalyticsTable = ({
               ))}
             </datalist>
           </div>
-
+          <select
+            className={`py-2 rounded`}
+            value={sortBy}
+            onChange={handleChange}
+          >
+            <option className="text-black-500" disabled>
+              {" "}
+              -- sort --{" "}
+            </option>
+            <option value={SORTING.PROGRESS_ASC} className="text-black-500">
+              Progress ASC
+            </option>
+            <option value={SORTING.PROGRESS_DESC} className="text-black-500">
+              Progress DESC
+            </option>
+          </select>
           <table class="table-fixed w-100 overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
             <thead className="border-b text-2xl bg-gray-50">
               <tr className="">
@@ -113,6 +135,35 @@ const AnalyticsTable = ({
                         ?.toLowerCase()
                         ?.includes(searchQuery?.toLowerCase())
                   )
+                  ?.sort((a, b) => {
+                    const aTotalProgress =
+                      (((a?.completedLecturesCount || 0) +
+                        (a?.completedChallengesCount || 0) +
+                        (a?.completedMCQCount || 0) +
+                        (a?.completedAssignmentCount || 0)) /
+                        Object.values(total).reduce(
+                          (val, tot) => (val ?? 0) + tot,
+                          0
+                        )) *
+                      100;
+
+                    const bTotalProgress =
+                      (((b?.completedLecturesCount || 0) +
+                        (b?.completedChallengesCount || 0) +
+                        (b?.completedMCQCount || 0) +
+                        (b?.completedAssignmentCount || 0)) /
+                        Object.values(total).reduce(
+                          (val, tot) => (val ?? 0) + tot,
+                          0
+                        )) *
+                      100;
+
+                    if (sortBy === SORTING.PROGRESS_DESC) {
+                      return bTotalProgress - aTotalProgress;
+                    } else if (sortBy === SORTING.PROGRESS_ASC) {
+                      return aTotalProgress - bTotalProgress;
+                    }
+                  })
                   ?.map((ba) => {
                     // const classes =
                     //   StylesConfig[user?.currentPerformance]?.styles || "";

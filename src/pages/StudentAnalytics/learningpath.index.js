@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { blockUser, unblockUser } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
+export const SORTING = {
+  PROGRESS_ASC: "PROGRESS_ASC",
+  PROGRESS_DESC: "PROGRESS_DESC",
+};
+
 const LPAnalyticsTable = ({
   data,
   total,
@@ -12,6 +17,7 @@ const LPAnalyticsTable = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
+  const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
 
   const navigate = useNavigate();
 
@@ -36,6 +42,10 @@ const LPAnalyticsTable = ({
     setRowLoading(null);
   };
 
+  const handleChange = (event) => {
+    setSortBy(event.target.value);
+  };
+
   if (loading) return <></>;
 
   return (
@@ -55,6 +65,22 @@ const LPAnalyticsTable = ({
                 <option value={d?.userid?.username} />
               ))}
             </datalist>
+            <select
+              className={`py-2 rounded`}
+              value={sortBy}
+              onChange={handleChange}
+            >
+              <option className="text-black-500" disabled>
+                {" "}
+                -- sort --{" "}
+              </option>
+              <option value={SORTING.PROGRESS_ASC} className="text-black-500">
+                Progress ASC
+              </option>
+              <option value={SORTING.PROGRESS_DESC} className="text-black-500">
+                Progress DESC
+              </option>
+            </select>
           </div>
 
           <table class=" overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
@@ -65,6 +91,9 @@ const LPAnalyticsTable = ({
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Email
+                </th>
+                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Progress
                 </th>
                 <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Account Status
@@ -83,6 +112,13 @@ const LPAnalyticsTable = ({
                         ?.toLowerCase()
                         ?.includes(searchQuery?.toLowerCase())
                   )
+                  ?.sort((a, b) => {
+                    if (sortBy === SORTING.PROGRESS_DESC) {
+                      return b?.lpProgress - a?.lpProgress;
+                    } else if (sortBy === SORTING.PROGRESS_ASC) {
+                      return a?.lpProgress - b?.lpProgress;
+                    }
+                  })
                   ?.map((ba) => {
                     return (
                       <tr
@@ -100,6 +136,9 @@ const LPAnalyticsTable = ({
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           {ba?.userid?.email}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          {ba?.lpProgress}%
                         </td>
                         <td className="px-6 py-4 text-sm font-medium text-gray-800">
                           <div className="d-flex">
