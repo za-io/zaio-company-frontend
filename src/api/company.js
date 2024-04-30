@@ -27,6 +27,12 @@ export const getAllBootcamps = ({ company_id }) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const getAllcompanies = () =>
+  axios
+    .get(BASE_URL + "/company/all-company")
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const getAllLPs = () =>
   axios
     .get(API_URL + `/all/learningpaths`)
@@ -92,5 +98,25 @@ export const enrollStudentsIntoLP = (payload) =>
 export const checkAuthToken = (payload) =>
   axios
     .post(`${BASE_URL}/company/checkAuthToken`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getAllWarnings = ({ bootcampid, userid }) =>
+  axios
+    .get(
+      `${BASE_URL}/bootcamp/bootcamp-warnings?bootcampid=${bootcampid}&userid=${userid}`
+    )
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const sendWarningEmail = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/send-warnings-email`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const mapCompanyBootcamp = (payload) =>
+  axios
+    .post(`${BASE_URL}/company/map-bootcamp-company`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
