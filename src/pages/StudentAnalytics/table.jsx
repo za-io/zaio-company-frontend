@@ -4,6 +4,7 @@ import { roundOff } from "../../utils/mathUtils";
 import { blockUser, unblockUser } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
+import { WarningModal } from "./WarningModal";
 
 const AnalyticsTable = ({
   data,
@@ -16,7 +17,7 @@ const AnalyticsTable = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
-
+  const [showWarningModal, setShowWarningModal] = useState(null);
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
     navigate(
@@ -59,6 +60,11 @@ const AnalyticsTable = ({
 
   return (
     <div>
+      <WarningModal
+      bootcampId={data?.bootcampDetails?._id}
+        showModal={showWarningModal}
+        setShowModal={setShowWarningModal}
+      />
       {data?.analytics?.length > 0 && (
         <>
           <div>
@@ -94,31 +100,36 @@ const AnalyticsTable = ({
           <table class="table-fixed w-100 overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
             <thead className="border-b text-2xl bg-gray-50">
               <tr className="">
-                <th className="w-1/5 text-center px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Username
                 </th>
-                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Lectures
                 </th>
-                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   MCQs
                 </th>
-                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Coding Challenges
                 </th>
-                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Assignments
                 </th>
-                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Progress
                 </th>
-                <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   View Progress
                 </th>
 
                 {!["TUTOR"]?.includes(user?.role) && (
-                  <th className="px-6 text-center py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  <th className="  py-3 text-xs font-bold text-left text-gray-500 uppercase">
                     Account Status
+                  </th>
+                )}
+                {!["TUTOR"]?.includes(user?.role) && (
+                  <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
+                    Warning
                   </th>
                 )}
               </tr>
@@ -192,14 +203,14 @@ const AnalyticsTable = ({
                             handleLearningpath(data._id);
                         }}
                       >
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {ba?.userid?.username}{" "}
                           <span className="text-purple-600">
                             {" "}
                             ({ba?.userid?.email})
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {total?.lectures !== 0
                             ? `${ba?.completedLecturesCount}/${
                                 total?.lectures || 0
@@ -207,7 +218,7 @@ const AnalyticsTable = ({
                             : "NA"}
                         </td>
                         <td
-                          className="px-6 py-4 text-sm font-medium text-gray-800"
+                          className="px-1 py-4 text-sm font-medium text-gray-800"
                           onClick={() => {
                             searchType === "course" &&
                               handleCourse(data._id, "mcq");
@@ -217,21 +228,21 @@ const AnalyticsTable = ({
                             ? `${ba?.completedMCQCount}/${total?.mcq || 0}`
                             : "NA"}
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {total?.challenge !== 0
                             ? `${ba?.completedChallengesCount}/${
                                 total?.challenge || 0
                               }`
                             : "NA"}
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {total?.assignment !== 0
                             ? `${ba?.completedAssignmentCount}/${
                                 total?.assignment || 0
                               } ${total?.assignment}`
                             : "NA"}
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {roundOff(totalProgress)}%
                         </td>
                         <td className="px-2 py-4 text-sm font-medium text-gray-800">
@@ -250,10 +261,10 @@ const AnalyticsTable = ({
                         </td>
 
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
                             <div className="d-flex">
                               <button
-                                className={`bg-${
+                                className={`text-${
                                   ba?.userid?.accBlocked ? "green" : "red"
                                 }-200 me-2 py-2 px-5 my-2 rounded font-small`}
                                 onClick={(event) => {
@@ -267,6 +278,20 @@ const AnalyticsTable = ({
                                 <Loader size={20} />
                               )}
                             </div>
+                          </td>
+                        )}
+
+                        {!["TUTOR"]?.includes(user?.role) && (
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                            <button
+                              className={`text-orange-400 py-2 my-2 rounded font-small`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setShowWarningModal(ba);
+                              }}
+                            >
+                              Warning
+                            </button>
                           </td>
                         )}
                       </tr>
