@@ -3,7 +3,7 @@ import { useUserStore } from "../../store/UserProvider";
 import { Navigate, Route } from "react-router-dom";
 import Login from "../../pages/Login";
 
-const publicRoutes = ["/student/course", "/student/learningpath"];
+export const publicRoutes = ["/student/course", "/student/learningpath"];
 
 const ProtectedRoute = ({ path: Path, component: Component }) => {
   const path = window.location.pathname;
