@@ -16,7 +16,7 @@ import StudentAnalytics from "./pages/StudentAnalytics";
 import StudentMCQ from "./pages/StudentMCQ";
 import StudentChallenges from "./pages/StudentChallenges";
 import StudentAssignments from "./pages/StudentAssignments";
-import ProtectedRoute from "./components/ProtectedRoute";
+import ProtectedRoute, { publicRoutes } from "./components/ProtectedRoute";
 import { AddExiting } from "./pages/AddExisting";
 import { AddCompany } from "./pages/AddCompany";
 import TutorAnalytics from "./pages/StudentAnalytics/TutorAnalytics";
@@ -64,7 +64,10 @@ const AppHelper = () => {
         <Route
           path="/program/manage"
           element={
-            <ProtectedRoute path="/program/manage" component={<ManageBootcamps />} />
+            <ProtectedRoute
+              path="/program/manage"
+              component={<ManageBootcamps />}
+            />
           }
         />
         <Route
@@ -177,7 +180,7 @@ const AppHelper = () => {
 };
 
 function App() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { setUser } = useUserStore();
 
@@ -205,7 +208,11 @@ function App() {
       });
   };
   useEffect(() => {
-    checkAuth();
+    const path = window.location.pathname;
+
+    const isPublic = publicRoutes.some((ele) => path.startsWith(ele));
+
+    if (!isPublic) checkAuth();
     // eslint-disable-next-line
   }, []);
 
