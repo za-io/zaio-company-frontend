@@ -60,6 +60,7 @@ export const AddProgram = () => {
     const emails = formData.get("emails");
     const commitedMins = formData.get("commitedMins");
     const startDate = formData.get("startDate");
+    const holidays = formData.get("holidays");
 
     if (!allEnrolled) {
       return setMsg(
@@ -75,6 +76,7 @@ export const AddProgram = () => {
       commitedMins,
       company_id: user?._id,
       startDate,
+      holidays,
     })
       .then((res) => {
         if (res.status === 200) {
@@ -96,6 +98,7 @@ export const AddProgram = () => {
     const learningPath = formData.get("learningPath");
     const commitedMins = formData.get("commitedMins");
     const startDate = formData.get("startDate");
+    const holidays = formData.get("holidays");
 
     console.log(startDate, commitedMins, "learningpath");
     if (!learningPath) return;
@@ -104,6 +107,7 @@ export const AddProgram = () => {
       learningPath,
       commitedMins,
       startDate,
+      holidays,
     })
       .then((res) => {
         date.setDate(new Date(res?.data?.[0]?.date));
@@ -154,9 +158,7 @@ export const AddProgram = () => {
   return (
     <div className="mt-8 pb-8">
       <form onSubmit={handleSubmit} className="w-8/12 mx-auto">
-      <p
-          className="uppercase text-white text-large font-bold mb-4"
-        >
+        <p className="uppercase text-white text-large font-bold mb-4">
           Add New Program
         </p>
         <div className="flex flex-wrap -mx-3 mb-6">
@@ -247,6 +249,25 @@ export const AddProgram = () => {
               type="text"
               placeholder="MM-DD-YYYY"
             />
+          </div>
+        </div>
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label
+              className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
+              for="grid-password"
+            >
+              Add Holidays
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="holidays"
+              type="text"
+              placeholder="'MM-DD-YYYY'-'MM-DD-YYYY','MM-DD-YYYY'-'MM-DD-YYYY'"
+            />
+            <p className="text-white text-xs italic">
+              Please enter holidays in the following syntex "08/10/2024"-"08/12/2024","09/10/2024"-"09/14/2024","10/01/2024"-"10/01/2024" where the date format will be MM-DD-YYYY
+            </p>
           </div>
         </div>
 
