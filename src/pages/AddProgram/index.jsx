@@ -263,7 +263,7 @@ export const AddProgram = () => {
               className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
               name="holidays"
               type="text"
-              placeholder="['MM-DD-YYYY', 'MM-DD-YYYY']"
+              placeholder="'MM-DD-YYYY'-'MM-DD-YYYY','MM-DD-YYYY'-'MM-DD-YYYY'"
             />
             <p className="text-white text-xs italic">
               Please enter holidays in the following syntex "08/10/2024"-"08/12/2024","09/10/2024"-"09/14/2024","10/01/2024"-"10/01/2024" where the date format will be MM-DD-YYYY
