@@ -65,7 +65,9 @@ export const addIntoExiting = (payload) =>
 
 export const fetchCalPreviewData = (payload) =>
   axios
+    // .post("https://asif-dev.herokuapp.com/bootcamp/preview-calendar", payload)
     .post(`${API_URL}/preview-calendar`, payload)
+
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
