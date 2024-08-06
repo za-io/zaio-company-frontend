@@ -6,6 +6,8 @@ import Loader from "../../components/loader/loader";
 export const SORTING = {
   PROGRESS_ASC: "PROGRESS_ASC",
   PROGRESS_DESC: "PROGRESS_DESC",
+  DEFERRED_ASC: "DEFERRED_ASC",
+  DEFERRED_DESC: "DEFERRED_DESC",
 };
 
 const LPAnalyticsTable = ({
@@ -80,6 +82,12 @@ const LPAnalyticsTable = ({
               <option value={SORTING.PROGRESS_DESC} className="text-black-500">
                 Progress DESC
               </option>
+              <option value={SORTING.DEFERRED_ASC} className="text-black-500">
+                DEFERRED ASC
+              </option>
+              <option value={SORTING.DEFERRED_DESC} className="text-black-500">
+                DEFERRED DESC
+              </option>
             </select>
           </div>
 
@@ -117,6 +125,16 @@ const LPAnalyticsTable = ({
                       return b?.lpProgress - a?.lpProgress;
                     } else if (sortBy === SORTING.PROGRESS_ASC) {
                       return a?.lpProgress - b?.lpProgress;
+                    } else if (sortBy === SORTING.DEFERRED_ASC) {
+                      return (
+                        Boolean(b?.deferredDetails?.studentDeferred) -
+                        Boolean(a?.deferredDetails?.studentDeferred)
+                      );
+                    } else if (sortBy === SORTING.DEFERRED_DESC) {
+                      return (
+                        Boolean(a?.deferredDetails?.studentDeferred) -
+                        Boolean(b?.deferredDetails?.studentDeferred)
+                      );
                     }
                   })
                   ?.map((ba) => {
