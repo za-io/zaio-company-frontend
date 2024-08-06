@@ -117,6 +117,12 @@ export const sendWarningEmail = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const deferStudent = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/defer-student`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const mapCompanyBootcamp = (payload) =>
   axios
     .post(`${BASE_URL}/company/map-bootcamp-company`, payload)

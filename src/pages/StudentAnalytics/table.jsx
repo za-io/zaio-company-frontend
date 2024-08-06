@@ -5,6 +5,8 @@ import { blockUser, unblockUser } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
 import { WarningModal } from "./WarningModal";
+import { StudentDeferredModal } from "./StudentDeferredModal";
+import { formatDate } from "../../utils/dateUtils";
 
 const AnalyticsTable = ({
   data,
@@ -18,6 +20,9 @@ const AnalyticsTable = ({
   const [rowLoading, setRowLoading] = useState(false);
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
   const [showWarningModal, setShowWarningModal] = useState(null);
+  const [studentDeferredModalConfig, setStudentDeferredModalConfig] =
+    useState(null);
+
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
     navigate(
@@ -61,9 +66,16 @@ const AnalyticsTable = ({
   return (
     <div>
       <WarningModal
-      bootcampId={data?.bootcampDetails?._id}
+        bootcampId={data?.bootcampDetails?._id}
         showModal={showWarningModal}
         setShowModal={setShowWarningModal}
+      />
+
+      <StudentDeferredModal
+        bootcampId={data?.bootcampDetails?._id}
+        showModal={studentDeferredModalConfig}
+        setShowModal={setStudentDeferredModalConfig}
+        getAnalytics={getAnalytics}
       />
       {data?.analytics?.length > 0 && (
         <>
@@ -82,7 +94,7 @@ const AnalyticsTable = ({
             </datalist>
           </div>
           <select
-            className={`py-2 rounded`}
+            className={`py-2 rounded font-semibold px-2 font-medium`}
             value={sortBy}
             onChange={handleChange}
           >
@@ -96,7 +108,29 @@ const AnalyticsTable = ({
             <option value={SORTING.PROGRESS_DESC} className="text-black-500">
               Progress DESC
             </option>
+            <option value={SORTING.DEFERRED_ASC} className="text-black-500">
+              DEFERRED ASC
+            </option>
+            <option value={SORTING.DEFERRED_DESC} className="text-black-500">
+              DEFERRED DESC
+            </option>
           </select>
+
+          <p className="text-white mt-3">
+            {
+              data?.analytics?.filter(
+                (ba) => ba?.deferredDetails?.studentDeferred
+              )?.length
+            }{" "}
+            out of {data?.analytics?.length} student(s){" "}
+            {data?.analytics?.filter(
+              (ba) => ba?.deferredDetails?.studentDeferred
+            )?.length === 1
+              ? "is"
+              : "are"}{" "}
+            deferred.
+          </p>
+
           <table class="table-fixed w-100 overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
             <thead className="border-b text-2xl bg-gray-50">
               <tr className="">
@@ -129,7 +163,12 @@ const AnalyticsTable = ({
                 )}
                 {!["TUTOR"]?.includes(user?.role) && (
                   <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
-                    Warning
+                    Warnings
+                  </th>
+                )}
+                {!["TUTOR"]?.includes(user?.role) && (
+                  <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
+                    Defer Status
                   </th>
                 )}
               </tr>
@@ -173,6 +212,16 @@ const AnalyticsTable = ({
                       return bTotalProgress - aTotalProgress;
                     } else if (sortBy === SORTING.PROGRESS_ASC) {
                       return aTotalProgress - bTotalProgress;
+                    } else if (sortBy === SORTING.DEFERRED_ASC) {
+                      return (
+                        Boolean(b?.deferredDetails?.studentDeferred) -
+                        Boolean(a?.deferredDetails?.studentDeferred)
+                      );
+                    } else if (sortBy === SORTING.DEFERRED_DESC) {
+                      return (
+                        Boolean(a?.deferredDetails?.studentDeferred) -
+                        Boolean(b?.deferredDetails?.studentDeferred)
+                      );
                     }
                   })
                   ?.map((ba) => {
@@ -292,6 +341,29 @@ const AnalyticsTable = ({
                             >
                               Warning
                             </button>
+                          </td>
+                        )}
+
+                        {!["TUTOR"]?.includes(user?.role) && (
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                            <span
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setStudentDeferredModalConfig(ba);
+                              }}
+                            >
+                              {ba?.deferredDetails?.studentDeferred ? (
+                                `Deferred on ${formatDate(
+                                  ba?.deferredDetails?.deferredDate
+                                )} for ${
+                                  ba?.deferredDetails?.numberOfDeferMonths
+                                }. Click for more details.`
+                              ) : (
+                                <button className="bg-blue-200 py-2 px-4 my-2 rounded font-small">
+                                  Defer Student
+                                </button>
+                              )}
+                            </span>
                           </td>
                         )}
                       </tr>
