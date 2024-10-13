@@ -7,6 +7,7 @@ import { SORTING } from "./learningpath.index";
 import { WarningModal } from "./WarningModal";
 import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
+import { StudentPingModal } from "./StudentPingModal";
 
 const AnalyticsTable = ({
   data,
@@ -21,6 +22,8 @@ const AnalyticsTable = ({
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
   const [showWarningModal, setShowWarningModal] = useState(null);
   const [studentDeferredModalConfig, setStudentDeferredModalConfig] =
+    useState(null);
+  const [studentPingModalConfig, setStudentPingModalConfig] =
     useState(null);
 
   const navigate = useNavigate();
@@ -75,6 +78,12 @@ const AnalyticsTable = ({
         bootcampId={data?.bootcampDetails?._id}
         showModal={studentDeferredModalConfig}
         setShowModal={setStudentDeferredModalConfig}
+        getAnalytics={getAnalytics}
+      />
+      <StudentPingModal
+        bootcampId={data?.bootcampDetails?._id}
+        showModal={studentPingModalConfig}
+        setShowModal={setStudentPingModalConfig}
         getAnalytics={getAnalytics}
       />
       {data?.analytics?.length > 0 && (
@@ -169,6 +178,11 @@ const AnalyticsTable = ({
                 {!["TUTOR"]?.includes(user?.role) && (
                   <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
                     Defer Status
+                  </th>
+                )}
+                {!["TUTOR"]?.includes(user?.role) && (
+                  <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
+                    Ping Student
                   </th>
                 )}
               </tr>
@@ -363,6 +377,29 @@ const AnalyticsTable = ({
                                   Defer Student
                                 </button>
                               )}
+                            </span>
+                          </td>
+                        )}
+
+                        {!["TUTOR"]?.includes(user?.role) && (
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                            <span
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setStudentPingModalConfig(ba);
+                              }}
+                            >
+                              {/* {ba?.deferredDetails?.studentDeferred ? (
+                                `Deferred on ${formatDate(
+                                  ba?.deferredDetails?.deferredDate
+                                )} for ${
+                                  ba?.deferredDetails?.numberOfDeferMonths
+                                }. Click for more details.`
+                              ) : ( */}
+                                <button className="bg-blue-200 p-2 my-2 rounded font-small">
+                                  Ping
+                                </button>
+                               {/* )} */}
                             </span>
                           </td>
                         )}

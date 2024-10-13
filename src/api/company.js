@@ -123,6 +123,12 @@ export const deferStudent = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const pingStudent = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/ping-student`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const mapCompanyBootcamp = (payload) =>
   axios
     .post(`${BASE_URL}/company/map-bootcamp-company`, payload)
