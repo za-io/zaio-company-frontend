@@ -382,7 +382,7 @@ const AnalyticsTable = ({
                         )}
 
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                          <td className="px-1 py-4 flex flex-col text-sm font-medium text-gray-800">
                             <span
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -398,6 +398,24 @@ const AnalyticsTable = ({
                               ) : ( */}
                                 <button className="bg-blue-200 p-2 my-2 rounded font-small">
                                   Ping
+                                </button>
+                               {/* )} */}
+                            </span>
+                            <span
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setStudentPingModalConfig({...ba, viewHistory: true});
+                              }}
+                            >
+                              {/* {ba?.deferredDetails?.studentDeferred ? (
+                                `Deferred on ${formatDate(
+                                  ba?.deferredDetails?.deferredDate
+                                )} for ${
+                                  ba?.deferredDetails?.numberOfDeferMonths
+                                }. Click for more details.`
+                              ) : ( */}
+                                <button className="bg-orange-200 p-2 my-2 rounded font-small">
+                                  History
                                 </button>
                                {/* )} */}
                             </span>

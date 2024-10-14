@@ -7,3 +7,6 @@ const options = {
 
 export const formatDate = (date) =>
   new Date(date)?.toLocaleDateString("en-US", options);
+
+export const formatTime = (date) =>
+  new Date(date)?.toLocaleTimeString("en-US", options);
