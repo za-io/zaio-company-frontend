@@ -2,14 +2,9 @@ import { useState } from "react";
 import { Modal } from "react-bootstrap";
 import { pingStudent } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
-import { formatDate } from "../../utils/dateUtils";
+import { formatDate, formatTime } from "../../utils/dateUtils";
 
-export const StudentPingModal = ({
-  showModal,
-  setShowModal,
-  bootcampId,
-  getAnalytics,
-}) => {
+const PingStudent = ({showModal,setShowModal,bootcampId,getAnalytics}) => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
   const { user } = useUserStore();
@@ -19,23 +14,23 @@ export const StudentPingModal = ({
   };
 
   const emailConfig = {
-    subject: "Full Stack Web development Bootcamp",
-    body: `Dear ${showModal?.userid?.email},\n\n
-Hope you are doing well.\n\n
-Firstly, Thank you so much for choosing Zaio as the institution to achieve your coding skills and goals.\n\n
-After looking at your progress on the bootcamp we have decided to make you a differed student at Zaio. You are getting this email because:\n
-* You tried to un-enrol from the bootcamp after 30 days since the bootcamp started or\n
-* The bootcamp is too fast paced for you and you want to shift to the self-paced course or\n
-* The bootcamp cohort you had started is now over and you were not able to make all submissions on time.\n\n
-We really want you to make it and we want to accommodate the situation you currently are in, hence we will give you the following benefits on the program.\n
-* You will have access to the material for another 6 months after the program completes for you to complete the work that you have not done. \n
-* You will have access to the Tutors as well for another 3 months after the program is completed and you can book them via calendly.\n
-* You can do the program at your pace and book the tutors are your convince to complete your interview readiness sessions.\n
-* You can complete the assignments at your convenience and they will be marked by our tutors\n
-* You can slow down your pace and have reds on your calendar - you will not be penalised for that\n\n
-I will inform the team about these changes for you. Let me know if you have any questions and any other way I can assist you. Please email me on asif@zaio.io.\n\n
-Kind regards,
-Asif`,
+    subject: "Check-In: Progress and Support for Your Full Stack Web Development Bootcamp",
+    body: `Hi ${showModal?.userid?.email},\n
+
+I hope you’re doing well!\n
+
+I wanted to check in and encourage you to keep pushing through the bootcamp. As a deferred student, remember that you still have access to all the tutors and lectures on Google Classroom until ${formatDate(showModal?.bootcampEndDate)}.\n
+
+If you complete any assignments or the capstone project on Classroom and need them marked, please notify one of the tutors allocated to your bootcamp. If for some reason you don’t receive a response from the tutors, feel free to email me directly at suhana@zaio.io, and I’ll arrange for a tutor to mark your work.\n
+
+We’re here to support you every step of the way. Don’t hesitate to reach out if you need assistance.\n
+
+Keep up the great work!\n
+
+Best regards,\n
+
+Suhana Patel
+Zaio Student Success Manager`,
   };
 
   const handleSubmit = (e) => {
@@ -181,4 +176,130 @@ Asif`,
       </div>
     </Modal>
   );
+}
+const PingStudentHistory = ({showModal,setShowModal,bootcampId,getAnalytics}) => {
+    const [loading, setLoading] = useState(false);
+    const [msg, setMsg] = useState(null);
+    const { user } = useUserStore();
+  
+    const handleClose = () => {
+      setShowModal(false);
+    };
+  
+    const emailConfig = {
+      subject: "Check-In: Progress and Support for Your Full Stack Web Development Bootcamp",
+      body: `Hi ${showModal?.userid?.email},\n
+  
+  I hope you’re doing well!\n
+  
+  I wanted to check in and encourage you to keep pushing through the bootcamp. As a deferred student, remember that you still have access to all the tutors and lectures on Google Classroom until ${formatDate(showModal?.bootcampEndDate)}.\n
+  
+  If you complete any assignments or the capstone project on Classroom and need them marked, please notify one of the tutors allocated to your bootcamp. If for some reason you don’t receive a response from the tutors, feel free to email me directly at suhana@zaio.io, and I’ll arrange for a tutor to mark your work.\n
+  
+  We’re here to support you every step of the way. Don’t hesitate to reach out if you need assistance.\n
+  
+  Keep up the great work!\n
+  
+  Best regards,\n
+  
+  Suhana Patel
+  Zaio Student Success Manager`,
+    };
+  
+    const handleSubmit = (e) => {
+      e.preventDefault();
+  
+      setMsg(null);
+  
+      const formData = new FormData(e.target);
+  
+      const subject = formData.get("subject");
+      const body = formData.get("body");
+      const numberOfDeferMonths = formData.get("numberOfDeferMonths");
+  
+      setLoading(true);
+      pingStudent({
+        emailSubject: subject,
+        emailBody: body,
+        userEmail: showModal?.userid?.email,
+        userid: showModal?.userid?._id,
+        bootcampid: bootcampId,
+        numberOfDeferMonths,
+        bootcampEndDate: showModal?.bootcampEndDate,
+      })
+        .then((res) => {
+          if (res?.success) {
+            setMsg("Success");
+            e?.target?.reset();
+            getAnalytics();
+            handleClose();
+          } else {
+            setMsg(res?.errMsg);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+  
+    return (
+      <Modal
+        centered
+        size="lg"
+        show={showModal}
+        onHide={handleClose}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          margin: "auto",
+          padding: "auto",
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: "#fff",
+            height: "100%",
+            width: "100%",
+            margin: "0px !important",
+            padding: "0px !important",
+          }}
+          className="p-4"
+        >
+          <p className="text-lg font-normal">
+            Ping{" "}
+            <span className="font-semibold">{showModal?.userid?.email}</span>{" "}
+          </p>
+  
+              <div className="p-2">
+                {
+                    showModal?.pingStatusDetails?.length ? showModal?.pingStatusDetails?.map(item=>{
+                        return (
+                        <div className="bg-gray-100 mb-1 p-1">
+                        <div className="my-1 py-2 px-2"><p><b>Timestamp</b> <br/>{formatTime(item.pingedAt)}</p></div>
+                        <div className="p-2 tracking-wide "><p className="px-2"><b>Content</b> <br/>{item.message.split('Best regards')[0].trim()}</p></div>
+                        </div>
+                    ) 
+                }) : <p>No history yet</p>
+                }
+              </div>
+        </div>
+      </Modal>
+    );
+  }
+export const StudentPingModal = ({
+  showModal,
+  setShowModal,
+  bootcampId,
+  getAnalytics,
+  viewHistory
+}) => {
+  return (
+    
+        !showModal?.viewHistory ? 
+        (<PingStudent showModal={showModal} setShowModal={setShowModal} bootcampId={bootcampId} getAnalytics={getAnalytics}/>) :
+        (<PingStudentHistory showModal={showModal} setShowModal={setShowModal} bootcampId={bootcampId} getAnalytics={getAnalytics}/>)
+
+    
+  )
 };
