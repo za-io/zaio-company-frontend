@@ -34,7 +34,7 @@ const Event = (props) => {
           {event?.type === "coursemcq" && (
             <MdOutlineAssignment size={FONT_SIZE} color={color} />
           )}
-          {event?.type === "challenge" && (
+          {["challenge", "datascience"]?.includes(event?.type) && (
             <BsFileEarmarkCode size={FONT_SIZE} color={color} />
           )}
           {event?.type === "lecture" && (

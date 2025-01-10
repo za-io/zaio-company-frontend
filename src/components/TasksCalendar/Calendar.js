@@ -34,7 +34,7 @@ const Calendar = ({ tasks, date }) => {
     <>
       <div className="flex flex-grow relative h-full w-full overflow-auto text-gray-700 bg-white">
         <div className="flex flex-col flex-grow">
-        <CalendarHeader  date={date} />
+          <CalendarHeader date={date} />
           <AllDays />
           <DayCardList data={days} firstDayOfMonth={date.firstDay} />
         </div>
