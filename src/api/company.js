@@ -39,6 +39,12 @@ export const getAllLPs = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const getAllTutors = () =>
+  axios
+    .get(BASE_URL + `/company/all-tutors`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const getBootcampDetails = (bootcamp_id) =>
   axios
     .get(API_URL + `/details?bootcamp_id=${bootcamp_id}`)

@@ -30,6 +30,7 @@ export const AddTutor = () => {
     const company_username = formData.get("company_username");
     const password = formData.get("password");
     const email = formData.get("email");
+    const calendlyLink = formData.get('calendly')
     const bootcamps = bootcampSelectionRef.current
       ?.getSelectedItems()
       ?.map((item) => item?.id);
@@ -41,6 +42,7 @@ export const AddTutor = () => {
       email,
       password,
       role: "TUTOR",
+      calendlyLink
     })
       .then((res) => {
         if (res.success) {
@@ -128,6 +130,21 @@ export const AddTutor = () => {
               }))}
               ref={bootcampSelectionRef}
               displayValue="name" // Property name to display in the dropdown options
+            />
+          </div>
+        </div>
+       
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
+              Calendly Link
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="calendly"
+              type="text"
+              placeholder="Fill the link"
+              required
             />
           </div>
         </div>
