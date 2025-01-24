@@ -110,14 +110,14 @@ const TutorAnalytics = () => {
 
       setParams("bootcamp", bootcampId, ["learningpath", "course"]);
       // getUserBootcampAnalytics(userId, bootcampId)
-      if(user?._id){
+      if (user?._id) {
         getUserBootcampAnalyticsForTutor(user?._id, bootcampId)
-        .then((res) => {
-          setBootcamp(res);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
+          .then((res) => {
+            setBootcamp(res);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
       }
     } else if (searchType === "learningpath") {
       setLoading("Please wait fetching learningpath data");
@@ -239,6 +239,7 @@ const TutorAnalytics = () => {
       </h1> */}
       {searchType === "bootcamp" && (
         <AnalyticsTable
+          setLoading={setLoading}
           data={bootcamp?.bootcamp}
           total={bootcamp?.total}
           loading={loading}

@@ -9,15 +9,20 @@ export const getUserBootcampAnalytics = (user_id, bootcamp_id) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const getUserBootcampAnalyticsForTutor = async (tutorid,  bootcamp_id) => {
+export const getUserBootcampAnalyticsForTutor = async (
+  tutorid,
+  bootcamp_id
+) => {
   try {
-    const response = await axios.get(API_URL + `/${tutorid}/tutor-bootcamp/${bootcamp_id}`)
-    console.log(response.data)
-    return response.data
+    const response = await axios.get(
+      API_URL + `/${tutorid}/tutor-bootcamp/${bootcamp_id}`
+    );
+    console.log(response.data);
+    return response.data;
   } catch (error) {
-    console.log(error)
+    console.log(error);
   }
-}
+};
 
 export const getLearningpathEnrolledUser = (learningpath_id) =>
   axios
@@ -84,3 +89,16 @@ export const checkAuthToken = (payload) =>
     .post(`${BASE_URL}/company/checkAuthToken`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const updateTutor = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/update-tutor`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const unEnrollStudent = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/unenroll-student`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
