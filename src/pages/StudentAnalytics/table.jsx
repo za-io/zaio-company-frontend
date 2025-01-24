@@ -175,11 +175,11 @@ const AnalyticsTable = ({
                     Warnings
                   </th>
                 )}
-                {!["TUTOR"]?.includes(user?.role) && (
+                {/* {!["TUTOR"]?.includes(user?.role) && ( */}
                   <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
                     Defer Status
                   </th>
-                )}
+                {/* )} */}
                 {!["TUTOR"]?.includes(user?.role) && (
                   <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
                     Ping Student
@@ -310,7 +310,7 @@ const AnalyticsTable = ({
                         </td>
                         <td className="px-2 py-4 text-sm font-medium text-gray-800">
                           <button
-                            className="bg-blue-200 py-2 px-5 my-2 rounded font-small"
+                            className="bg-blue-200 py-2 w-full rounded text-xs"
                             onClick={(event) => {
                               event.stopPropagation();
                               window.open(
@@ -358,8 +358,8 @@ const AnalyticsTable = ({
                           </td>
                         )}
 
-                        {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                        {/* {!["TUTOR"]?.includes(user?.role) && ( */}
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800 text-center">
                             <span
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -373,13 +373,16 @@ const AnalyticsTable = ({
                                   ba?.deferredDetails?.numberOfDeferMonths
                                 }. Click for more details.`
                               ) : (
+                                // {/* {!["TUTOR"]?.includes(user?.role) && ( */}
+                                !["TUTOR"]?.includes(user?.role) ? (
                                 <button className="bg-blue-200 py-2 px-4 my-2 rounded font-small">
                                   Defer Student
                                 </button>
+                                ) : <p>No</p>
                               )}
                             </span>
                           </td>
-                        )}
+                        {/* )} */}
 
                         {!["TUTOR"]?.includes(user?.role) && (
                           <td className="px-1 py-4 flex flex-col text-sm font-medium text-gray-800">

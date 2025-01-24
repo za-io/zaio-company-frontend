@@ -9,6 +9,16 @@ export const getUserBootcampAnalytics = (user_id, bootcamp_id) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const getUserBootcampAnalyticsForTutor = async (tutorid,  bootcamp_id) => {
+  try {
+    const response = await axios.get(API_URL + `/${tutorid}/tutor-bootcamp/${bootcamp_id}`)
+    console.log(response.data)
+    return response.data
+  } catch (error) {
+    console.log(error)
+  }
+}
+
 export const getLearningpathEnrolledUser = (learningpath_id) =>
   axios
     .get(API_URL + `/learningpathsenrolledusers/${learningpath_id}`)

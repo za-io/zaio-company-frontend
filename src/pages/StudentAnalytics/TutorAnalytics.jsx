@@ -6,6 +6,7 @@ import {
   getCourseEnrolledUser,
   getLearningpathEnrolledUser,
   getUserBootcampAnalytics,
+  getUserBootcampAnalyticsForTutor,
 } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import AnalyticsTable from "./table";
@@ -108,14 +109,16 @@ const TutorAnalytics = () => {
       setLoading("Please wait fetching bootcamp data");
 
       setParams("bootcamp", bootcampId, ["learningpath", "course"]);
-
-      getUserBootcampAnalytics(userId, bootcampId)
+      // getUserBootcampAnalytics(userId, bootcampId)
+      if(user?._id){
+        getUserBootcampAnalyticsForTutor(user?._id, bootcampId)
         .then((res) => {
           setBootcamp(res);
         })
         .finally(() => {
           setLoading(false);
         });
+      }
     } else if (searchType === "learningpath") {
       setLoading("Please wait fetching learningpath data");
 

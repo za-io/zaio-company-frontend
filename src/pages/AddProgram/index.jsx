@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addProgram,
   checkEnrollmentEligibility,
   enrollStudentsIntoLP,
   fetchCalPreviewData,
   getAllLPs,
+  getAllTutors
 } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useUserStore } from "../../store/UserProvider";
 import Calendar from "../../components/TasksCalendar/Calendar";
 import useDate from "../../hooks/useDate";
 import { TasksModal } from "../../components/TasksCalendar/TasksModal";
+import Multiselect from "multiselect-react-dropdown";
 
 export const flowTypes = {
   preview_cal: "preview_cal",
@@ -28,6 +30,22 @@ export const AddProgram = () => {
   const [calendarData, setCalendarData] = useState(null);
   const [lpList, setLpList] = useState(null);
   const [allEnrolled, setAllEnrolled] = useState(null);
+  const [allTutors, setAllTutors] = useState(null);
+  const tutorSelectionRef = useRef();
+
+
+  const fetchTutors = async () => {
+    setLoading(true);
+    const tutors = await getAllTutors();
+    setAllTutors(tutors?.data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchTutors();
+  }, []);
+
+
 
   useEffect(() => {
     const init = () => {
@@ -61,6 +79,11 @@ export const AddProgram = () => {
     const commitedMins = formData.get("commitedMins");
     const startDate = formData.get("startDate");
     const holidays = formData.get("holidays");
+    const tutors = tutorSelectionRef.current
+      ?.getSelectedItems()
+      ?.map((item) => item?.id);
+
+      console.log({tutors},'form dropdown')
 
     if (!allEnrolled) {
       return setMsg(
@@ -77,6 +100,7 @@ export const AddProgram = () => {
       company_id: user?._id,
       startDate,
       holidays,
+      tutors
     })
       .then((res) => {
         if (res.status === 200) {
@@ -231,6 +255,27 @@ export const AddProgram = () => {
               name="commitedMins"
               type="number"
               placeholder="Commited Minutes"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label
+              className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
+              for="grid-password"
+            >
+              Tutor Name
+            </label>
+
+            <Multiselect
+              className="appearance-none block  w-full bg-gray-200 text-gray-700 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              options={allTutors?.map((tutor) => ({
+                name: tutor?.company_username,
+                id: tutor?._id,
+              }))}
+              ref={tutorSelectionRef}
+              displayValue="name" // Property name to display in the dropdown options
             />
           </div>
         </div>
