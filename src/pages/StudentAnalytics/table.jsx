@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
 import { blockUser, unblockUser } from "../../api/student";
@@ -8,6 +8,8 @@ import { WarningModal } from "./WarningModal";
 import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
+import { getAllTutors } from "../../api/company";
+import { StudentMoreActionsModal } from "./StudentMoreActions";
 
 const AnalyticsTable = ({
   data,
@@ -21,10 +23,12 @@ const AnalyticsTable = ({
   const [rowLoading, setRowLoading] = useState(false);
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
   const [showWarningModal, setShowWarningModal] = useState(null);
+  const [showMoreActionsModal, setShowMoreActionsModal] = useState(null);
+
   const [studentDeferredModalConfig, setStudentDeferredModalConfig] =
     useState(null);
-  const [studentPingModalConfig, setStudentPingModalConfig] =
-    useState(null);
+  const [studentPingModalConfig, setStudentPingModalConfig] = useState(null);
+  const [tutors, setTutors] = useState([]);
 
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
@@ -64,6 +68,15 @@ const AnalyticsTable = ({
     setSortBy(event.target.value);
   };
 
+  const fetchTutors = async () => {
+    const tutors = await getAllTutors();
+    setTutors(tutors?.data);
+  };
+
+  useEffect(() => {
+    fetchTutors();
+  }, []);
+
   if (loading) return <></>;
 
   return (
@@ -72,6 +85,14 @@ const AnalyticsTable = ({
         bootcampId={data?.bootcampDetails?._id}
         showModal={showWarningModal}
         setShowModal={setShowWarningModal}
+      />
+
+      <StudentMoreActionsModal
+        bootcampId={data?.bootcampDetails?._id}
+        showModal={showMoreActionsModal}
+        setShowModal={setShowMoreActionsModal}
+        tutors={tutors}
+        getAnalytics={getAnalytics}
       />
 
       <StudentDeferredModal
@@ -162,6 +183,10 @@ const AnalyticsTable = ({
                   Progress
                 </th>
                 <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  Tutor
+                </th>
+
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   View Progress
                 </th>
 
@@ -185,6 +210,9 @@ const AnalyticsTable = ({
                     Ping Student
                   </th>
                 )}
+                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                  More Actions
+                </th>
               </tr>
             </thead>
             {data && data.analytics.length !== 0 && (
@@ -305,9 +333,15 @@ const AnalyticsTable = ({
                               } ${total?.assignment}`
                             : "NA"}
                         </td>
+
                         <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {roundOff(totalProgress)}%
                         </td>
+
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                          {ba?.tutor?.company_username || ba?.tutor?.email || "Not Assigned"}
+                        </td>
+
                         <td className="px-2 py-4 text-sm font-medium text-gray-800">
                           <button
                             className="bg-blue-200 py-2 w-full rounded text-xs"
@@ -399,15 +433,18 @@ const AnalyticsTable = ({
                                   ba?.deferredDetails?.numberOfDeferMonths
                                 }. Click for more details.`
                               ) : ( */}
-                                <button className="bg-blue-200 p-2 my-2 rounded font-small">
-                                  Ping
-                                </button>
-                               {/* )} */}
+                              <button className="bg-blue-200 p-2 my-2 rounded font-small">
+                                Ping
+                              </button>
+                              {/* )} */}
                             </span>
                             <span
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setStudentPingModalConfig({...ba, viewHistory: true});
+                                setStudentPingModalConfig({
+                                  ...ba,
+                                  viewHistory: true,
+                                });
                               }}
                             >
                               {/* {ba?.deferredDetails?.studentDeferred ? (
@@ -417,13 +454,25 @@ const AnalyticsTable = ({
                                   ba?.deferredDetails?.numberOfDeferMonths
                                 }. Click for more details.`
                               ) : ( */}
-                                <button className="bg-orange-200 p-2 my-2 rounded font-small">
-                                  History
-                                </button>
-                               {/* )} */}
+                              <button className="bg-orange-200 p-2 my-2 rounded font-small">
+                                History
+                              </button>
+                              {/* )} */}
                             </span>
                           </td>
                         )}
+
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                          <button
+                            className={`text-orange-400 py-2 my-2 rounded font-small`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setShowMoreActionsModal(ba);
+                            }}
+                          >
+                            More Actions
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}

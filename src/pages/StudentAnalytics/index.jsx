@@ -242,6 +242,7 @@ const StudentAnalytics = () => {
           searchType="bootcamp"
           getAnalytics={getAnalytics}
           user={user}
+          setLoading={setLoading}
         />
       )}
       {searchType === "learningpath" && (
