@@ -201,18 +201,20 @@ const AnalyticsTable = ({
                   </th>
                 )}
                 {/* {!["TUTOR"]?.includes(user?.role) && ( */}
-                  <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
-                    Defer Status
-                  </th>
+                <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
+                  Defer Status
+                </th>
                 {/* )} */}
                 {!["TUTOR"]?.includes(user?.role) && (
                   <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
                     Ping Student
                   </th>
                 )}
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  More Actions
-                </th>
+                {!["TUTOR"]?.includes(user?.role) && (
+                  <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                    More Actions
+                  </th>
+                )}
               </tr>
             </thead>
             {data && data.analytics.length !== 0 && (
@@ -339,7 +341,9 @@ const AnalyticsTable = ({
                         </td>
 
                         <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          {ba?.tutor?.company_username || ba?.tutor?.email || "Not Assigned"}
+                          {ba?.tutor?.company_username ||
+                            ba?.tutor?.email ||
+                            "Not Assigned"}
                         </td>
 
                         <td className="px-2 py-4 text-sm font-medium text-gray-800">
@@ -393,29 +397,29 @@ const AnalyticsTable = ({
                         )}
 
                         {/* {!["TUTOR"]?.includes(user?.role) && ( */}
-                          <td className="px-1 py-4 text-sm font-medium text-gray-800 text-center">
-                            <span
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setStudentDeferredModalConfig(ba);
-                              }}
-                            >
-                              {ba?.deferredDetails?.studentDeferred ? (
-                                `Deferred on ${formatDate(
-                                  ba?.deferredDetails?.deferredDate
-                                )} for ${
-                                  ba?.deferredDetails?.numberOfDeferMonths
-                                }. Click for more details.`
-                              ) : (
-                                // {/* {!["TUTOR"]?.includes(user?.role) && ( */}
-                                !["TUTOR"]?.includes(user?.role) ? (
-                                <button className="bg-blue-200 py-2 px-4 my-2 rounded font-small">
-                                  Defer Student
-                                </button>
-                                ) : <p>No</p>
-                              )}
-                            </span>
-                          </td>
+                        <td className="px-1 py-4 text-sm font-medium text-gray-800 text-center">
+                          <span
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setStudentDeferredModalConfig(ba);
+                            }}
+                          >
+                            {ba?.deferredDetails?.studentDeferred ? (
+                              `Deferred on ${formatDate(
+                                ba?.deferredDetails?.deferredDate
+                              )} for ${
+                                ba?.deferredDetails?.numberOfDeferMonths
+                              }. Click for more details.`
+                            ) : // {/* {!["TUTOR"]?.includes(user?.role) && ( */}
+                            !["TUTOR"]?.includes(user?.role) ? (
+                              <button className="bg-blue-200 py-2 px-4 my-2 rounded font-small">
+                                Defer Student
+                              </button>
+                            ) : (
+                              <p>No</p>
+                            )}
+                          </span>
+                        </td>
                         {/* )} */}
 
                         {!["TUTOR"]?.includes(user?.role) && (
@@ -462,17 +466,19 @@ const AnalyticsTable = ({
                           </td>
                         )}
 
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          <button
-                            className={`text-orange-400 py-2 my-2 rounded font-small`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setShowMoreActionsModal(ba);
-                            }}
-                          >
-                            More Actions
-                          </button>
-                        </td>
+                        {!["TUTOR"]?.includes(user?.role) && (
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                            <button
+                              className={`text-orange-400 py-2 my-2 rounded font-small`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setShowMoreActionsModal(ba);
+                              }}
+                            >
+                              More Actions
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
