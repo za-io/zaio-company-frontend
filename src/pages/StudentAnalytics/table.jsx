@@ -210,9 +210,11 @@ const AnalyticsTable = ({
                     Ping Student
                   </th>
                 )}
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  More Actions
-                </th>
+                {!["TUTOR"]?.includes(user?.role) && (
+                  <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                    More Actions
+                  </th>
+                )}
               </tr>
             </thead>
             {data && data.analytics.length !== 0 && (
