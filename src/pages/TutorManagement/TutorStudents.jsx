@@ -63,7 +63,7 @@ export default function TutorStudents() {
 
          
          <button
-          onClick={() => navigate(-1, { replace: true })}  // ✅ Uses React Router for proper navigation
+          onClick={() => navigate(-1)}  // ✅ Uses React Router for proper navigation
           className="bg-gray-700 text-white px-4 py-2 rounded mt-4 hover:bg-gray-600 transition"
         >
           Back

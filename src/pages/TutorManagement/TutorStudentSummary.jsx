@@ -61,7 +61,7 @@ const StudentSummary = () => {
       <div className="w-full max-w-6xl flex items-center">
         {/* Back Button */}
         <button
-          onClick={() => navigate(-1, {replace : true})}
+          onClick={() => navigate(-1)}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 flex items-center space-x-2"
         >
           <span>←</span>
