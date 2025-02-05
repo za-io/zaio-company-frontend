@@ -8,6 +8,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const handleLogout = () => {
     localStorage.removeItem("TOKEN");
+    localStorage.clear()
     navigate("/login");
     setUser(null);
   };
@@ -15,7 +16,7 @@ const Navbar = () => {
     <div className="w-full flex justify-between items-center px-36 py-4 border-b border-gray-500">
       <Link to="/" className="flex items-end">
         <img className="h-10" src={logo} alt="" />
-        {user?.email && (
+        {user?.email && user?.role !== "TUTOR" && (
           <p className="text-white m-0 ms-3 text-lg font-bold text-purple-200">
             Hello, {user?.company_username}
           </p>

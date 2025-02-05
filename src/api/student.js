@@ -24,6 +24,21 @@ export const getUserBootcampAnalyticsForTutor = async (
   }
 };
 
+export const getUserBootcampAnalyticsCourseWise = async (
+  bootcamp_id,
+  userid
+) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${bootcamp_id}/tutor-bootcamp-course-summary/${userid}`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return []
+  }
+};
+
 export const getLearningpathEnrolledUser = (learningpath_id) =>
   axios
     .get(API_URL + `/learningpathsenrolledusers/${learningpath_id}`)
