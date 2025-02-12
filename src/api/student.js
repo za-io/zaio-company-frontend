@@ -24,6 +24,36 @@ export const getUserBootcampAnalyticsForTutor = async (
   }
 };
 
+export const getTutorKPIUserModuleStats = async (
+  tutorid,
+  bootcamp_id
+) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${tutorid}/tutor-kpi-bootcamp-course-summary/${bootcamp_id}`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+export const getTutorKPIUserModuleSummaryStats = async (
+  tutorid,
+  bootcamp_id,
+  learningpathid,
+  courseid
+) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${tutorid}/${bootcamp_id}/tutor-kpi-students-bootcamp-course-summary/${learningpathid}/${courseid}`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+  }
+};
+
 export const getUserBootcampAnalyticsCourseWise = async (
   bootcamp_id,
   userid

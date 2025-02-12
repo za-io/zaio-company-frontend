@@ -25,6 +25,8 @@ import ManageBootcamps from "./pages/ManageBootcamps/ManageBootcamps";
 import TutorBootcamps from "./pages/TutorManagement/TutorBootcamps";
 import TutorStudents from "./pages/TutorManagement/TutorStudents";
 import TutorStudentSummary from "./pages/TutorManagement/TutorStudentSummary";
+import TutorKPISummary from "./pages/TutorManagement/TutotKPISummary";
+import TutorKPIStudentSummary from "./pages/TutorManagement/TutorKPIStudentSummary";
 
 const AppHelper = () => {
   return (
@@ -42,6 +44,28 @@ const AppHelper = () => {
               path="/tutor/analytics"
               // component={<TutorAnalytics />}
               component={<TutorBootcamps />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/kpi/analytics/:bootcampId/:learningpathId/:courseId"
+          element={
+            <ProtectedRoute
+              path="/tutor/kpi/analytics/:bootcampId/:learningpathId/:courseId"
+              // component={<TutorAnalytics />}
+              // component={<TutorBootcamps />}
+              component={<TutorKPIStudentSummary />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/kpi/analytics/:bootcampId"
+          element={
+            <ProtectedRoute
+              path="/tutor/kpi/analytics/:bootcampId"
+              // component={<TutorAnalytics />}
+              // component={<TutorBootcamps />}
+              component={<TutorKPISummary />}
             />
           }
         />

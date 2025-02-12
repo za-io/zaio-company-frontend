@@ -10,12 +10,11 @@ export default function TutorBootcamps() {
   const { user } = useUserStore();
   const navigate = useNavigate();
 
-
-  useEffect(()=>{
-    if(user){
-        setLoading(false)
+  useEffect(() => {
+    if (user) {
+      setLoading(false);
     }
-  },[])
+  }, [user]);
 
   return (
     <div className="flex h-screen bg-gray-800 text-gray-100">
@@ -43,36 +42,75 @@ export default function TutorBootcamps() {
       {/* Main Content */}
       <div className="w-3/4 p-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">My Students</h2>
+          <h2 className="text-xl font-bold text-white">
+            {activeTab === "students" ? "My Students" : "My KPIs"}
+          </h2>
           <span className="font-bold text-white">Hi {user?.company_username}</span>
         </div>
 
+        {/* Render "My Students" */}
         {activeTab === "students" && (
           <div className="mt-4 border border-gray-700 rounded p-4">
             <ul>
               {user?.bootcamps?.map((bootcamp, index) => (
-                <li key={index} className="flex justify-between p-2 border-b border-gray-700">
-                  {bootcamp.bootcampName} <a onClick={(e) => {
-                                    e.preventDefault(); 
-                                    navigate(`/tutor/analytics/${bootcamp?._id}`)}} className="text-blue-400 cursor-pointer">View</a>
+                <li
+                  key={index}
+                  className="flex justify-between p-2 border-b border-gray-700"
+                >
+                  {bootcamp.bootcampName}{" "}
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(`/tutor/analytics/${bootcamp?._id}`);
+                    }}
+                    className="text-blue-400 cursor-pointer"
+                  >
+                    View
+                  </a>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
+        {/* Render "My KPIs" */}
         {activeTab === "kpis" && (
           <div className="mt-4 border border-gray-700 rounded p-4">
             <h3 className="text-lg font-semibold text-white">My KPIs</h3>
-            <p className="text-gray-400">No KPIs available at the moment.</p>
+            <div className="mt-2">
+              <ul>
+              {user?.bootcamps?.map((bootcamp, index) => (
+                <li
+                  key={index}
+                  className="flex justify-between p-2 border-b border-gray-700"
+                >
+                  {bootcamp.bootcampName}{" "}
+                  <a
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(`/tutor/kpi/analytics/${bootcamp?._id}`, { state: bootcamp.bootcampName  });
+                      
+                    }}
+                    className="text-blue-400 cursor-pointer"
+                  >
+                    View
+                  </a>
+                </li>
+              ))}
+              </ul>
+              {!user?.bootcamps?.length && (
+                <p className="text-gray-400">No KPIs available at the moment.</p>
+              )}
+            </div>
           </div>
         )}
 
+        {/* Loader */}
         {loading && (
-                <div className="flex flex-col content-center">
-                <Loader />
-                <p className="m-0 text-white text-center">{loading}</p>
-                </div>
+          <div className="flex flex-col items-center">
+            <Loader />
+            <p className="m-0 text-white text-center">Loading...</p>
+          </div>
         )}
       </div>
     </div>
