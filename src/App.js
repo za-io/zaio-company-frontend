@@ -22,6 +22,7 @@ import { AddCompany } from "./pages/AddCompany";
 import TutorAnalytics from "./pages/StudentAnalytics/TutorAnalytics";
 import { AddTutor } from "./pages/AddTutor";
 import ManageBootcamps from "./pages/ManageBootcamps/ManageBootcamps";
+import SetGoal from "./pages/Goals";
 
 const AppHelper = () => {
   return (
@@ -151,6 +152,16 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/student/course/:courseid/assignments/:userid"
               component={<StudentAssignments />}
+            />
+          }
+        />
+
+        <Route
+          path="/defer-student/goals"
+          element={
+            <ProtectedRoute
+            path="/defer-student/goals/"
+            component={<SetGoal />}
             />
           }
         />

@@ -140,3 +140,9 @@ export const mapCompanyBootcamp = (payload) =>
     .post(`${BASE_URL}/company/map-bootcamp-company`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const enrollIntoBootcamp = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/enroll`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
