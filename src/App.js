@@ -27,6 +27,7 @@ import TutorStudents from "./pages/TutorManagement/TutorStudents";
 import TutorStudentSummary from "./pages/TutorManagement/TutorStudentSummary";
 import TutorKPISummary from "./pages/TutorManagement/TutotKPISummary";
 import TutorKPIStudentSummary from "./pages/TutorManagement/TutorKPIStudentSummary";
+import SetGoal from "./pages/Goals";
 
 const AppHelper = () => {
   return (
@@ -198,6 +199,16 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/student/course/:courseid/assignments/:userid"
               component={<StudentAssignments />}
+            />
+          }
+        />
+
+        <Route
+          path="/defer-student/goals"
+          element={
+            <ProtectedRoute
+            path="/defer-student/goals/"
+            component={<SetGoal />}
             />
           }
         />

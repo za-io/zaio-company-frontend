@@ -1,0 +1,45 @@
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap:3px;
+    background-color: #e0e0e0;
+  }
+  
+  .day-cell {
+    background-color: #fff;
+    padding: 10px;
+    min-height: 140px;
+    cursor: pointer;
+  }
+  
+  .day-cell.text-muted {
+    color: #999;
+  }
+  
+  .day-cell.selected {
+    background-color: #e6f3ff;
+  }
+  
+  .day-cell.within-goal {
+    background-color: #e6ffe6;
+  }
+  
+  .day-cell.goal-start {
+    /* border-left: 3px solid #28a745; */
+  }
+  
+  .day-cell.goal-end {
+    /* border-right: 3px solid #28a745; */
+  }
+  
+  .date {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  
+  .task-indicator {
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  

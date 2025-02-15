@@ -147,3 +147,16 @@ export const unEnrollStudent = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const fetchStudentGoals = (payload) =>
+  axios
+    .get(
+      `${BASE_URL}/defer-student/all-goals/${payload?.userid}/${payload.bootcampid}`
+    )
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const addStudentGoals = (payload) =>
+  axios
+    .post(`${BASE_URL}/defer-student/add-goal`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
