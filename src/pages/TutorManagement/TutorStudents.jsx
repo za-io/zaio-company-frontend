@@ -27,6 +27,7 @@ export default function TutorStudents() {
       }
       const deferredList = response?.bootcamp?.analytics?.filter(student => student?.deferredDetails && student?.deferredDetails?.studentDeferred)
       setDeferred(deferredList)
+      console.log(response)
       setBootcamps(response);
 
       // Cache the data in localStorage
@@ -163,7 +164,7 @@ export default function TutorStudents() {
                           </a>
                           <a onClick={(e) => {
                                     e.preventDefault(); 
-                                    navigate(`/tutor/analytics/${bootcampId}/${student?.userid?._id}`, { state : student });}} className="text-blue-400 hover:underline cursor-pointer">
+                                    navigate(`/defer-student/goals?learningpath=${student?.learningpath}&email=${student?.userid?.email}`, { state : student });}} className="text-blue-400 hover:underline cursor-pointer">
                             View Goals
                           </a>
                         </td>
