@@ -26,9 +26,11 @@ export default function TutorStudents() {
         );
       }
       const deferredList = response?.bootcamp?.analytics?.filter(student => student?.deferredDetails && student?.deferredDetails?.studentDeferred)
+      const regularList = response?.bootcamp?.analytics?.filter(
+        student => !student?.deferredDetails // Only non-deferred students
+      );
       setDeferred(deferredList)
-      console.log(response)
-      setBootcamps(response);
+      setBootcamps(regularList);
 
       // Cache the data in localStorage
       localStorage.setItem(
@@ -95,7 +97,7 @@ export default function TutorStudents() {
                       </td>
                     </tr>
                   ) : (
-                    bootcamps?.bootcamp?.analytics?.map((student, index) => (
+                    bootcamps?.map((student, index) => (
                       <tr key={index} className="border border-gray-600 hover:bg-gray-800 transition">
                         <td className="border border-gray-600 p-3">{student?.userid?.username || "N/A"}</td>
                         <td className="border border-gray-600 p-3">{student?.completedCoursesCount}</td>
