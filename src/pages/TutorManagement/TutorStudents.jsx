@@ -6,6 +6,7 @@ import { getUserBootcampAnalyticsForTutor } from "../../api/student";
 export default function TutorStudents() {
   const [activeTab, setActiveTab] = useState("students");
   const [bootcamps, setBootcamps] = useState([]);
+  const [bootcampName, setBootcampName] = useState("");
   const [deferred, setDeferred] = useState([])
   const [loading, setLoading] = useState(false);
   const { user } = useUserStore();
@@ -31,7 +32,7 @@ export default function TutorStudents() {
       );
       setDeferred(deferredList)
       setBootcamps(regularList);
-
+      setBootcampName(response?.bootcamp?.bootcampDetails?.bootcampName)
       // Cache the data in localStorage
       localStorage.setItem(
         `bootcampAnalytics_${bootcampId}`,
@@ -59,7 +60,7 @@ export default function TutorStudents() {
       <div className="w-full max-w-6xl p-6">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold text-white">
-            My Students : {bootcamps?.bootcamp?.bootcampDetails?.bootcampName}
+            My Students : {bootcampName}
           </h2>
           <span className="font-bold text-white">Hi {user?.company_username}</span>
         </div>
