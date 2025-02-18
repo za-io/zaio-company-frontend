@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
-import { getUserBootcampAnalyticsCourseWise } from "../../api/student";
+import { getUserBootcampAnalyticsCourseWise, markCourseCompleted } from "../../api/student";
 
 const StudentSummary = () => {
   const navigate = useNavigate();
@@ -42,6 +42,20 @@ const StudentSummary = () => {
       }
     } catch (error) {
       setLoading(`${error?.message} || Error getting list`);
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMarkCourseComplete = async (userid, module) => {
+    try {
+      setLoading('Marking Module')
+      const res = await markCourseCompleted(userid, module.course._id);
+      if(res.success){
+        alert('Module marked as completed')
+      }
+    } catch (error) {
+      setLoading(`${error?.message} || Unable to mark as completed`);
     } finally {
       setLoading(false)
     }
@@ -99,7 +113,7 @@ const StudentSummary = () => {
             <tbody>
             {loading ? (<tr>
                       <td colSpan="7" className="text-center p-4">
-                        fetching summary... may take a while
+                        {(loading?.length>0) ? loading : 'fetching summary... may take a while'}
                       </td>
                     </tr>) : 
               (userSummary.map((module, index) => (
@@ -114,7 +128,7 @@ const StudentSummary = () => {
                   <td className="p-2 border">0</td>
                   <td className="p-2 border flex items-center space-x-2">
                     <span>00</span>
-                    <button className="px-3 py-1 text-xs bg-green-600 text-white rounded shadow-md hover:bg-green-700">
+                    <button className="px-3 py-1 text-xs bg-green-600 text-white rounded shadow-md hover:bg-green-700" onClick={()=>handleMarkCourseComplete(userid, module)}>
                       Mark as Complete
                     </button>
                   </td>
