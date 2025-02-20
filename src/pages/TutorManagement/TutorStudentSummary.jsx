@@ -1,7 +1,126 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
-import { getUserBootcampAnalyticsCourseWise, markCourseCompleted } from "../../api/student";
+import { RxCross1 } from "react-icons/rx";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getUserBootcampAnalyticsCourseWise, markCourseCompleted } from "../../api/student";
+import Loader from "../../components/loader/loader";
+
+
+function Assignments({setAssignmentState, assignmentModule}) {
+  const [assignments, setAssignments] = useState([]);
+  const [newAssignment, setNewAssignment] = useState({ name: "", mark: "" });
+  const [showInputRow, setShowInputRow] = useState(false);
+  const [load,setLoad] = useState(false); 
+
+  const addAssignment = () => setShowInputRow(true);
+
+
+  const fetchCourseAssignment = async (userid, courseid) => {
+    try {
+      setLoad(true)
+      const res = await getBootcampAssignment(userid, courseid);
+      if(res.data && res.data.bootcampassignment){
+        setAssignments(res.data.bootcampassignment)
+      }
+    } catch (error) {
+      setLoad(false);
+    } finally {
+      setLoad(false)
+    }
+  }
+
+  useEffect(()=>{
+    if(assignmentModule?.userid && assignmentModule?.module?.course?._id)
+    fetchCourseAssignment(assignmentModule?.userid, assignmentModule?.module?.course?._id)
+  },[])
+
+  const saveAssignment = async () => {
+    if (newAssignment.name.length && newAssignment.mark) {
+      const response = await addClassroomAssignmentBootcamp(newAssignment, assignmentModule?.userid, assignmentModule?.module?.course?._id);
+      setAssignments([...assignments, newAssignment]);
+      setNewAssignment({ name: "", mark: "" });
+      setShowInputRow(false);
+    }
+  };
+
+  const calculateAverage = () => {
+    if (assignments.length === 0) return 0;
+    const total = assignments.reduce((acc, curr) => acc + Number(curr.mark), 0);
+    return (total / assignments.length).toFixed(2);
+  };
+
+  return (
+    <div className="w-full max-w-6xl text-white m-4">
+      <div className="flex justify-between items-center mb-2">
+            <h1 className="text-lg font-bold">
+              {`${assignmentModule.locationState.userid.username} / ${assignmentModule.module.coursename} / Assignments`}
+            </h1>
+            <button
+              
+              className="cursor-p text-xl font-bold text-red-700"
+              onClick={()=>setAssignmentState(false)}
+            >
+              <RxCross1/>
+            </button>
+      </div>
+      <div className="text-right mb-2">Avg mark: {calculateAverage()}%</div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <div className="grid grid-cols-2 bg-gray-800 p-2 font-bold text-white">
+          <div>Assignment Name</div>
+          <div>Final mark from Classroom</div>
+        </div>
+
+        {load ? <Loader/> : assignments.map((assignment, index) => (
+          <div key={index} className="grid grid-cols-2 p-2 border-t border-gray-700 text-white">
+            <div>{assignment.name}</div>
+            <div>{assignment.mark}%</div>
+          </div>
+        ))}
+
+        {showInputRow && (
+          <div className="grid grid-cols-2 p-2 border-t border-gray-700 text-white">
+            <input
+              type="text"
+              placeholder="Assignment name"
+              value={newAssignment.name}
+              onChange={(e) =>
+                setNewAssignment({ ...newAssignment, name: e.target.value })
+              }
+              className="w-full bg-gray-600 text-white placeholder-gray-400 mr-2"
+            />
+            <input
+              type="number"
+              placeholder="%"
+              value={newAssignment.mark}
+              onChange={(e) =>
+                setNewAssignment({ ...newAssignment, mark: e.target.value })
+              }
+              className="w-full bg-gray-600 text-white placeholder-gray-400"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end items-center gap-4 mt-4">
+          <button
+            onClick={addAssignment}
+            className="p-1 bg-blue-500 text-white max-w-max"
+          >
+            Add Assignment Data
+          </button>
+          <button
+            onClick={saveAssignment}
+            disabled={!showInputRow}
+            className={`p-1 text-white max-w-max ${showInputRow ? 'bg-green-700' : 'bg-gray-700'}`}
+          >
+            Save
+          </button>
+      </div>
+    </div>
+  );
+}
+
 
 const StudentSummary = () => {
   const navigate = useNavigate();
@@ -11,6 +130,8 @@ const StudentSummary = () => {
   const [average, setAverage] = useState({mcq: 0, challenge: 0, assignment: 0});
   const { bootcampId, userid } = useParams();
   const [loading, setLoading] = useState(false);
+  const [assignmentState, setAssignmentState] = useState(true);
+  const [assignmentModule,setAssignmentModule] = useState(null)
   const isFirstLoad = useRef(true);
 
   const calcAverage = (data) => {
@@ -60,6 +181,13 @@ const StudentSummary = () => {
       setLoading(false)
     }
   }
+
+  const handleClassroomAssignment = (userid, module, locationState) => {
+    setAssignmentState(true)
+    setAssignmentModule({
+      userid, module, locationState
+    })
+  }
   
   useEffect(()=>{
     if(isFirstLoad.current){
@@ -84,7 +212,7 @@ const StudentSummary = () => {
       </div>
 
       {/* Student Summary Card */}
-      <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-6xl mt-4">
+       { !assignmentState ? <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-6xl mt-4">
         <h2 className="text-xl font-bold text-gray-800 mb-2">
           Summary Page
         </h2>
@@ -124,7 +252,10 @@ const StudentSummary = () => {
                   <td className="p-2 border">{module.coursename}</td>
                   <td className="p-2 border">{module.completed.mcq + '/' + module.total.mcq} {`(${module.completed.mcq > 0 ? Math.ceil((module.completed.mcq/module.total.mcq)*100) : 0}%)`}</td>
                   <td className="p-2 border">{module.completed.challenge + '/' + module.total.challenge} {`(${module.completed.challenge > 0 ? Math.ceil((module.completed.challenge/module.total.challenge)*100) : 0}%)`}</td>
-                  <td className="p-2 border">{module.completed.assignment + '/' + module.total.assignment} {`(${module.completed.assignment > 0 ? Math.ceil((module.completed.assignment/module.total.assignment)*100) : 0}%)`}</td>
+                  <td className="p-2 border">
+                    {module.completed.assignment + '/' + module.total.assignment} {`(${module.completed.assignment > 0 ? Math.ceil((module.completed.assignment/module.total.assignment)*100) : 0}%)`}
+                    <button className="ml-2 p-1 rounded-md text-white text-sm bg-indigo-500 hover:bg-blue-700" onClick={()=>handleClassroomAssignment(userid, module, state)}>Edit</button>
+                    </td>
                   <td className="p-2 border">0</td>
                   <td className="p-2 border flex items-center space-x-2">
                     <span>00</span>
@@ -138,7 +269,7 @@ const StudentSummary = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </div> : <Assignments setAssignmentState={setAssignmentState} assignmentModule={assignmentModule}/> }
     </div>
   );
 };
