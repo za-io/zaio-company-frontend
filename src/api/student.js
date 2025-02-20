@@ -69,6 +69,22 @@ export const getUserBootcampAnalyticsCourseWise = async (
   }
 };
 
+export const setBootcampFinalProjectMark = async (
+  bootcamp_id,
+  userid,
+  finalprojectmark
+) => {
+  try {
+    const response = await axios.post(
+      API_URL + `/${bootcamp_id}/tutor-bootcamp-final-project-mark/${userid}`, {finalprojectmark}
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return []
+  }
+};
+
 export const markCourseCompleted = async (
   userid,
   courseid

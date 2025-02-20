@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
-import { addClassroomAssignmentBootcamp, getBootcampAssignment, getUserBootcampAnalyticsCourseWise, markCourseCompleted } from "../../api/student";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getUserBootcampAnalyticsCourseWise, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 
@@ -133,6 +133,22 @@ const StudentSummary = () => {
   const [assignmentState, setAssignmentState] = useState(false);
   const [assignmentModule,setAssignmentModule] = useState(null)
   const isFirstLoad = useRef(true);
+  const [isEditingProjectMark, setIsEditingProjectMark] = useState(false);
+  const [finalProjectMark, setFinalProjectMark] = useState(0);
+
+  // Handler to save final project mark
+  const handleSaveProjectMark = async () => {
+    try {
+      const res = await setBootcampFinalProjectMark(bootcampId, userid, finalProjectMark);
+      if(!res.success)
+      throw "Marks didn't set"
+    } catch (error) {
+      setLoading(`${error?.message} || Error setting mark`);
+    } finally {
+      setIsEditingProjectMark(false);
+    }
+  };
+
 
   const calcAverage = (data) => {
     const reducedData = data.reduce((acc, summary) => {
@@ -159,6 +175,7 @@ const StudentSummary = () => {
       const res = await getUserBootcampAnalyticsCourseWise(bootcampId, userid);
       if(res.data.length){
         calcAverage(res.data);
+        setFinalProjectMark(res.data[0].finalprojectmark)
         setUserSummary(res.data)
       }
     } catch (error) {
@@ -217,9 +234,40 @@ const StudentSummary = () => {
           Summary Page
         </h2>
         <p className="text-gray-700 font-semibold">{`Name: ${state?.userid?.username}`}</p>
-        <p className="text-gray-700">{`MCQs Avg: ${average.mcq}%`}</p>
-        <p className="text-gray-700">{`Coding Challenges Avg: ${average.challenge}%`}</p>
-        <p className="text-gray-700">{`Assignments Avg: ${average.assignment}%`}</p>
+        <p className="text-gray-700">{`Final Module Mark: 0%`}</p>
+        <p className="text-gray-700">
+          Final Project Mark:{" "}
+          {isEditingProjectMark ? (
+            <span>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={finalProjectMark}
+                onChange={(e) => setFinalProjectMark(e.target.value)}
+                className="w-16 p-1 border border-gray-300 rounded"
+              />
+              <button
+                onClick={handleSaveProjectMark}
+                className="ml-2 p-1 rounded-md text-white text-sm bg-green-500 hover:bg-green-700"
+              >
+                Save
+              </button>
+            </span>
+          ) : (
+            <span>
+              {finalProjectMark}%
+              <button
+                onClick={() => setIsEditingProjectMark(true)}
+                className="ml-2 p-1 rounded-md text-white text-sm bg-indigo-500 hover:bg-blue-700"
+              >
+                Edit
+              </button>
+            </span>
+          )}
+        </p>
+        {/* <p className="text-gray-700">{`Coding Challenges Avg: ${average.challenge}%`}</p> */}
+        {/* <p className="text-gray-700">{`Assignments Avg: ${average.assignment}%`}</p> */}
 
         {/* Course Mark Label */}
         <h3 className="text-lg font-semibold text-gray-700 mt-4">{`Course Mark: ${0}`}</h3>
