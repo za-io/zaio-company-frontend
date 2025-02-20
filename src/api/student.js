@@ -84,6 +84,39 @@ export const markCourseCompleted = async (
   }
 };
 
+export const getBootcampAssignment = async (
+  userid,
+  courseid
+) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${courseid}/fetch-bootcamp-classroom-assignment/${userid}`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return []
+  }
+};
+
+export const addClassroomAssignmentBootcamp = async (
+  newAssignment,
+  userid,
+  courseid
+) => {
+  try {
+    console.log({newAssignment,userid, courseid})
+    const response = await axios.post(
+      API_URL + `/${courseid}/tutor-bootcamp-classroom-assignment/${userid}`,
+      newAssignment
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return []
+  }
+};
+
 export const getLearningpathEnrolledUser = (learningpath_id) =>
   axios
     .get(API_URL + `/learningpathsenrolledusers/${learningpath_id}`)
