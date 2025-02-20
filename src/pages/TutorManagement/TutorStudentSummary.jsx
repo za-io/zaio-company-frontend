@@ -130,7 +130,7 @@ const StudentSummary = () => {
   const [average, setAverage] = useState({mcq: 0, challenge: 0, assignment: 0});
   const { bootcampId, userid } = useParams();
   const [loading, setLoading] = useState(false);
-  const [assignmentState, setAssignmentState] = useState(true);
+  const [assignmentState, setAssignmentState] = useState(false);
   const [assignmentModule,setAssignmentModule] = useState(null)
   const isFirstLoad = useRef(true);
 
