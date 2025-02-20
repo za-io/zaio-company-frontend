@@ -18,6 +18,7 @@ import { enrollIntoBootcamp } from "../../api/company";
 import { fetchStudentGoals } from "../../api/student";
 import { useLocation } from "react-router-dom";
 import Loader from "../loader/loader";
+import { GoalsList } from "./GoalsList";
 
 const GoalsCalendar = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -126,6 +127,10 @@ const GoalsCalendar = () => {
     }
   };
 
+  const onDelete = async () => {
+    await fetchGoals(otherDetails);
+  };
+
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(monthStart);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -219,6 +224,14 @@ const GoalsCalendar = () => {
           </Button>
         </div>
       </div>
+
+      <GoalsList
+        details={otherDetails}
+        setLoading={setLoading}
+        goals={goals}
+        onDelete={onDelete}
+      />
+
       <GoalCreationModal
         show={showGoalModal}
         onHide={() => setShowGoalModal(false)}

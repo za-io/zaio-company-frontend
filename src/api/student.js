@@ -175,3 +175,9 @@ export const addStudentGoals = (payload) =>
     .post(`${BASE_URL}/defer-student/add-goal`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const deleteStudentGoal = (payload) =>
+  axios
+    .post(`${BASE_URL}/defer-student/delete-goal`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
