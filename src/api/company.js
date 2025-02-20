@@ -9,12 +9,17 @@ export const registerCompany = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const registerTutor = (payload) =>
-  axios
-    .post(`${BASE_URL}/company/registerTutor`, payload)
-    .then((res) => res.data)
-    .catch((err) => console.log(err));
-
+export const registerTutor = async (payload) =>{
+  const headers = {
+    'Content-Type': 'multipart/form-data',  // Optional, axios will set this for you when sending FormData
+  };
+  
+  return axios
+  .post(`${BASE_URL}/company/registerTutor`, payload, {headers})
+  .then((res) => res.data)
+  .catch((err) => console.log(err));
+}
+  
 export const loginCompany = (payload) =>
   axios
     .post(`${BASE_URL}/company/login`, payload)

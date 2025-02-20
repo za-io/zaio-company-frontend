@@ -22,6 +22,11 @@ import { AddCompany } from "./pages/AddCompany";
 import TutorAnalytics from "./pages/StudentAnalytics/TutorAnalytics";
 import { AddTutor } from "./pages/AddTutor";
 import ManageBootcamps from "./pages/ManageBootcamps/ManageBootcamps";
+import TutorBootcamps from "./pages/TutorManagement/TutorBootcamps";
+import TutorStudents from "./pages/TutorManagement/TutorStudents";
+import TutorStudentSummary from "./pages/TutorManagement/TutorStudentSummary";
+import TutorKPISummary from "./pages/TutorManagement/TutotKPISummary";
+import TutorKPIStudentSummary from "./pages/TutorManagement/TutorKPIStudentSummary";
 import SetGoal from "./pages/Goals";
 
 const AppHelper = () => {
@@ -38,7 +43,49 @@ const AppHelper = () => {
           element={
             <ProtectedRoute
               path="/tutor/analytics"
-              component={<TutorAnalytics />}
+              // component={<TutorAnalytics />}
+              component={<TutorBootcamps />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/kpi/analytics/:bootcampId/:learningpathId/:courseId"
+          element={
+            <ProtectedRoute
+              path="/tutor/kpi/analytics/:bootcampId/:learningpathId/:courseId"
+              // component={<TutorAnalytics />}
+              // component={<TutorBootcamps />}
+              component={<TutorKPIStudentSummary />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/kpi/analytics/:bootcampId"
+          element={
+            <ProtectedRoute
+              path="/tutor/kpi/analytics/:bootcampId"
+              // component={<TutorAnalytics />}
+              // component={<TutorBootcamps />}
+              component={<TutorKPISummary />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/analytics/:bootcampId"
+          element={
+            <ProtectedRoute
+              path="/tutor/analytics"
+              component={<TutorStudents />}
+              // component={<TutorStudentSummary />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/analytics/:bootcampId/:userid"
+          element={
+            <ProtectedRoute
+              path="/tutor/analytics"
+              component={<TutorStudentSummary />}
             />
           }
         />

@@ -31,6 +31,7 @@ export const AddTutor = () => {
     const password = formData.get("password");
     const email = formData.get("email");
     const calendlyLink = formData.get('calendly')
+    const image = formData.get('company_user_image')
     const bootcamps = bootcampSelectionRef.current
       ?.getSelectedItems()
       ?.map((item) => item?.id);
@@ -42,7 +43,8 @@ export const AddTutor = () => {
       email,
       password,
       role: "TUTOR",
-      calendlyLink
+      calendlyLink,
+      image
     })
       .then((res) => {
         if (res.success) {
@@ -79,6 +81,24 @@ export const AddTutor = () => {
               type="text"
               placeholder="Tutor Username"
               required
+            />
+          </div>
+        </div>
+        
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label
+              className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
+              for="grid-password"
+            >
+              Image Upload
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="company_user_image"
+              // onChange={handleImage}
+              type="file"
+              placeholder="Upload Your Image (Optional)"
             />
           </div>
         </div>
