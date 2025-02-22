@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
-import { addClassroomAssignmentBootcamp, getBootcampAssignment, getUserBootcampAnalyticsCourseWise, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getLearningPathUserProfile, getUserBootcampAnalyticsCourseWise, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 
@@ -176,6 +176,11 @@ const StudentSummary = () => {
     try {
       setLoading(true);
       const res = await getUserBootcampAnalyticsCourseWise(bootcampId, userid);
+      const platformData = await getLearningPathUserProfile(state?.learningpath, state?.userid?.email)
+      const platformDict = platformData?.data?.learningpathcourses?.reduce((acc, mod)=> {
+        acc[mod._id] = mod.completedPercentage
+        return acc;
+      }, {});
       if (res.data.length) {
         const userSummaryWithAvg = await Promise.all(
           res.data.map(async (module) => {
@@ -189,7 +194,7 @@ const StudentSummary = () => {
               challengeTotal: module.total.challenge,
             });
 
-            return { ...module, assignmentAvg, moduleMark };
+            return { ...module, assignmentAvg, moduleMark, platformProgress: platformDict[module.course._id] };
           })
         );
 
@@ -364,7 +369,7 @@ const StudentSummary = () => {
                     {`${module.assignmentAvg}%`}
                     <button className="ml-2 p-1 rounded-md text-white text-sm bg-indigo-500 hover:bg-blue-700" onClick={()=>handleClassroomAssignment(userid, module, state || JSON.parse(localStorage.getItem('summaryState') || {}))}>Edit</button>
                     </td>
-                  <td className="p-2 border">0</td>
+                  <td className="p-2 border">{module.platformProgress}%</td>
                   <td className="p-2 border flex items-center space-x-2">
                     <span>{module.moduleMark}%</span>
                     <button className="px-3 py-1 text-xs bg-green-600 text-white rounded shadow-md hover:bg-green-700" onClick={()=>handleMarkCourseComplete(userid, module)}>

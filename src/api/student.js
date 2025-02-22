@@ -133,6 +133,20 @@ export const addClassroomAssignmentBootcamp = async (
   }
 };
 
+export const getLearningPathUserProfile = async (id, email) => {
+  // console.log(id)
+  return axios
+    .get(BASE_URL + "/learningpath/UserProfile/" + id + "/" + email)
+    .then((res) => {
+      // console.log('then',res);
+      return res.data;
+    })
+    .catch((rej) => {
+      // console.log('catch',rej.response)
+      return rej.response;
+    });
+};
+
 export const getLearningpathEnrolledUser = (learningpath_id) =>
   axios
     .get(API_URL + `/learningpathsenrolledusers/${learningpath_id}`)
