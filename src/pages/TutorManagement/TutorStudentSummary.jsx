@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
-import { addClassroomAssignmentBootcamp, getBootcampAssignment, getUserBootcampAnalyticsCourseWise, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getLearningPathUserProfile, getUserBootcampAnalyticsCourseWise, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 
@@ -135,6 +135,8 @@ const StudentSummary = () => {
   const isFirstLoad = useRef(true);
   const [isEditingProjectMark, setIsEditingProjectMark] = useState(false);
   const [finalProjectMark, setFinalProjectMark] = useState(0);
+  const [modulemarkAvg, setModuleMarkAvg] = useState(0)
+  const [courseMark, setCourseMark] = useState(0);
 
   // Handler to save final project mark
   const handleSaveProjectMark = async () => {
@@ -172,18 +174,78 @@ const StudentSummary = () => {
 
   const fetchUserSummary = async () => {
     try {
+      setLoading(true);
       const res = await getUserBootcampAnalyticsCourseWise(bootcampId, userid);
-      if(res.data.length){
-        calcAverage(res.data);
-        setFinalProjectMark(res.data[0].finalprojectmark)
-        setUserSummary(res.data)
+      const platformData = await getLearningPathUserProfile(state?.learningpath, state?.userid?.email)
+      const platformDict = platformData?.data?.learningpathcourses?.reduce((acc, mod)=> {
+        acc[mod._id] = mod.completedPercentage
+        return acc;
+      }, {});
+      if (res.data.length) {
+        const userSummaryWithAvg = await Promise.all(
+          res.data.map(async (module) => {
+            const assignmentAvg = await fetchAssignmentAverage(userid, module.course._id);
+            // Calculate module mark
+            const moduleMark = calculateModuleMark({
+              assignmentAvg: parseFloat(assignmentAvg) || 0,
+              mcqCompleted: module.completed.mcq,
+              mcqTotal: module.total.mcq,
+              challengeCompleted: module.completed.challenge,
+              challengeTotal: module.total.challenge,
+            });
+
+            return { ...module, assignmentAvg, moduleMark, platformProgress: platformDict[module.course._id] };
+          })
+        );
+
+        const totalmodulemark = userSummaryWithAvg.reduce((acc, module)=> {
+         return acc + parseFloat(module?.moduleMark || 0)
+        },0);
+        const totalmodulemarkAvg = totalmodulemark/userSummaryWithAvg.length;
+
+        setModuleMarkAvg(Math.min(100, totalmodulemarkAvg.toFixed(2)));
+        setUserSummary(userSummaryWithAvg);
+        setFinalProjectMark(res.data[0].finalprojectmark);
+        setCourseMark(Math.min(100, Math.ceil((0.65*parseFloat(totalmodulemarkAvg.toFixed(2) || 0) + 0.35* parseFloat(res.data[0].finalprojectmark || 0))).toFixed(2)))
       }
     } catch (error) {
       setLoading(`${error?.message} || Error getting list`);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+  
+  const calculateModuleMark = ({ assignmentAvg, mcqCompleted, mcqTotal, challengeCompleted, challengeTotal }) => {
+    // Calculate percentages
+    const mcqPercentage = mcqTotal > 0 ? (mcqCompleted / mcqTotal) * 100 : null;
+    const challengePercentage = challengeTotal > 0 ? (challengeCompleted / challengeTotal) * 100 : null;
+  
+    // Rules:
+    if (assignmentAvg && challengePercentage !== null && mcqPercentage !== null) {
+      return (assignmentAvg * 0.4 + challengePercentage * 0.4 + mcqPercentage * 0.2).toFixed(2);
+    } else if (assignmentAvg && mcqPercentage !== null) {
+      return (assignmentAvg * 0.5 + mcqPercentage * 0.5).toFixed(2);
+    } else if (assignmentAvg) {
+      return assignmentAvg.toFixed(2);
+    } else {
+      return 0; // No assignments, challenges, or MCQs
+    }
+  };
+
+  
+  const fetchAssignmentAverage = async (userid, courseid) => {
+    try {
+      const res = await getBootcampAssignment(userid, courseid);
+      if (res.data && res.data.bootcampassignment) {
+        const assignments = res.data.bootcampassignment;
+        const totalMarks = assignments.reduce((acc, curr) => acc + Number(curr.mark), 0);
+        return assignments.length > 0 ? (totalMarks / assignments.length).toFixed(2) : 0;
+      }
+    } catch (error) {
+      console.error(`Error fetching assignments for course ${courseid}:`, error);
+    }
+    return 0; // Return 0 if no assignments or an error occurs
+  };
 
   const handleMarkCourseComplete = async (userid, module) => {
     try {
@@ -211,6 +273,8 @@ const StudentSummary = () => {
       setLoading(true)
       isFirstLoad.current = false;
       fetchUserSummary()
+      if(state)
+      localStorage.setItem('summaryState', JSON.stringify(state))
     }
   },[state])
 
@@ -220,7 +284,7 @@ const StudentSummary = () => {
       <div className="w-full max-w-6xl flex items-center">
         {/* Back Button */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate(`/tutor/analytics/${bootcampId}`)}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 flex items-center space-x-2"
         >
           <span>←</span>
@@ -233,8 +297,8 @@ const StudentSummary = () => {
         <h2 className="text-xl font-bold text-gray-800 mb-2">
           Summary Page
         </h2>
-        <p className="text-gray-700 font-semibold">{`Name: ${state?.userid?.username}`}</p>
-        <p className="text-gray-700">{`Final Module Mark: 0%`}</p>
+        <p className="text-gray-700 font-semibold">{`Name: ${state?.userid?.username || JSON.parse(localStorage.getItem('summaryState') || {}).userid.username} `}</p>
+        <p className="text-gray-700">{`Final Module Mark: ${modulemarkAvg}%`}</p>
         <p className="text-gray-700">
           Final Project Mark:{" "}
           {isEditingProjectMark ? (
@@ -270,7 +334,7 @@ const StudentSummary = () => {
         {/* <p className="text-gray-700">{`Assignments Avg: ${average.assignment}%`}</p> */}
 
         {/* Course Mark Label */}
-        <h3 className="text-lg font-semibold text-gray-700 mt-4">{`Course Mark: ${0}`}</h3>
+        <h3 className="text-lg font-semibold text-gray-700 mt-4">{`Course Mark: ${courseMark}%`}</h3>
 
         {/* Table Container with Wider Width */}
         <div className="overflow-x-auto max-h-[450px] mt-2 rounded-lg border border-gray-300 w-full">
@@ -301,17 +365,18 @@ const StudentSummary = () => {
                   <td className="p-2 border">{module.completed.mcq + '/' + module.total.mcq} {`(${module.completed.mcq > 0 ? Math.ceil((module.completed.mcq/module.total.mcq)*100) : 0}%)`}</td>
                   <td className="p-2 border">{module.completed.challenge + '/' + module.total.challenge} {`(${module.completed.challenge > 0 ? Math.ceil((module.completed.challenge/module.total.challenge)*100) : 0}%)`}</td>
                   <td className="p-2 border">
-                    {module.completed.assignment + '/' + module.total.assignment} {`(${module.completed.assignment > 0 ? Math.ceil((module.completed.assignment/module.total.assignment)*100) : 0}%)`}
-                    <button className="ml-2 p-1 rounded-md text-white text-sm bg-indigo-500 hover:bg-blue-700" onClick={()=>handleClassroomAssignment(userid, module, state)}>Edit</button>
+                    {/* {module.completed.assignment + '/' + module.total.assignment} {`(${module.completed.assignment > 0 ? Math.ceil((module.completed.assignment/module.total.assignment)*100) : 0}%)`} */}
+                    {`${module.assignmentAvg}%`}
+                    <button className="ml-2 p-1 rounded-md text-white text-sm bg-indigo-500 hover:bg-blue-700" onClick={()=>handleClassroomAssignment(userid, module, state || JSON.parse(localStorage.getItem('summaryState') || {}))}>Edit</button>
                     </td>
-                  <td className="p-2 border">0</td>
+                  <td className="p-2 border">{module.platformProgress}%</td>
                   <td className="p-2 border flex items-center space-x-2">
-                    <span>00</span>
+                    <span>{module.moduleMark}%</span>
                     <button className="px-3 py-1 text-xs bg-green-600 text-white rounded shadow-md hover:bg-green-700" onClick={()=>handleMarkCourseComplete(userid, module)}>
                       Mark as Complete
                     </button>
                   </td>
-                  <td className="p-2 border">{state?.bootcampEndDate && moment(state?.bootcampEndDate).format('DD MMMM YYYY')}</td>
+                  <td className="p-2 border">{(state?.bootcampEndDate || JSON.parse(localStorage.getItem('summaryState') || {}).bootcampEndDate) && moment(state?.bootcampEndDate || JSON.parse(localStorage.getItem('summaryState') || {}).bootcampEndDate).format('DD MMMM YYYY')}</td>
                 </tr>
               )))}
             </tbody>
