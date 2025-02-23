@@ -69,6 +69,7 @@ export default function TutorKPISummary() {
           getUserBootcampAnalytics();
           getTutorKPIModuleStats();
         }
+        if(state) localStorage.setItem('kpi_summary', state)
       }
     }, []);
   
@@ -76,9 +77,9 @@ export default function TutorKPISummary() {
       <div className="flex flex-col h-screen bg-gray-800 text-gray-100 p-6">
         {/* Header Section */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-white">MY KPIs / {state}</h2>
+          <h2 className="text-xl font-bold text-white">MY KPIs / {state || localStorage.getItem('kpi_summary')}</h2>
           <button
-            onClick={() => navigate(-1)} // Navigate back to KPI list
+            onClick={() => navigate('/tutor/analytics?q=kpis')} // Navigate back to KPI list
             className="text-blue-400 cursor-pointer"
           >
             Back
