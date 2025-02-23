@@ -2,17 +2,20 @@ import { useEffect, useState } from "react";
 import { useUserStore } from "../../store/UserProvider";
 import { getAllBootcamps } from "../../api/student";
 import Loader from "../../components/loader/loader";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 export default function TutorBootcamps() {
   const [activeTab, setActiveTab] = useState("students");
   const [loading, setLoading] = useState(true);
+  const [params] = useSearchParams();
   const { user } = useUserStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
       setLoading(false);
+      if(params.get('q'))
+      setActiveTab(params.get('q'))
     }
   }, [user]);
 
