@@ -6,8 +6,9 @@ import { getUserBootcampAnalyticsForTutor } from "../../api/student";
 export default function TutorStudents() {
   const [activeTab, setActiveTab] = useState("students");
   const [bootcamps, setBootcamps] = useState([]);
-  const [bootcampName, setBootcampName] = useState("");
+  const [bootcampDetails, setBootcampDetails] = useState("");
   const [deferred, setDeferred] = useState([])
+  const [currentCourse, setCurrentCourse] = useState("")
   const [loading, setLoading] = useState(false);
   const { user } = useUserStore();
   const { bootcampId } = useParams();
@@ -32,7 +33,8 @@ export default function TutorStudents() {
       );
       setDeferred(deferredList)
       setBootcamps(regularList);
-      setBootcampName(response?.bootcamp?.bootcampDetails?.bootcampName)
+      setBootcampDetails(response?.bootcamp?.bootcampDetails)
+      setCurrentCourse(response?.bootcamp?.currentCourse?.coursename)
       // Cache the data in localStorage
       localStorage.setItem(
         `bootcampAnalytics_${bootcampId}`,
@@ -60,7 +62,7 @@ export default function TutorStudents() {
       <div className="w-full max-w-6xl p-6">
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-bold text-white">
-            My Students : {bootcampName}
+            My Students : {bootcampDetails?.bootcampName}
           </h2>
           <span className="font-bold text-white">Hi {user?.company_username}</span>
         </div>
@@ -77,7 +79,7 @@ export default function TutorStudents() {
         {activeTab === "students" && (
           <div className="rounded p-2">
             <h3 className="text-lg font-bold text-white">
-              Current Course: {bootcamps?.bootcamp?.currentCourse?.coursename}
+              Current Course: {currentCourse}
             </h3>
 
             {/* Table Wrapper with Controlled Height & Scroll */}
@@ -101,7 +103,7 @@ export default function TutorStudents() {
                     bootcamps?.map((student, index) => (
                       <tr key={index} className="border border-gray-600 hover:bg-gray-800 transition">
                         <td className="border border-gray-600 p-3">{student?.userid?.username || "N/A"}</td>
-                        <td className="border border-gray-600 p-3">{student?.completedCoursesCount}</td>
+                        <td className="border border-gray-600 p-3">{student?.completedCoursesCount}/{bootcampDetails?.learningpathcourses}</td>
                         <td className="border border-gray-600 p-3">
                           <a
                             href={`https://www.zaio.io/app/zaio-profile/${student?.userid?.email}`}
@@ -149,7 +151,7 @@ export default function TutorStudents() {
                       // bootcamps?.bootcamp?.analytics?.map((student, index) => (
                       <tr key={index} className="border border-gray-600 hover:bg-gray-800 transition">
                         <td className="border border-gray-600 p-3">{student?.userid?.username || "N/A"}</td>
-                        <td className="border border-gray-600 p-3">{student?.completedCoursesCount}</td>
+                        <td className="border border-gray-600 p-3">{student?.completedCoursesCount}/{bootcampDetails?.learningpathcourses}</td>
                         <td className="border border-gray-600 p-3">{student?.deferredDetails?.newBootcampEndDate}</td>
                         <td className="border border-gray-600 p-3">
                           <a
