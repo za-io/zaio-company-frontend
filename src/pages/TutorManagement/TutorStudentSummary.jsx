@@ -250,7 +250,7 @@ const StudentSummary = () => {
   const handleMarkCourseComplete = async (userid, module) => {
     try {
       setLoading('Marking Module')
-      const res = await markCourseCompleted(userid, module.course._id);
+      const res = await markCourseCompleted(bootcampId, userid, module.course._id);
       if(res.success){
         alert('Module marked as completed')
       }
