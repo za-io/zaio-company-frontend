@@ -17,17 +17,28 @@ export default function TutorKPIStudentSummary() {
     // Calculate percentages
     const mcqPercentage = mcqTotal > 0 ? (mcqCompleted / mcqTotal) * 100 : null;
     const challengePercentage = challengeTotal > 0 ? (challengeCompleted / challengeTotal) * 100 : null;
-  
-    // Rules:
-    if (assignmentAvg && challengePercentage !== null && mcqPercentage !== null) {
-      return (assignmentAvg * 0.4 + challengePercentage * 0.4 + mcqPercentage * 0.2).toFixed(2);
-    } else if (assignmentAvg && mcqPercentage !== null) {
-      return (assignmentAvg * 0.5 + mcqPercentage * 0.5).toFixed(2);
-    } else if (assignmentAvg) {
-      return assignmentAvg.toFixed(2);
-    } else {
-      return 0; // No assignments, challenges, or MCQs
+    const weightage = {
+      '1':{
+        weight: 1
+      },
+      '2':{
+        weight: 0.5
+      },
+      '3':{
+        weight: 0.4
+      }
     }
+    // Rules:
+    const calcAttributes = []
+    if(challengePercentage>0) calcAttributes.push(challengePercentage)
+    if(assignmentAvg>0) calcAttributes.push(assignmentAvg)
+    if(mcqPercentage>0) calcAttributes.push(mcqPercentage)
+
+    let moduleMarkPercent = 0
+    if(calcAttributes.length===1) moduleMarkPercent =  weightage['1'].weight*calcAttributes[0];
+    else if(calcAttributes.length===2) moduleMarkPercent = weightage['2'].weight*(calcAttributes[0] + calcAttributes[1]);
+    else if(calcAttributes.length===3) moduleMarkPercent = (weightage['3'].weight*(calcAttributes[0] + calcAttributes[1])) + (1- 2*weightage['3'].weight)*calcAttributes[2];
+    return moduleMarkPercent.toFixed(2);
   };
 
   const fetchSummary = async () => {
