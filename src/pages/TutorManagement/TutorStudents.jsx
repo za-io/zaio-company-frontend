@@ -15,11 +15,11 @@ export default function TutorStudents() {
   const isFirstLoad = useRef(true);
   const navigate = useNavigate();
   
-  const getUserBootcampAnalytics = async () => {
+  const getUserBootcampAnalytics = async (isRefresh = false) => {
     try {
       setLoading("Getting Student List...");
       let response;
-      if(localStorage.getItem(`bootcampAnalytics_${bootcampId}`)){
+      if(!isRefresh && localStorage.getItem(`bootcampAnalytics_${bootcampId}`)){
         response = JSON.parse(localStorage.getItem(`bootcampAnalytics_${bootcampId}`))
       } else {
         response = await getUserBootcampAnalyticsForTutor(
@@ -47,6 +47,10 @@ export default function TutorStudents() {
     }
   };
 
+  const handleRefresh = async () => {
+    await getUserBootcampAnalytics(true);
+  }
+
   useEffect(() => {
     if(isFirstLoad.current){
       isFirstLoad.current = false;
@@ -73,6 +77,12 @@ export default function TutorStudents() {
           className="bg-gray-700 text-white px-4 py-2 rounded mt-4 hover:bg-gray-600 transition"
         >
           Back
+        </button>
+         <button
+          onClick={handleRefresh}  
+          className="mx-2 bg-gray-700 text-white px-4 py-2 rounded mt-4 hover:bg-gray-600 transition"
+        >
+          Refresh
         </button>
 
 

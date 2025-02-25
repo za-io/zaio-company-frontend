@@ -214,6 +214,10 @@ const StudentSummary = () => {
       setLoading(false);
     }
   };
+
+  const handleRefresh = async () => {
+    await fetchUserSummary();
+  }
   
   const calculateModuleMark = ({ assignmentAvg, mcqCompleted, mcqTotal, challengeCompleted, challengeTotal }) => {
     // Calculate percentages
@@ -300,6 +304,12 @@ const StudentSummary = () => {
         >
           <span>←</span>
           <span>Back</span>
+        </button>
+        <button
+          onClick={handleRefresh}
+          className="mx-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 flex items-center space-x-2"
+        >
+          <span>Refresh</span>
         </button>
       </div>
 
