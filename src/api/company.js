@@ -9,17 +9,17 @@ export const registerCompany = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const registerTutor = async (payload) =>{
+export const registerTutor = async (payload) => {
   const headers = {
-    'Content-Type': 'multipart/form-data',  // Optional, axios will set this for you when sending FormData
+    "Content-Type": "multipart/form-data", // Optional, axios will set this for you when sending FormData
   };
-  
+
   return axios
-  .post(`${BASE_URL}/company/registerTutor`, payload, {headers})
-  .then((res) => res.data)
-  .catch((err) => console.log(err));
-}
-  
+    .post(`${BASE_URL}/company/registerTutor`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+};
+
 export const loginCompany = (payload) =>
   axios
     .post(`${BASE_URL}/company/login`, payload)
@@ -149,5 +149,11 @@ export const mapCompanyBootcamp = (payload) =>
 export const enrollIntoBootcamp = (payload) =>
   axios
     .post(`${BASE_URL}/bootcamp/enroll`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getTutorDetails = (tutorId) =>
+  axios
+    .get(`${BASE_URL}/company/tutor-details/${tutorId}`)
     .then((res) => res.data)
     .catch((err) => console.log(err));

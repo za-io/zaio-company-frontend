@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getAllBootcamps } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useProgramStore } from "../../store/programStore";
 import { useUserStore } from "../../store/UserProvider";
+import { CompanyAppRoles } from "../../utils/appUtils";
 
 const Program = ({ program }) => {
   return (
@@ -38,6 +39,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const setPrograms = useProgramStore((state) => state.setPrograms);
   const { user } = useUserStore();
+  const navigate = useNavigate();
+
   const init = () => {
     setLoading(true);
     getAllBootcamps({
@@ -56,6 +59,9 @@ const Dashboard = () => {
   };
   useEffect(() => {
     if (user?.role === "SUPER_STUDENT_ADMIN" || bootcamps || !user?._id) return;
+    if (user?.role === CompanyAppRoles.STUDENT_SUCCESS_MANAGER) {
+      navigate("/ssm/tutor/all");
+    }
     init();
     // eslint-disable-next-line
   }, []);
