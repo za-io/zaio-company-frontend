@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useUserStore } from "../../store/UserProvider";
 import { getUserBootcampAnalyticsForTutor } from "../../api/student";
+import { RxCheckCircled } from "react-icons/rx";
 
 export default function TutorStudents() {
   const [activeTab, setActiveTab] = useState("students");
@@ -15,11 +16,11 @@ export default function TutorStudents() {
   const isFirstLoad = useRef(true);
   const navigate = useNavigate();
   
-  const getUserBootcampAnalytics = async () => {
+  const getUserBootcampAnalytics = async (isRefresh = false) => {
     try {
       setLoading("Getting Student List...");
       let response;
-      if(localStorage.getItem(`bootcampAnalytics_${bootcampId}`)){
+      if(!isRefresh && localStorage.getItem(`bootcampAnalytics_${bootcampId}`)){
         response = JSON.parse(localStorage.getItem(`bootcampAnalytics_${bootcampId}`))
       } else {
         response = await getUserBootcampAnalyticsForTutor(
@@ -47,6 +48,10 @@ export default function TutorStudents() {
     }
   };
 
+  const handleRefresh = async () => {
+    await getUserBootcampAnalytics(true);
+  }
+
   useEffect(() => {
     if(isFirstLoad.current){
       isFirstLoad.current = false;
@@ -73,6 +78,12 @@ export default function TutorStudents() {
           className="bg-gray-700 text-white px-4 py-2 rounded mt-4 hover:bg-gray-600 transition"
         >
           Back
+        </button>
+         <button
+          onClick={handleRefresh}  
+          className="mx-2 bg-gray-700 text-white px-4 py-2 rounded mt-4 hover:bg-gray-600 transition"
+        >
+          Refresh
         </button>
 
 
@@ -104,7 +115,7 @@ export default function TutorStudents() {
                       <tr key={index} className="border border-gray-600 hover:bg-gray-800 transition">
                         <td className="border border-gray-600 p-3">{student?.userid?.username || "N/A"}</td>
                         <td className="border border-gray-600 p-3">{student?.completedCoursesCount}/{bootcampDetails?.learningpathcourses}</td>
-                        <td className="border border-gray-600 p-3">
+                        <td className="border border-gray-600 p-3 flex justify-start items-center">
                           <a
                             href={`https://www.zaio.io/app/zaio-profile/${student?.userid?.email}`}
                             target="_blank"
@@ -118,6 +129,7 @@ export default function TutorStudents() {
                                     navigate(`/tutor/analytics/${bootcampId}/${student?.userid?._id}`, { state : student });}} className="text-blue-400 hover:underline cursor-pointer">
                             View
                           </a>
+                          <span className="text-green-400 text-xl ml-4"> { student?.isbootCampPassed && <RxCheckCircled /> } </span>
                         </td>
                       </tr>
                     ))

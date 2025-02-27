@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
-import { addClassroomAssignmentBootcamp, getBootcampAssignment, getLearningPathUserProfile, getUserBootcampAnalyticsCourseWise, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getLearningPathUserProfile, getUserBootcampAnalyticsCourseWise, markBootcampCompleted, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 
@@ -214,6 +214,10 @@ const StudentSummary = () => {
       setLoading(false);
     }
   };
+
+  const handleRefresh = async () => {
+    await fetchUserSummary();
+  }
   
   const calculateModuleMark = ({ assignmentAvg, mcqCompleted, mcqTotal, challengeCompleted, challengeTotal }) => {
     // Calculate percentages
@@ -278,6 +282,24 @@ const StudentSummary = () => {
       userid, module, locationState
     })
   }
+
+  const handlePassBootcamp = async () => {
+    try {
+      setLoading('Marking Bootcamp as Passed...')
+      if(courseMark<65 && finalProjectMark<70){
+        alert(`Cannot be passed as course mark and final project mark criteria violated`)
+        return
+      }
+      const res = await markBootcampCompleted(bootcampId, userid);
+      if(res.success){
+        alert('Bootcamp marked as completed')
+      }
+    } catch (error) {
+      setLoading(`${error?.message} || Unable to mark as completed`);
+    } finally {
+      setLoading(false)
+    }
+  }
   
   useEffect(()=>{
     if(isFirstLoad.current){
@@ -300,6 +322,18 @@ const StudentSummary = () => {
         >
           <span>←</span>
           <span>Back</span>
+        </button>
+        <button
+          onClick={handleRefresh}
+          className="mx-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 flex items-center space-x-2"
+        >
+          <span>Refresh</span>
+        </button>
+        <button
+          onClick={handlePassBootcamp}
+          className="mx-1 px-4 py-2 bg-yellow-600 text-white rounded-lg shadow-md hover:bg-yellow-700 flex items-center space-x-2"
+        >
+          <span>Pass Bootcamp</span>
         </button>
       </div>
 

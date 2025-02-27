@@ -98,7 +98,25 @@ export const markCourseCompleted = async (bootcampid, userid, courseid) => {
   }
 };
 
-export const getBootcampAssignment = async (userid, courseid) => {
+export const markBootcampCompleted = async (
+  bootcampid,
+  userid
+) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${bootcampid}/tutor-bootcamp-mark-completed/${userid}`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return []
+  }
+};
+
+export const getBootcampAssignment = async (
+  userid,
+  courseid
+) => {
   try {
     const response = await axios.get(
       API_URL + `/${courseid}/fetch-bootcamp-classroom-assignment/${userid}`

@@ -10,6 +10,7 @@ import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
 import { getAllTutors } from "../../api/company";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
+import { RxCheckCircled } from "react-icons/rx";
 
 const AnalyticsTable = ({
   data,
@@ -297,6 +298,7 @@ const AnalyticsTable = ({
                         }}
                       >
                         <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                        {(ba?.completedPercentage === 100 || ba?.isbootCampPassed) && <span className="text-2xl text-green-600"> <RxCheckCircled/> </span> }
                           {ba?.userid?.username}{" "}
                           <span className="text-purple-600">
                             {" "}
