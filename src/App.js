@@ -19,7 +19,6 @@ import StudentAssignments from "./pages/StudentAssignments";
 import ProtectedRoute, { publicRoutes } from "./components/ProtectedRoute";
 import { AddExiting } from "./pages/AddExisting";
 import { AddCompany } from "./pages/AddCompany";
-import TutorAnalytics from "./pages/StudentAnalytics/TutorAnalytics";
 import { AddTutor } from "./pages/AddTutor";
 import ManageBootcamps from "./pages/ManageBootcamps/ManageBootcamps";
 import TutorBootcamps from "./pages/TutorManagement/TutorBootcamps";
@@ -28,6 +27,10 @@ import TutorStudentSummary from "./pages/TutorManagement/TutorStudentSummary";
 import TutorKPISummary from "./pages/TutorManagement/TutotKPISummary";
 import TutorKPIStudentSummary from "./pages/TutorManagement/TutorKPIStudentSummary";
 import SetGoal from "./pages/Goals";
+import AllTutors from "./pages/Stu_Success_Manager/AllTutors";
+import { ViewTutor } from "./pages/Stu_Success_Manager/ViewTutor";
+import { ViewTutorBootcampAnalytics } from "./pages/Stu_Success_Manager/TutorBootcampAnalytics";
+import { TutorRefreshStatsPage } from "./pages/Stu_Success_Manager/TutorRefreshStatsPage";
 
 const AppHelper = () => {
   return (
@@ -49,10 +52,43 @@ const AppHelper = () => {
           }
         />
         <Route
-          path="/tutor/kpi/analytics/:bootcampId/:learningpathId/:courseId"
+          path="/ssm/tutor/all"
+          element={
+            <ProtectedRoute path="/ssm/tutor/all" component={<AllTutors />} />
+          }
+        />
+        <Route
+          path="/ssm/tutor/:tutorId"
           element={
             <ProtectedRoute
-              path="/tutor/kpi/analytics/:bootcampId/:learningpathId/:courseId"
+              path="/ssm/tutor/:tutorId"
+              component={<ViewTutor />}
+            />
+          }
+        />
+        <Route
+          path="/ssm/tutor/:tutorId/bootcamp/:bootcampId"
+          element={
+            <ProtectedRoute
+              path="/ssm/tutor/:tutorId/bootcamp/:bootcampId"
+              component={<ViewTutorBootcampAnalytics />}
+            />
+          }
+        />
+         <Route
+          path="/ssm/tutor/:tutorId/bootcamp/:bootcampId/course/:courseId/history"
+          element={
+            <ProtectedRoute
+            path="/ssm/tutor/:tutorId/bootcamp/:bootcampId/course/:courseId/history"
+            component={<TutorRefreshStatsPage />}
+            />
+          }
+        />
+        <Route
+          path="/tutor/:tutorId/kpi/analytics/:bootcampId/:learningpathId/:courseId/:tutorRefreshId"
+          element={
+            <ProtectedRoute
+              path="/tutor/:tutorId/kpi/analytics/:bootcampId/:learningpathId/:courseId/:tutorRefreshId"
               // component={<TutorAnalytics />}
               // component={<TutorBootcamps />}
               component={<TutorKPIStudentSummary />}
@@ -207,8 +243,8 @@ const AppHelper = () => {
           path="/defer-student/goals"
           element={
             <ProtectedRoute
-            path="/defer-student/goals/"
-            component={<SetGoal />}
+              path="/defer-student/goals/"
+              component={<SetGoal />}
             />
           }
         />

@@ -24,10 +24,7 @@ export const getUserBootcampAnalyticsForTutor = async (
   }
 };
 
-export const getTutorKPIUserModuleStats = async (
-  tutorid,
-  bootcamp_id
-) => {
+export const getTutorKPIUserModuleStats = async (tutorid, bootcamp_id) => {
   try {
     const response = await axios.get(
       API_URL + `/${tutorid}/tutor-kpi-bootcamp-course-summary/${bootcamp_id}`
@@ -42,11 +39,13 @@ export const getTutorKPIUserModuleSummaryStats = async (
   tutorid,
   bootcamp_id,
   learningpathid,
-  courseid
+  courseid,
+  tutorRefreshId
 ) => {
   try {
     const response = await axios.get(
-      API_URL + `/${tutorid}/${bootcamp_id}/tutor-kpi-students-bootcamp-course-summary/${learningpathid}/${courseid}`
+      API_URL +
+        `/${tutorid}/${bootcamp_id}/tutor-kpi-students-bootcamp-course-summary/${learningpathid}/${courseid}/${tutorRefreshId}`
     );
     return response.data;
   } catch (error) {
@@ -65,7 +64,7 @@ export const getUserBootcampAnalyticsCourseWise = async (
     return response.data;
   } catch (error) {
     console.log(error);
-    return []
+    return [];
   }
 };
 
@@ -76,28 +75,26 @@ export const setBootcampFinalProjectMark = async (
 ) => {
   try {
     const response = await axios.post(
-      API_URL + `/${bootcamp_id}/tutor-bootcamp-final-project-mark/${userid}`, {finalprojectmark}
+      API_URL + `/${bootcamp_id}/tutor-bootcamp-final-project-mark/${userid}`,
+      { finalprojectmark }
     );
     return response.data;
   } catch (error) {
     console.log(error);
-    return []
+    return [];
   }
 };
 
-export const markCourseCompleted = async (
-  bootcampid,
-  userid,
-  courseid
-) => {
+export const markCourseCompleted = async (bootcampid, userid, courseid) => {
   try {
     const response = await axios.get(
-      API_URL + `/${bootcampid}/${courseid}/tutor-bootcamp-mark-course-completed/${userid}`
+      API_URL +
+        `/${bootcampid}/${courseid}/tutor-bootcamp-mark-course-completed/${userid}`
     );
     return response.data;
   } catch (error) {
     console.log(error);
-    return []
+    return [];
   }
 };
 
@@ -127,7 +124,7 @@ export const getBootcampAssignment = async (
     return response.data;
   } catch (error) {
     console.log(error);
-    return []
+    return [];
   }
 };
 
@@ -137,7 +134,7 @@ export const addClassroomAssignmentBootcamp = async (
   courseid
 ) => {
   try {
-    console.log({newAssignment,userid, courseid})
+    console.log({ newAssignment, userid, courseid });
     const response = await axios.post(
       API_URL + `/${courseid}/tutor-bootcamp-classroom-assignment/${userid}`,
       newAssignment
@@ -145,7 +142,7 @@ export const addClassroomAssignmentBootcamp = async (
     return response.data;
   } catch (error) {
     console.log(error);
-    return []
+    return [];
   }
 };
 
@@ -260,3 +257,18 @@ export const deleteStudentGoal = (payload) =>
     .post(`${BASE_URL}/defer-student/delete-goal`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const saveTutorProgress = (payload) =>
+  axios
+    .post(`${API_URL}/save-tutor-progress/`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getTutorRefreshStats = (tutorId, bootcampId, courseId) =>
+  axios
+    .get(`${API_URL}/view-tutor-history/${tutorId}/${bootcampId}/${courseId}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.error("Error fetching tutor refresh stats:", err);
+      return { success: false };
+    });
