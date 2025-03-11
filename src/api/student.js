@@ -98,10 +98,7 @@ export const markCourseCompleted = async (bootcampid, userid, courseid) => {
   }
 };
 
-export const markBootcampCompleted = async (
-  bootcampid,
-  userid
-) => {
+export const markBootcampCompleted = async (bootcampid, userid) => {
   try {
     const response = await axios.get(
       API_URL + `/${bootcampid}/tutor-bootcamp-mark-completed/${userid}`
@@ -109,14 +106,11 @@ export const markBootcampCompleted = async (
     return response.data;
   } catch (error) {
     console.log(error);
-    return []
+    return [];
   }
 };
 
-export const getBootcampAssignment = async (
-  userid,
-  courseid
-) => {
+export const getBootcampAssignment = async (userid, courseid) => {
   try {
     const response = await axios.get(
       API_URL + `/${courseid}/fetch-bootcamp-classroom-assignment/${userid}`
@@ -235,6 +229,18 @@ export const updateTutor = (payload) =>
 export const unEnrollStudent = (payload) =>
   axios
     .post(`${BASE_URL}/bootcamp/unenroll-student`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const revokeLPAndBootcampAccess = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/revoke-access`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const undoRevokeLPAndBootcampAccess = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/undo-revoke-access`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
 

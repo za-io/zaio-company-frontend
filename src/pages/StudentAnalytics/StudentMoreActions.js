@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Modal } from "react-bootstrap";
 import Loader from "../../components/loader/loader";
-import { unEnrollStudent, updateTutor } from "../../api/student";
+import {
+  revokeLPAndBootcampAccess,
+  unEnrollStudent,
+  updateTutor,
+  undoRevokeLPAndBootcampAccess,
+} from "../../api/student";
 
 export const StudentMoreActionsModal = ({
   showModal,
@@ -35,7 +40,7 @@ export const StudentMoreActionsModal = ({
       });
   };
 
-  const removeStudentFromBootcamp = (e) => {
+  const removeStudentFromBootcamp = () => {
     const confirmationCode = window.prompt(
       "Enter the secret code to confirm deletion:"
     );
@@ -45,9 +50,58 @@ export const StudentMoreActionsModal = ({
       return;
     }
 
-    e.preventDefault();
     setLoading(true);
     unEnrollStudent({
+      userid: showModal?.userid?._id,
+      bootcampid: bootcampId,
+    })
+      .then((res) => {
+        handleClose();
+        getAnalytics();
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  const revokeStudentAccess = () => {
+    const confirmationCode = window.prompt(
+      "Enter the secret code to confirm revoke access:"
+    );
+
+    if (confirmationCode !== "12341234") {
+      alert("Invalid code. Deletion canceled.");
+      return;
+    }
+
+    setLoading(true);
+    revokeLPAndBootcampAccess({
+      userid: showModal?.userid?._id,
+      bootcampid: bootcampId,
+    })
+      .then((res) => {
+        handleClose();
+        getAnalytics();
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  const undoRevokeStudentAccess = () => {
+    const confirmationCode = window.prompt(
+      "Enter the secret code to confirm undo revoke access:"
+    );
+
+    if (confirmationCode !== "12341234") {
+      alert("Invalid code. Deletion canceled.");
+      return;
+    }
+
+    setLoading(true);
+    undoRevokeLPAndBootcampAccess({
       userid: showModal?.userid?._id,
       bootcampid: bootcampId,
     })
@@ -89,6 +143,16 @@ export const StudentMoreActionsModal = ({
           className="btn btn-danger mb-5 mt-2"
         >
           Remove the student from Bootcamp
+        </button>
+        <button
+          onClick={
+            showModal?.accessRevoked
+              ? undoRevokeStudentAccess
+              : revokeStudentAccess
+          }
+          className="btn btn-danger mb-5 mt-2 ml-4"
+        >
+          {showModal?.accessRevoked ? "Undo Revoke Access" : "Revoke Access"}
         </button>
         <p className="text-lg text-bold text-weight-500">
           Update Tutor for {showModal?.userid?.email}:
