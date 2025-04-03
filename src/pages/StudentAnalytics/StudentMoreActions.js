@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { Modal } from "react-bootstrap";
 import Loader from "../../components/loader/loader";
+<<<<<<< Updated upstream
 import {
   revokeLPAndBootcampAccess,
   unEnrollStudent,
   updateTutor,
   undoRevokeLPAndBootcampAccess,
 } from "../../api/student";
+=======
+import { markBootcampCompleted, unEnrollStudent, updateTutor } from "../../api/student";
+>>>>>>> Stashed changes
 
 export const StudentMoreActionsModal = ({
   showModal,
@@ -64,6 +68,34 @@ export const StudentMoreActionsModal = ({
         setLoading(false);
       });
   };
+  
+  const passStudentBootcamp = (e) => {
+    const confirmationCode = window.prompt(
+      "Write confirm to proceed:"
+    );
+
+    if (confirmationCode !== "confirm") {
+      alert("Invalid. Operation canceled.");
+      return;
+    }
+
+    e.preventDefault();
+    setLoading(true);
+    markBootcampCompleted(
+      bootcampId,
+      showModal?.userid?._id,
+    )
+      .then((res) => {
+        handleClose();
+        getAnalytics();
+      })
+      .catch(() => {})
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+
 
   const revokeStudentAccess = () => {
     const confirmationCode = window.prompt(
@@ -145,6 +177,7 @@ export const StudentMoreActionsModal = ({
           Remove the student from Bootcamp
         </button>
         <button
+<<<<<<< Updated upstream
           onClick={
             showModal?.accessRevoked
               ? undoRevokeStudentAccess
@@ -153,6 +186,12 @@ export const StudentMoreActionsModal = ({
           className="btn btn-danger mb-5 mt-2 ml-4"
         >
           {showModal?.accessRevoked ? "Undo Revoke Access" : "Revoke Access"}
+=======
+          onClick={passStudentBootcamp}
+          className="btn btn-success mb-5 m-2"
+        >
+          Pass student
+>>>>>>> Stashed changes
         </button>
         <p className="text-lg text-bold text-weight-500">
           Update Tutor for {showModal?.userid?.email}:
