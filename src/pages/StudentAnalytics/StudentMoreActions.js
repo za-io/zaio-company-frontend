@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { Modal } from "react-bootstrap";
-import Loader from "../../components/loader/loader";
-<<<<<<< Updated upstream
-import {
-  revokeLPAndBootcampAccess,
-  unEnrollStudent,
-  updateTutor,
-  undoRevokeLPAndBootcampAccess,
-} from "../../api/student";
-=======
-import { markBootcampCompleted, unEnrollStudent, updateTutor } from "../../api/student";
->>>>>>> Stashed changes
+import Loader from "../../components/loader/loader"
+import { markBootcampCompleted, unEnrollStudent, updateTutor, undoRevokeLPAndBootcampAccess, revokeLPAndBootcampAccess,} from "../../api/student";
 
 export const StudentMoreActionsModal = ({
   showModal,
@@ -177,7 +168,6 @@ export const StudentMoreActionsModal = ({
           Remove the student from Bootcamp
         </button>
         <button
-<<<<<<< Updated upstream
           onClick={
             showModal?.accessRevoked
               ? undoRevokeStudentAccess
@@ -186,12 +176,12 @@ export const StudentMoreActionsModal = ({
           className="btn btn-danger mb-5 mt-2 ml-4"
         >
           {showModal?.accessRevoked ? "Undo Revoke Access" : "Revoke Access"}
-=======
+        </button>
+        <button
           onClick={passStudentBootcamp}
           className="btn btn-success mb-5 m-2"
         >
           Pass student
->>>>>>> Stashed changes
         </button>
         <p className="text-lg text-bold text-weight-500">
           Update Tutor for {showModal?.userid?.email}:
