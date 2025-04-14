@@ -5,7 +5,7 @@ import {
   enrollStudentsIntoLP,
   fetchCalPreviewData,
   getAllLPs,
-  getAllTutors
+  getAllTutors,
 } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useUserStore } from "../../store/UserProvider";
@@ -31,8 +31,9 @@ export const AddProgram = () => {
   const [lpList, setLpList] = useState(null);
   const [allEnrolled, setAllEnrolled] = useState(null);
   const [allTutors, setAllTutors] = useState(null);
-  const tutorSelectionRef = useRef();
+  const [selectedWeekdays, setSelectedWeekdays] = useState([]);
 
+  const tutorSelectionRef = useRef();
 
   const fetchTutors = async () => {
     setLoading(true);
@@ -44,8 +45,6 @@ export const AddProgram = () => {
   useEffect(() => {
     fetchTutors();
   }, []);
-
-
 
   useEffect(() => {
     const init = () => {
@@ -83,8 +82,6 @@ export const AddProgram = () => {
       ?.getSelectedItems()
       ?.map((item) => item?.id);
 
-      console.log({tutors},'form dropdown')
-
     if (!allEnrolled) {
       return setMsg(
         "Please enroll all the students into the learningpath first."
@@ -100,11 +97,13 @@ export const AddProgram = () => {
       company_id: user?._id,
       startDate,
       holidays,
-      tutors
+      tutors,
+      selectedWeekdays,
     })
       .then((res) => {
         if (res.status === 200) {
           setMsg("Success");
+          setSelectedWeekdays([]);
           e?.target?.reset();
         } else {
           setMsg(res?.errMsg);
@@ -124,7 +123,6 @@ export const AddProgram = () => {
     const startDate = formData.get("startDate");
     const holidays = formData.get("holidays");
 
-    console.log(startDate, commitedMins, "learningpath");
     if (!learningPath) return;
     setLoading(true);
     fetchCalPreviewData({
@@ -132,6 +130,7 @@ export const AddProgram = () => {
       commitedMins,
       startDate,
       holidays,
+      selectedWeekdays,
     })
       .then((res) => {
         date.setDate(new Date(res?.data?.[0]?.date));
@@ -296,6 +295,42 @@ export const AddProgram = () => {
             />
           </div>
         </div>
+
+        <div className="w-full px-1 mb-6">
+          <label className="block uppercase tracking-wide text-white text-xs font-bold mb-2">
+            Select Days for Bootcamp Tasks
+          </label>
+          <div className="flex flex-wrap gap-4">
+            {[
+              "Sunday",
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+            ].map((day) => (
+              <label
+                key={day}
+                className="text-white text-sm flex items-center space-x-2"
+              >
+                <input
+                  type="checkbox"
+                  value={day}
+                  checked={selectedWeekdays.includes(day)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setSelectedWeekdays((prev) =>
+                      checked ? [...prev, day] : prev.filter((d) => d !== day)
+                    );
+                  }}
+                />
+                <span>{day}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <div className="flex flex-wrap -mx-3 mb-6">
           <div className="w-full px-3">
             <label
