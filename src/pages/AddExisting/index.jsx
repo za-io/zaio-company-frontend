@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addIntoExiting,
   checkEnrollmentEligibility,
   enrollStudentsIntoLP,
   getAllBootcamps,
   getAllLPs,
+  getAllTutors,
 } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useUserStore } from "../../store/UserProvider";
 import { flowTypes } from "../AddProgram";
+import Multiselect from "multiselect-react-dropdown";
 export const AddExiting = () => {
   const [loading, setLoading] = useState(false);
   const [bootcampList, setBootcampList] = useState(null);
@@ -16,8 +18,17 @@ export const AddExiting = () => {
   const [flow, setFlow] = useState(null);
   const [lpList, setLpList] = useState(null);
   const [selectedWeekdays, setSelectedWeekdays] = useState([]);
-
+  const [allTutors, setAllTutors] = useState(null);
   const { user } = useUserStore();
+
+  const tutorSelectionRef = useRef();
+
+  const fetchTutors = async () => {
+    setLoading(true);
+    const tutors = await getAllTutors();
+    setAllTutors(tutors?.data);
+    setLoading(false);
+  };
 
   const [msg, setMsg] = useState(null);
   useEffect(() => {
@@ -45,6 +56,7 @@ export const AddExiting = () => {
     };
 
     init();
+    fetchTutors();
   }, []);
 
   const checkAndEnrollStudents = (e) => {
@@ -95,7 +107,11 @@ export const AddExiting = () => {
     const emails = formData.get("emails");
     const startDate = formData.get("startDate");
     const commitedMins = formData.get("commitedMins");
+    const googleClassroom = formData.get("googleClassroom");
     const holidays = formData.get("holidays");
+    const tutors = tutorSelectionRef.current
+      ?.getSelectedItems()
+      ?.map((item) => item?.id);
 
     if (!allEnrolled) {
       return setMsg(
@@ -112,6 +128,8 @@ export const AddExiting = () => {
       commitedMins,
       holidays,
       selectedWeekdays,
+      tutors,
+      googleClassroom,
     })
       .then((res) => {
         if (res.status === 200) {
@@ -200,6 +218,23 @@ export const AddExiting = () => {
               className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
               for="grid-password"
             >
+              Google Classroom Link
+            </label>
+            <input
+              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              name="googleClassroom"
+              type="text"
+              placeholder="Commited Minutes"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label
+              className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
+              for="grid-password"
+            >
               Commited Minutes
             </label>
             <input
@@ -207,6 +242,27 @@ export const AddExiting = () => {
               name="commitedMins"
               type="number"
               placeholder="Commited Minutes"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap -mx-3 mb-6">
+          <div className="w-full px-3">
+            <label
+              className="block uppercase tracking-wide text-white text-xs font-bold mb-2"
+              for="grid-password"
+            >
+              Tutor Name
+            </label>
+
+            <Multiselect
+              className="appearance-none block  w-full bg-gray-200 text-gray-700 rounded py-3 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
+              options={allTutors?.map((tutor) => ({
+                name: tutor?.company_username,
+                id: tutor?._id,
+              }))}
+              ref={tutorSelectionRef}
+              displayValue="name" // Property name to display in the dropdown options
             />
           </div>
         </div>
