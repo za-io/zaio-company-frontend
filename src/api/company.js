@@ -50,6 +50,18 @@ export const getAllTutors = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const getAllAssessors = () =>
+  axios
+    .get(BASE_URL + `/company/all-assessors`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getAllModerators = () =>
+  axios
+    .get(BASE_URL + `/company/all-moderators`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const getBootcampDetails = (bootcamp_id) =>
   axios
     .get(API_URL + `/details?bootcamp_id=${bootcamp_id}`)
@@ -155,5 +167,97 @@ export const enrollIntoBootcamp = (payload) =>
 export const getTutorDetails = (tutorId) =>
   axios
     .get(`${BASE_URL}/company/tutor-details/${tutorId}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+// OC Cohort APIs
+export const createOCCohort = (payload) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/create`, payload)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getAllOCCohorts = (company_id) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const url = company_id 
+    ? `${BASE_URL}/oc-cohort/all?company_id=${company_id}`
+    : `${BASE_URL}/oc-cohort/all`;
+  
+  return axios
+    .get(url, { headers })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+};
+
+export const getOCCohortDetails = (cohortId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getCohortStudents = (cohortId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/students`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const assignAssessor = (cohortId, assessorId) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/${cohortId}/assign-assessor`, {
+      assessorId,
+    })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const assignModerator = (cohortId, moderatorId) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/${cohortId}/assign-moderator`, {
+      moderatorId,
+    })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getOCStudentDetails = (studentId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/student/${studentId}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const getOCModuleDetails = (studentId, moduleId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/student/${studentId}/module/${moduleId}`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const assignTutorToStudent = (enrollmentId, tutorId) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/enrollment/${enrollmentId}/assign-tutor`, {
+      tutorId,
+    })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const tutorSignOffQCTOAssessment = (assessmentId, submissionId, tutorSignature = "") =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/qcto-assessment/${assessmentId}/submission/${submissionId}/tutor-sign-off`, {
+      tutorSignature,
+    })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const tutorSignOffQCTOPMT = (taskId, submissionId, tutorSignature = "") =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/qcto-pmt/${taskId}/submission/${submissionId}/tutor-sign-off`, {
+      tutorSignature,
+    })
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const tutorSignOffQCTOLW = (assessmentId, submissionId, tutorSignature = "") =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/qctolw/${assessmentId}/submission/${submissionId}/tutor-sign-off`, {
+      tutorSignature,
+    })
     .then((res) => res.data)
     .catch((err) => console.log(err));

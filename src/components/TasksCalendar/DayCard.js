@@ -1,12 +1,14 @@
 import { isSameDay, format } from "date-fns";
 import Event from "./Event";
+import Goal from "./Goal";
 import startOfDay from "date-fns/startOfDay";
 import { useContext } from "react";
 import { TasksContext } from "../../context/TasksProvider";
 
 const CUT_TASKS_LEN = 4;
+const CUT_GOALS_LEN = 2;
 
-const DayCard = ({ date, events, status }) => {
+const DayCard = ({ date, events, goals = [], status }) => {
   const { setShowModal, setTasks } = useContext(TasksContext);
 
   //Extracts month in long format from date object
@@ -20,8 +22,14 @@ const DayCard = ({ date, events, status }) => {
 
   // Sort events by startAt property
   let sortedEvents = [...events].sort(
-    (a, b) => new Date(a.startAt) - new Date(b.startAt)
+    (a, b) => new Date(a.startAt) - new Date(a.startAt)
   );
+  
+  // Sort goals by deadline
+  let sortedGoals = [...goals].sort(
+    (a, b) => new Date(a.goalDeadline) - new Date(b.goalDeadline)
+  );
+  
   const classes = "bg-white";
   const color = "";
 
@@ -43,6 +51,25 @@ const DayCard = ({ date, events, status }) => {
       </div>
 
       <div className="flex flex-col px-1 py-1">
+        {/* Display Goals First */}
+        {sortedGoals.slice(0, CUT_GOALS_LEN).map((goal, i) => (
+          <Goal key={`goal-${i}`} goal={goal} />
+        ))}
+        
+        {/* Show more goals button if there are more goals */}
+        {sortedGoals?.length > CUT_GOALS_LEN && (
+          <button
+            className="font-semibold text-sm text-left mt-1 text-purple-700 hover:text-purple-800"
+            onClick={() => {
+              // You can implement a goals modal here
+              console.log("Show more goals:", sortedGoals);
+            }}
+          >
+            + {sortedGoals?.length - CUT_GOALS_LEN} Goals
+          </button>
+        )}
+
+        {/* Display Events/Tasks */}
         {sortedEvents.slice(0, CUT_TASKS_LEN).map((event, i) => (
           <>
             <Event color={color} event={event} key={i} />

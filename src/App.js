@@ -20,6 +20,8 @@ import ProtectedRoute, { publicRoutes } from "./components/ProtectedRoute";
 import { AddExiting } from "./pages/AddExisting";
 import { AddCompany } from "./pages/AddCompany";
 import { AddTutor } from "./pages/AddTutor";
+import { AddAssessor } from "./pages/AddAssessor";
+import { AddModerator } from "./pages/AddModerator";
 import ManageBootcamps from "./pages/ManageBootcamps/ManageBootcamps";
 import TutorBootcamps from "./pages/TutorManagement/TutorBootcamps";
 import TutorStudents from "./pages/TutorManagement/TutorStudents";
@@ -31,6 +33,11 @@ import AllTutors from "./pages/Stu_Success_Manager/AllTutors";
 import { ViewTutor } from "./pages/Stu_Success_Manager/ViewTutor";
 import { ViewTutorBootcampAnalytics } from "./pages/Stu_Success_Manager/TutorBootcampAnalytics";
 import { TutorRefreshStatsPage } from "./pages/Stu_Success_Manager/TutorRefreshStatsPage";
+import SupportSessions from "./pages/SupportSessions";
+import CreateOCCohort from "./pages/CreateOCCohort";
+import ViewOCPrograms from "./pages/ViewOCPrograms";
+import OCStudentDetails from "./pages/OCStudentDetails";
+import OCModuleDetails from "./pages/OCModuleDetails";
 
 const AppHelper = () => {
   return (
@@ -146,6 +153,18 @@ const AppHelper = () => {
           }
         />
         <Route
+          path="/assessor/add"
+          element={
+            <ProtectedRoute path="/assessor/add" component={<AddAssessor />} />
+          }
+        />
+        <Route
+          path="/moderator/add"
+          element={
+            <ProtectedRoute path="/moderator/add" component={<AddModerator />} />
+          }
+        />
+        <Route
           path="/program/manage"
           element={
             <ProtectedRoute
@@ -160,6 +179,42 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/program/add/exiting"
               component={<AddExiting />}
+            />
+          }
+        />
+        <Route
+          path="/oc-cohort/create"
+          element={
+            <ProtectedRoute
+              path="/oc-cohort/create"
+              component={<CreateOCCohort />}
+            />
+          }
+        />
+        <Route
+          path="/oc-programs"
+          element={
+            <ProtectedRoute
+              path="/oc-programs"
+              component={<ViewOCPrograms />}
+            />
+          }
+        />
+        <Route
+          path="/oc-programs/student/:studentId"
+          element={
+            <ProtectedRoute
+              path="/oc-programs/student/:studentId"
+              component={<OCStudentDetails />}
+            />
+          }
+        />
+        <Route
+          path="/oc-programs/student/:studentId/module/:moduleId"
+          element={
+            <ProtectedRoute
+              path="/oc-programs/student/:studentId/module/:moduleId"
+              component={<OCModuleDetails />}
             />
           }
         />
@@ -245,6 +300,15 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/defer-student/goals/"
               component={<SetGoal />}
+            />
+          }
+        />
+        <Route
+          path="/support-sessions"
+          element={
+            <ProtectedRoute
+              path="/support-sessions"
+              component={<SupportSessions />}
             />
           }
         />
