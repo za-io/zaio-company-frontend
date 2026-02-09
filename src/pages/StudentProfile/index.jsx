@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, getCustomPlans, createCustomPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 const formatDate = (dateStr) => {
@@ -68,6 +68,10 @@ const StudentProfile = () => {
   const [linkManatiCode, setLinkManatiCode] = useState("");
   const [linkManatiMessage, setLinkManatiMessage] = useState(null);
   const [linkManatiSubmitting, setLinkManatiSubmitting] = useState(false);
+  const [addUpfrontModal, setAddUpfrontModal] = useState(false);
+  const [addUpfrontForm, setAddUpfrontForm] = useState({ amount: "", paymentDate: new Date().toISOString().slice(0, 10), file: null });
+  const [addUpfrontSubmitting, setAddUpfrontSubmitting] = useState(false);
+  const [addUpfrontError, setAddUpfrontError] = useState(null);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -431,6 +435,41 @@ const StudentProfile = () => {
   const selectedInstallmentPlan = installmentPlans.find((p) => p.planCode === addEftForm.planCode);
   const selectedPlanIsCustom = addEftForm.planCode && customPlans.some((p) => p.planCode === addEftForm.planCode);
   const selectedCustomPlan = customPlans.find((p) => p.planCode === addEftForm.planCode);
+
+  const handleAddUpfrontSubmit = async (e) => {
+    e.preventDefault();
+    setAddUpfrontError(null);
+    const amountNum = parseAmountString(addUpfrontForm.amount);
+    if (!(amountNum > 0)) {
+      setAddUpfrontError("Amount must be a positive number (Rands).");
+      return;
+    }
+    if (!addUpfrontForm.file) {
+      setAddUpfrontError("Proof of payment file is required.");
+      return;
+    }
+    setAddUpfrontSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("amount", String(amountNum));
+      formData.append("payment_date", addUpfrontForm.paymentDate || new Date().toISOString().slice(0, 10));
+      formData.append("file", addUpfrontForm.file);
+      const res = await createUpfrontPlan(userId, formData);
+      if (res.success) {
+        setAddUpfrontModal(false);
+        setAddUpfrontForm({ amount: "", paymentDate: new Date().toISOString().slice(0, 10), file: null });
+        fetchBilling();
+        const customRes = await getCustomPlans(userId);
+        if (customRes.success && Array.isArray(customRes.data)) setCustomPlans(customRes.data);
+      } else {
+        setAddUpfrontError(res.message || "Failed to create upfront plan");
+      }
+    } catch (err) {
+      setAddUpfrontError(err?.response?.data?.message || "Failed to create upfront plan");
+    } finally {
+      setAddUpfrontSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -948,6 +987,19 @@ const StudentProfile = () => {
         </div>
       )}
 
+      {/* Upfront plan */}
+      <div className="flex items-center justify-between mb-4 mt-10">
+        <h2 className="text-2xl font-bold text-white">Upfront plan</h2>
+        <button
+          type="button"
+          onClick={() => { setAddUpfrontModal(true); setAddUpfrontError(null); }}
+          className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700"
+        >
+          Add upfront plan
+        </button>
+      </div>
+      <p className="text-gray-400 text-sm mb-4">Add a single upfront payment with amount and proof of payment. It will appear on the student&apos;s billing tab as paid.</p>
+
       {/* 2-installment EFT plans */}
       <div className="flex items-center justify-between mb-4 mt-10">
         <h2 className="text-2xl font-bold text-white">2-installment EFT plans</h2>
@@ -1078,6 +1130,68 @@ const StudentProfile = () => {
                   type="button"
                   onClick={() => setAddInstallmentModal(false)}
                   disabled={addInstallmentSubmitting}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add upfront plan modal */}
+      {addUpfrontModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !addUpfrontSubmitting && setAddUpfrontModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Add upfront plan</h3>
+            <p className="text-sm text-gray-600 mb-4">Enter the amount (Rands) and upload proof of payment. This will be added to the student&apos;s billing tab as a single paid installment.</p>
+            <form onSubmit={handleAddUpfrontSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (R)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={addUpfrontForm.amount}
+                  onChange={(e) => setAddUpfrontForm((f) => ({ ...f, amount: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment date</label>
+                <input
+                  type="date"
+                  value={addUpfrontForm.paymentDate}
+                  onChange={(e) => setAddUpfrontForm((f) => ({ ...f, paymentDate: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Proof of payment (file)</label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setAddUpfrontForm((f) => ({ ...f, file: e.target.files?.[0] || null }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              {addUpfrontError && <p className="text-sm text-red-600">{addUpfrontError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={addUpfrontSubmitting}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {addUpfrontSubmitting ? "Creating…" : "Add upfront plan"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddUpfrontModal(false)}
+                  disabled={addUpfrontSubmitting}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                 >
                   Cancel

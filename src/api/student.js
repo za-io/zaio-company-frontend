@@ -186,6 +186,18 @@ export const createCustomPlan = (userId, payload) =>
       return { success: false, message: err?.response?.data?.message || "Create custom plan failed" };
     });
 
+// Upfront plan: create with amount, payment_date, and POP file (FormData). Adds to student billing as paid.
+export const createUpfrontPlan = (userId, formData) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/upfront-plan`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Create upfront plan failed" };
+    });
+
 // Paystack plan lookup by plan code (for custom plans – returns name, invoice_limit = payments required)
 export const getPaystackPlanInfo = (planCode) =>
   axios
