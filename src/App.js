@@ -13,6 +13,7 @@ import Loader from "./components/loader/loader";
 import StudentBootcamp from "./pages/StudentBootcamp";
 import StudentLearningPath from "./pages/StudentLearningPath";
 import StudentAnalytics from "./pages/StudentAnalytics";
+import StudentProfile from "./pages/StudentProfile";
 import StudentMCQ from "./pages/StudentMCQ";
 import StudentChallenges from "./pages/StudentChallenges";
 import StudentAssignments from "./pages/StudentAssignments";
@@ -247,6 +248,15 @@ const AppHelper = () => {
             />
           }
         />
+        <Route
+          path="/student-profile/:userId"
+          element={
+            <ProtectedRoute
+              path="/student-profile/:userId"
+              component={<StudentProfile />}
+            />
+          }
+        />
 
         <Route
           path="/student/bootcamp/:bootcampid/learningpath/:learningpathid"
@@ -321,6 +331,7 @@ const AppHelper = () => {
         <Route path="/register" element={<Signup />} />
         <Route path="/student/bootcamp" element={<StudentBootcamp />} />
         <Route path="/student/analytics" element={<StudentAnalytics />} />
+        <Route path="/student-profile/:userId" element={<StudentProfile />} />
         <Route
           path="/student/bootcamp/:bootcampid/learningpath/:learningpathid"
           element={<StudentLearningPath />}

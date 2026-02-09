@@ -80,6 +80,11 @@ const AnalyticsTable = ({
 
   if (loading) return <></>;
 
+  const deferredCount = data?.analytics?.filter(
+    (ba) => ba?.deferredDetails?.studentDeferred
+  )?.length || 0;
+  const totalStudents = data?.analytics?.length || 0;
+
   return (
     <div>
       <WarningModal
@@ -108,118 +113,124 @@ const AnalyticsTable = ({
         setShowModal={setStudentPingModalConfig}
         getAnalytics={getAnalytics}
       />
+
       {data?.analytics?.length > 0 && (
-        <>
-          <div>
-            <input
-              list="browsers"
-              value={searchQuery}
-              placeholder="Search Student"
-              onChange={(e) => setSearchQuery(e?.target?.value)}
-              className="appearance-none block bg-gray-200 text-gray-700 border border-gray-200 rounded py-2 px-4 mb-3 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-            />
-            <datalist id="browsers">
-              {data?.analytics?.map((d) => (
-                <option value={d?.userid?.username} />
-              ))}
-            </datalist>
+        <div className="bg-[#161B22] rounded-xl border border-gray-800 overflow-hidden">
+          {/* Table Header Section */}
+          <div className="p-6 border-b border-gray-800">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              {/* Bootcamp Title */}
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  {data?.bootcampDetails?.bootcampName || "Bootcamp Analytics"}
+                </h2>
+                <p className="text-gray-400 text-sm mt-1">
+                  {totalStudents} student{totalStudents !== 1 ? "s" : ""} enrolled
+                  {deferredCount > 0 && (
+                    <span className="text-yellow-500 ml-2">
+                      ({deferredCount} deferred)
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              {/* Search and Sort Controls */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                {/* Search Input */}
+                <div className="relative">
+                  <svg
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <input
+                    list="browsers"
+                    value={searchQuery}
+                    placeholder="Search by name or email..."
+                    onChange={(e) => setSearchQuery(e?.target?.value)}
+                    className="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                  />
+                  <datalist id="browsers">
+                    {data?.analytics?.map((d, idx) => (
+                      <option key={idx} value={d?.userid?.username} />
+                    ))}
+                  </datalist>
+                </div>
+
+                {/* Sort Select */}
+                <select
+                  className="px-4 py-2.5 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  value={sortBy}
+                  onChange={handleChange}
+                >
+                  <option value={SORTING.PROGRESS_DESC} className="bg-[#161B22]">
+                    Progress (High to Low)
+                  </option>
+                  <option value={SORTING.PROGRESS_ASC} className="bg-[#161B22]">
+                    Progress (Low to High)
+                  </option>
+                  <option value={SORTING.DEFERRED_ASC} className="bg-[#161B22]">
+                    Deferred First
+                  </option>
+                  <option value={SORTING.DEFERRED_DESC} className="bg-[#161B22]">
+                    Active First
+                  </option>
+                </select>
+              </div>
+            </div>
           </div>
-          <select
-            className={`py-2 rounded font-semibold px-2 font-medium`}
-            value={sortBy}
-            onChange={handleChange}
-          >
-            <option className="text-black-500" disabled>
-              {" "}
-              -- sort --{" "}
-            </option>
-            <option value={SORTING.PROGRESS_ASC} className="text-black-500">
-              Progress ASC
-            </option>
-            <option value={SORTING.PROGRESS_DESC} className="text-black-500">
-              Progress DESC
-            </option>
-            <option value={SORTING.DEFERRED_ASC} className="text-black-500">
-              DEFERRED ASC
-            </option>
-            <option value={SORTING.DEFERRED_DESC} className="text-black-500">
-              DEFERRED DESC
-            </option>
-          </select>
 
-          <p className="text-white mt-3">
-            {
-              data?.analytics?.filter(
-                (ba) => ba?.deferredDetails?.studentDeferred
-              )?.length
-            }{" "}
-            out of {data?.analytics?.length} student(s){" "}
-            {data?.analytics?.filter(
-              (ba) => ba?.deferredDetails?.studentDeferred
-            )?.length === 1
-              ? "is"
-              : "are"}{" "}
-            deferred.
-          </p>
-
-          <table class="table-fixed w-100 overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
-            <thead className="border-b text-2xl bg-gray-50">
-              <tr className="">
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Username
-                </th>
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Lectures
-                </th>
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  MCQs
-                </th>
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Coding Challenges
-                </th>
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Assignments
-                </th>
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Progress
-                </th>
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Tutor
-                </th>
-
-                <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  View Progress
-                </th>
-
-                {!["TUTOR"]?.includes(user?.role) && (
-                  <th className="  py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                    Account Status
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#0D1117]">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Student
                   </th>
-                )}
-                {!["TUTOR"]?.includes(user?.role) && (
-                  <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
-                    Warnings
+                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Progress
                   </th>
-                )}
-                {/* {!["TUTOR"]?.includes(user?.role) && ( */}
-                <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
-                  Defer Status
-                </th>
-                {/* )} */}
-                {!["TUTOR"]?.includes(user?.role) && (
-                  <th className="   py-3 text-xs font-bold text-gray-500 uppercase">
-                    Ping Student
+                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Tutor
                   </th>
-                )}
-                {!["TUTOR"]?.includes(user?.role) && (
-                  <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                    More Actions
+                  <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Calendar
                   </th>
-                )}
-              </tr>
-            </thead>
-            {data && data.analytics.length !== 0 && (
-              <tbody className="divide-y divide-gray-200">
+                  {!["TUTOR"]?.includes(user?.role) && (
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Status
+                    </th>
+                  )}
+                  {!["TUTOR"]?.includes(user?.role) && (
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Warnings
+                    </th>
+                  )}
+                  <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Defer Status
+                  </th>
+                  {!["TUTOR"]?.includes(user?.role) && (
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Ping
+                    </th>
+                  )}
+                  {!["TUTOR"]?.includes(user?.role) && (
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
                 {data.analytics
                   ?.filter(
                     (ba) =>
@@ -231,27 +242,8 @@ const AnalyticsTable = ({
                         ?.includes(searchQuery?.toLowerCase())
                   )
                   ?.sort((a, b) => {
-                    const aTotalProgress =
-                      (((a?.completedLecturesCount || 0) +
-                        (a?.completedChallengesCount || 0) +
-                        (a?.completedMCQCount || 0) +
-                        (a?.completedAssignmentCount || 0)) /
-                        Object.values(total).reduce(
-                          (val, tot) => (val ?? 0) + tot,
-                          0
-                        )) *
-                      100;
-
-                    const bTotalProgress =
-                      (((b?.completedLecturesCount || 0) +
-                        (b?.completedChallengesCount || 0) +
-                        (b?.completedMCQCount || 0) +
-                        (b?.completedAssignmentCount || 0)) /
-                        Object.values(total).reduce(
-                          (val, tot) => (val ?? 0) + tot,
-                          0
-                        )) *
-                      100;
+                    const aTotalProgress = a?.isbootCampPassed ? 100 : (a?.completedPercentage || 0);
+                    const bTotalProgress = b?.isbootCampPassed ? 100 : (b?.completedPercentage || 0);
 
                     if (sortBy === SORTING.PROGRESS_DESC) {
                       return bTotalProgress - aTotalProgress;
@@ -270,22 +262,17 @@ const AnalyticsTable = ({
                     }
                   })
                   ?.map((ba) => {
-                    // const classes =
-                    //   StylesConfig[user?.currentPerformance]?.styles || "";
-                    const totalProgress =
-                      (((ba?.completedLecturesCount || 0) +
-                        (ba?.completedChallengesCount || 0) +
-                        (ba?.completedMCQCount || 0) +
-                        (ba?.completedAssignmentCount || 0)) /
-                        Object.values(total).reduce(
-                          (val, tot) => (val ?? 0) + tot,
-                          0
-                        )) *
-                      100;
+                    const totalProgress = ba?.isbootCampPassed ? 100 : (ba?.completedPercentage || 0);
+                    const isCompleted = ba?.completedPercentage === 100 || ba?.isbootCampPassed;
+                    const isDeferred = ba?.deferredDetails?.studentDeferred;
+                    const isBlocked = ba?.userid?.accBlocked;
+
                     return (
                       <tr
                         key={ba?._id}
-                        className={`cursor-pointer hover:bg-gray-100 cursor-pointer`}
+                        className={`hover:bg-[#1C2128] cursor-pointer transition-colors duration-150 ${
+                          isDeferred ? "bg-yellow-900/10" : ""
+                        }`}
                         onClick={() => {
                           searchType === "bootcamp" &&
                             handleBootcamp(
@@ -297,60 +284,65 @@ const AnalyticsTable = ({
                             handleLearningpath(data._id);
                         }}
                       >
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                        {(ba?.completedPercentage === 100 || ba?.isbootCampPassed) && <span className="text-2xl text-green-600"> <RxCheckCircled/> </span> }
-                          {ba?.userid?.username}{" "}
-                          <span className="text-purple-600">
-                            {" "}
-                            ({ba?.userid?.email})
+                        {/* Student Info */}
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            {isCompleted && (
+                              <span className="text-green-500 flex-shrink-0">
+                                <RxCheckCircled className="w-5 h-5" />
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-white truncate">
+                                {ba?.userid?.username}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {ba?.userid?.email}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Progress */}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 w-24">
+                              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    totalProgress >= 100
+                                      ? "bg-green-500"
+                                      : totalProgress >= 50
+                                      ? "bg-blue-500"
+                                      : totalProgress >= 25
+                                      ? "bg-yellow-500"
+                                      : "bg-red-500"
+                                  }`}
+                                  style={{ width: `${Math.min(totalProgress, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                            <span className={`text-sm font-medium ${
+                              totalProgress >= 100 ? "text-green-400" : "text-gray-300"
+                            }`}>
+                              {roundOff(totalProgress)}%
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Tutor */}
+                        <td className="px-4 py-4">
+                          <span className={`text-sm ${
+                            ba?.tutor ? "text-gray-300" : "text-gray-500 italic"
+                          }`}>
+                            {ba?.tutor?.company_username || ba?.tutor?.email || "Not Assigned"}
                           </span>
                         </td>
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          {total?.lectures !== 0
-                            ? `${ba?.completedLecturesCount}/${
-                                total?.lectures || 0
-                              }`
-                            : "NA"}
-                        </td>
-                        <td
-                          className="px-1 py-4 text-sm font-medium text-gray-800"
-                          onClick={() => {
-                            searchType === "course" &&
-                              handleCourse(data._id, "mcq");
-                          }}
-                        >
-                          {total?.mcq !== 0
-                            ? `${ba?.completedMCQCount}/${total?.mcq || 0}`
-                            : "NA"}
-                        </td>
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          {total?.challenge !== 0
-                            ? `${ba?.completedChallengesCount}/${
-                                total?.challenge || 0
-                              }`
-                            : "NA"}
-                        </td>
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          {total?.assignment !== 0
-                            ? `${ba?.completedAssignmentCount}/${
-                                total?.assignment || 0
-                              } ${total?.assignment}`
-                            : "NA"}
-                        </td>
 
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          {roundOff(totalProgress)}%
-                        </td>
-
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                          {ba?.tutor?.company_username ||
-                            ba?.tutor?.email ||
-                            "Not Assigned"}
-                        </td>
-
-                        <td className="px-2 py-4 text-sm font-medium text-gray-800">
+                        {/* View Calendar */}
+                        <td className="px-4 py-4 text-center">
                           <button
-                            className="bg-blue-200 py-2 w-full rounded text-xs"
+                            className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors"
                             onClick={(event) => {
                               event.stopPropagation();
                               window.open(
@@ -359,35 +351,39 @@ const AnalyticsTable = ({
                               );
                             }}
                           >
-                            View Calendar
+                            View
                           </button>
                         </td>
 
+                        {/* Account Status */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
-                            <div className="d-flex">
+                          <td className="px-4 py-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
                               <button
-                                className={`text-${
-                                  ba?.userid?.accBlocked ? "green" : "red"
-                                }-200 me-2 py-2 px-5 my-2 rounded font-small`}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  isBlocked
+                                    ? "bg-green-600/20 text-green-400 hover:bg-green-600/30"
+                                    : "bg-red-600/20 text-red-400 hover:bg-red-600/30"
+                                }`}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   handleBlockUnBlock(event, ba);
                                 }}
                               >
-                                {ba?.userid?.accBlocked ? "Unblock" : "Block"}
+                                {isBlocked ? "Unblock" : "Block"}
                               </button>
                               {rowLoading === ba?.userid?._id && (
-                                <Loader size={20} />
+                                <Loader size={16} />
                               )}
                             </div>
                           </td>
                         )}
 
+                        {/* Warnings */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                          <td className="px-4 py-4 text-center">
                             <button
-                              className={`text-orange-400 py-2 my-2 rounded font-small`}
+                              className="px-3 py-1.5 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded-lg text-xs font-medium transition-colors"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setShowWarningModal(ba);
@@ -398,86 +394,69 @@ const AnalyticsTable = ({
                           </td>
                         )}
 
-                        {/* {!["TUTOR"]?.includes(user?.role) && ( */}
-                        <td className="px-1 py-4 text-sm font-medium text-gray-800 text-center">
+                        {/* Defer Status */}
+                        <td className="px-4 py-4 text-center">
                           <span
                             onClick={(event) => {
                               event.stopPropagation();
                               setStudentDeferredModalConfig(ba);
                             }}
+                            className="cursor-pointer"
                           >
-                            {ba?.deferredDetails?.studentDeferred ? (
-                              `Deferred on ${formatDate(
-                                ba?.deferredDetails?.deferredDate
-                              )} for ${
-                                ba?.deferredDetails?.numberOfDeferMonths
-                              }. Click for more details.`
-                            ) : // {/* {!["TUTOR"]?.includes(user?.role) && ( */}
-                            !["TUTOR"]?.includes(user?.role) ? (
-                              <button className="bg-blue-200 py-2 px-4 my-2 rounded font-small">
-                                Defer Student
+                            {isDeferred ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-600/20 text-yellow-400">
+                                Deferred
+                              </span>
+                            ) : !["TUTOR"]?.includes(user?.role) ? (
+                              <button className="px-3 py-1.5 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 rounded-lg text-xs font-medium transition-colors">
+                                Defer
                               </button>
                             ) : (
-                              <p>No</p>
+                              <span className="text-gray-500 text-xs">Active</span>
                             )}
                           </span>
                         </td>
-                        {/* )} */}
 
+                        {/* Ping Student */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-1 py-4 flex flex-col text-sm font-medium text-gray-800">
-                            <span
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setStudentPingModalConfig(ba);
-                              }}
-                            >
-                              {/* {ba?.deferredDetails?.studentDeferred ? (
-                                `Deferred on ${formatDate(
-                                  ba?.deferredDetails?.deferredDate
-                                )} for ${
-                                  ba?.deferredDetails?.numberOfDeferMonths
-                                }. Click for more details.`
-                              ) : ( */}
-                              <button className="bg-blue-200 p-2 my-2 rounded font-small">
+                          <td className="px-4 py-4">
+                            <div className="flex flex-col items-center gap-1">
+                              <button
+                                className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors w-full"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setStudentPingModalConfig(ba);
+                                }}
+                              >
                                 Ping
                               </button>
-                              {/* )} */}
-                            </span>
-                            <span
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setStudentPingModalConfig({
-                                  ...ba,
-                                  viewHistory: true,
-                                });
-                              }}
-                            >
-                              {/* {ba?.deferredDetails?.studentDeferred ? (
-                                `Deferred on ${formatDate(
-                                  ba?.deferredDetails?.deferredDate
-                                )} for ${
-                                  ba?.deferredDetails?.numberOfDeferMonths
-                                }. Click for more details.`
-                              ) : ( */}
-                              <button className="bg-orange-200 p-2 my-2 rounded font-small">
+                              <button
+                                className="px-3 py-1.5 bg-gray-700/50 text-gray-400 hover:bg-gray-700 rounded-lg text-xs font-medium transition-colors w-full"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setStudentPingModalConfig({
+                                    ...ba,
+                                    viewHistory: true,
+                                  });
+                                }}
+                              >
                                 History
                               </button>
-                              {/* )} */}
-                            </span>
+                            </div>
                           </td>
                         )}
 
+                        {/* More Actions */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                          <td className="px-4 py-4 text-center">
                             <button
-                              className={`text-orange-400 py-2 my-2 rounded font-small`}
+                              className="px-3 py-1.5 bg-gray-700/50 text-gray-400 hover:bg-gray-700 hover:text-gray-300 rounded-lg text-xs font-medium transition-colors"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setShowMoreActionsModal(ba);
                               }}
                             >
-                              More Actions
+                              More
                             </button>
                           </td>
                         )}
@@ -485,23 +464,21 @@ const AnalyticsTable = ({
                     );
                   })}
               </tbody>
-            )}
-            {/* <tr>
-        <td></td>
-        <td></td>
-        <td>
-          {loading && (
-            <div>
-              <Loader />
-            </div>
-          )}
-        </td>
-      </tr> */}
-          </table>
-        </>
+            </table>
+          </div>
+        </div>
       )}
+
       {data && data.analytics.length === 0 && (
-        <div className="text-gray-100">Not enrolled in this bootcamp</div>
+        <div className="bg-[#161B22] rounded-xl border border-gray-800 p-12 text-center">
+          <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-semibold text-white mb-2">No Students Enrolled</h3>
+          <p className="text-gray-400">No students are currently enrolled in this bootcamp</p>
+        </div>
       )}
     </div>
   );

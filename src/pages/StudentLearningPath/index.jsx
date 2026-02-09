@@ -16,7 +16,6 @@ const StudentLearningPath = () => {
   const [learningpath, setLearningpath] = useState(null);
 
   const getAnalytics = () => {
-    // setLoading(true);
     getUserLearningpathAnalytics(userId, learningpathId)
       .then((res) => {
         setLearningpath(res);
@@ -30,12 +29,9 @@ const StudentLearningPath = () => {
     getAnalytics();
     // eslint-disable-next-line
   }, []);
-  return (
-    <div className="px-36 py-12">
-      {/* <button disabled={loading} onClick={getAnalytics} className="bg-blue-500 px-12 py-3 rounded font-medium">
-        Refresh
-      </button> */}
 
+  return (
+    <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8">
       <LearningpathTable
         learningpath={learningpath}
         data={learningpath?.courses}
@@ -45,7 +41,12 @@ const StudentLearningPath = () => {
         userData={learningpath?.userData}
       />
 
-      {loading && <Loader />}
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-16">
+          <Loader />
+          <p className="mt-4 text-gray-400">Loading student progress...</p>
+        </div>
+      )}
     </div>
   );
 };

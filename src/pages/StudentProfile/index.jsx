@@ -1,0 +1,1900 @@
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, getCustomPlans, createCustomPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser } from "../../api/student";
+import Loader from "../../components/loader/loader";
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" });
+};
+
+const formatAmount = (amount, currency = "ZAR") => {
+  if (amount == null) return "—";
+  const value = Number(amount) / 100;
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: currency || "ZAR" }).format(value);
+};
+
+const parseAmountString = (val) => {
+  if (val == null || val === "" || val === "—") return 0;
+  const num = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, ""));
+  return Number.isFinite(num) ? num : 0;
+};
+
+const formatTotal = (num) =>
+  new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
+
+const StudentProfile = () => {
+  const { userId } = useParams();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [student, setStudent] = useState(null);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [billing, setBilling] = useState({ plans: [], outstandingLinks: [] });
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [statementModal, setStatementModal] = useState(null);
+  const [statementData, setStatementData] = useState(null);
+  const [statementLoading, setStatementLoading] = useState(false);
+  const [statementRefreshing, setStatementRefreshing] = useState(false);
+  const [paymentsModalPlan, setPaymentsModalPlan] = useState(null);
+  const [eftSubmissions, setEftSubmissions] = useState([]);
+  const [eftLoading, setEftLoading] = useState(false);
+  const [eftActionId, setEftActionId] = useState(null);
+  const [rejectModal, setRejectModal] = useState(null);
+  const [addEftModal, setAddEftModal] = useState(false);
+  const [addEftForm, setAddEftForm] = useState({ planCode: "", paymentDate: "", amount: "", file: null, installmentPlanId: "", installmentNumber: "", customPlanId: "" });
+  const [addEftSubmitting, setAddEftSubmitting] = useState(false);
+  const [addEftError, setAddEftError] = useState(null);
+  const [installmentPlans, setInstallmentPlans] = useState([]);
+  const [installmentPlansLoading, setInstallmentPlansLoading] = useState(false);
+  const [addInstallmentModal, setAddInstallmentModal] = useState(false);
+  const [addInstallmentForm, setAddInstallmentForm] = useState({ amount1: "", amount2: "", dueDate1: "", dueDate2: "", planName: "" });
+  const [addInstallmentSubmitting, setAddInstallmentSubmitting] = useState(false);
+  const [addInstallmentError, setAddInstallmentError] = useState(null);
+  const [customPlans, setCustomPlans] = useState([]);
+  const [customPlansLoading, setCustomPlansLoading] = useState(false);
+  const [addCustomModal, setAddCustomModal] = useState(false);
+  const [addCustomForm, setAddCustomForm] = useState({ planName: "", manatiAgreementCode: "", installments: [{ amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }] });
+  const [paystackLookupLoading, setPaystackLookupLoading] = useState(null);
+  const [addCustomSubmitting, setAddCustomSubmitting] = useState(false);
+  const [addCustomError, setAddCustomError] = useState(null);
+  const [linkPaystackForm, setLinkPaystackForm] = useState({ planCode: "", payerEmail: "" });
+  const [linkPaystackMessage, setLinkPaystackMessage] = useState(null);
+  const [paystackPreview, setPaystackPreview] = useState(null);
+  const [paystackPreviewLoading, setPaystackPreviewLoading] = useState(false);
+  const [paystackSelectedRefs, setPaystackSelectedRefs] = useState(new Set());
+  const [paystackSaveLoading, setPaystackSaveLoading] = useState(false);
+  const [generateLinkLoading, setGenerateLinkLoading] = useState(false);
+  const [backfillCustomPlan, setBackfillCustomPlan] = useState(null);
+  const [linkManatiCode, setLinkManatiCode] = useState("");
+  const [linkManatiMessage, setLinkManatiMessage] = useState(null);
+  const [linkManatiSubmitting, setLinkManatiSubmitting] = useState(false);
+
+  const fetchProfile = async () => {
+    setLoading(true);
+    console.log("Fetching profile for userId:", userId);
+    try {
+      const result = await getStudentProfile(userId);
+      console.log("Profile result:", result);
+      if (result?.success) {
+        setStudent(result.student);
+      }
+    } catch (err) {
+      console.error("Error fetching profile:", err);
+    }
+    setLoading(false);
+  };
+
+  const fetchBilling = async () => {
+    if (!userId) return;
+    setBillingLoading(true);
+    try {
+      const result = await getStudentBilling(userId);
+      if (result?.success) {
+        setBilling({
+          plans: result.plans || [],
+          outstandingLinks: result.outstandingLinks || [],
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching billing:", err);
+    }
+    setBillingLoading(false);
+  };
+
+  useEffect(() => {
+    if (userId) {
+      fetchProfile();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchBilling();
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    setEftLoading(true);
+    getStudentEftSubmissions(userId)
+      .then((res) => {
+        if (!cancelled && res.success && Array.isArray(res.data)) setEftSubmissions(res.data);
+      })
+      .finally(() => { if (!cancelled) setEftLoading(false); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    setInstallmentPlansLoading(true);
+    getStudentInstallmentPlans(userId)
+      .then((res) => {
+        if (!cancelled && res.success && Array.isArray(res.data)) setInstallmentPlans(res.data);
+      })
+      .finally(() => { if (!cancelled) setInstallmentPlansLoading(false); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    setCustomPlansLoading(true);
+    getCustomPlans(userId)
+      .then((res) => {
+        if (!cancelled && res.success && Array.isArray(res.data)) setCustomPlans(res.data);
+      })
+      .finally(() => { if (!cancelled) setCustomPlansLoading(false); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const handleBlockToggle = async () => {
+    if (!student) return;
+    setBlockLoading(true);
+    
+    if (student.accBlocked) {
+      await unblockUser({ userid: student._id });
+    } else {
+      await blockUser({ userid: student._id });
+    }
+    
+    // Refresh profile
+    await fetchProfile();
+    setBlockLoading(false);
+  };
+
+  const handleBootcampClick = (bootcamp) => {
+    if (bootcamp._id && bootcamp.learningpathId) {
+      navigate(
+        `/student/bootcamp/${bootcamp._id}/learningpath/${bootcamp.learningpathId}?user_id=${student._id}`
+      );
+    }
+  };
+
+  const handleManatiRowClick = async (plan) => {
+    const code = plan.agreementCode || plan.planCode;
+    if (!code) return;
+    setStatementModal({ agreementCode: code, planName: plan.planName || plan.planCode });
+    setStatementData(null);
+    setStatementLoading(true);
+    try {
+      const res = await getStudentManatiStatement(userId, code);
+      setStatementData(res.success ? res.data : null);
+    } catch (err) {
+      setStatementData(null);
+    }
+    setStatementLoading(false);
+  };
+
+  const closeStatementModal = () => {
+    setStatementModal(null);
+    setStatementData(null);
+  };
+
+  const handleRefreshManatiStatement = async () => {
+    if (!statementModal?.agreementCode || !userId) return;
+    setStatementRefreshing(true);
+    try {
+      const res = await refreshStudentManatiStatement(userId, statementModal.agreementCode);
+      if (res.success && res.data) {
+        setStatementData(res.data);
+        await fetchBilling();
+      }
+    } catch (err) {
+      console.error("Manati refresh failed", err);
+    }
+    setStatementRefreshing(false);
+  };
+
+  const handleBillingRowClick = (plan) => {
+    if (plan.partner === "Manati") {
+      handleManatiRowClick(plan);
+    } else {
+      setPaymentsModalPlan(plan);
+    }
+  };
+
+  const handleViewEftProof = async (submissionId) => {
+    const res = await getEftSubmissionProofUrl(userId, submissionId);
+    if (res.success && res.data?.url) window.open(res.data.url, "_blank");
+    else alert(res.message || "Could not open proof");
+  };
+
+  const handleApproveEft = async (submissionId) => {
+    setEftActionId(submissionId);
+    const res = await approveEftSubmission(userId, submissionId);
+    setEftActionId(null);
+    if (res.success) {
+      const listRes = await getStudentEftSubmissions(userId);
+      if (listRes.success && Array.isArray(listRes.data)) setEftSubmissions(listRes.data);
+      fetchBilling();
+    } else alert(res.message || "Approve failed");
+  };
+
+  const handleRejectEft = async (submissionId, reason) => {
+    setEftActionId(submissionId);
+    const res = await rejectEftSubmission(userId, submissionId, reason);
+    setEftActionId(null);
+    setRejectModal(null);
+    if (res.success) {
+      const listRes = await getStudentEftSubmissions(userId);
+      if (listRes.success && Array.isArray(listRes.data)) setEftSubmissions(listRes.data);
+    } else alert(res.message || "Reject failed");
+  };
+
+  const handleAddInstallmentPlanSubmit = async (e) => {
+    e.preventDefault();
+    setAddInstallmentError(null);
+    const amount1 = Number(addInstallmentForm.amount1);
+    const amount2 = Number(addInstallmentForm.amount2);
+    const dueDate2 = (addInstallmentForm.dueDate2 || "").trim();
+    if (!(amount1 > 0 && amount2 > 0)) {
+      setAddInstallmentError("Amount 1 and Amount 2 must be positive numbers (Rands).");
+      return;
+    }
+    if (!dueDate2) {
+      setAddInstallmentError("Due date for installment 2 is required.");
+      return;
+    }
+    setAddInstallmentSubmitting(true);
+    try {
+      const res = await createStudentInstallmentPlan(userId, {
+        amount1,
+        amount2,
+        due_date1: (addInstallmentForm.dueDate1 || "").trim() || undefined,
+        due_date2: dueDate2,
+        plan_name: (addInstallmentForm.planName || "").trim() || undefined,
+      });
+      if (res.success) {
+        setAddInstallmentModal(false);
+        setAddInstallmentForm({ amount1: "", amount2: "", dueDate1: "", dueDate2: "", planName: "" });
+        const listRes = await getStudentInstallmentPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+        fetchBilling();
+      } else {
+        setAddInstallmentError(res.message || "Failed to create plan");
+      }
+    } catch (err) {
+      setAddInstallmentError(err?.response?.data?.message || "Failed to create plan");
+    } finally {
+      setAddInstallmentSubmitting(false);
+    }
+  };
+
+  const handlePaystackLookup = async (rowIdx) => {
+    const row = addCustomForm.installments[rowIdx];
+    const code = (row.paystack_plan_code || "").trim();
+    if (!code) {
+      setAddCustomError("Enter a Paystack plan code to look up.");
+      return;
+    }
+    setPaystackLookupLoading(rowIdx);
+    setAddCustomError(null);
+    const res = await getPaystackPlanInfo(code);
+    setPaystackLookupLoading(null);
+    if (res.success && res.data) {
+      setAddCustomForm((f) => ({
+        ...f,
+        installments: f.installments.map((r, i) =>
+          i === rowIdx ? { ...r, paystackLookup: res.data } : r
+        ),
+      }));
+    } else {
+      setAddCustomError(res.message || "Plan not found. Check the plan code.");
+    }
+  };
+
+  const handleAddCustomPlanSubmit = async (e) => {
+    e.preventDefault();
+    setAddCustomError(null);
+    const rows = addCustomForm.installments;
+    const hasValidRow = rows.some((row) => {
+      const type = (row.type || "cash").toLowerCase();
+      if (type === "paystack") {
+        return (row.paystack_plan_code || "").trim();
+      }
+      return Number.isFinite(Number(row.amount)) && Number(row.amount) > 0;
+    });
+    if (!hasValidRow) {
+      setAddCustomError("Add at least one installment: Cash with amount (Rands) or Paystack with plan code (use Look up).");
+      return;
+    }
+    const paystackWithoutDate = rows.some((row) => {
+      const type = (row.type || "cash").toLowerCase();
+      return type === "paystack" && (row.paystack_plan_code || "").trim() && !(row.paystack_expected_first_date || "").trim();
+    });
+    if (paystackWithoutDate) {
+      setAddCustomError("For each Paystack plan code, set the expected first payment date.");
+      return;
+    }
+    const firstPaystackRow = rows.find((r) => (r.type || "cash").toLowerCase() === "paystack" && (r.paystack_plan_code || "").trim());
+    const firstUrl = (firstPaystackRow?.paystack_payment_url || "").trim();
+    if (firstPaystackRow && !firstUrl) {
+      setAddCustomError("Set the Paystack payment link on the Paystack row. If the student does not pay by the expected date, they will be blocked and directed to Billing with a Pay now button.");
+      return;
+    }
+    const payload = {
+      plan_name: (addCustomForm.planName || "").trim() || undefined,
+      manati_agreement_code: (addCustomForm.manatiAgreementCode || "").trim() || undefined,
+      first_paystack_payment_url: firstUrl || undefined,
+      installments: rows.map((row) => {
+        const type = (row.type || "cash").toLowerCase() === "paystack" ? "paystack" : "cash";
+        const paystackCode = (row.paystack_plan_code || "").trim() || undefined;
+        if (type === "paystack" && paystackCode) {
+          return {
+            type: "paystack",
+            paystack_plan_code: paystackCode,
+            paystack_expected_first_payment_date: (row.paystack_expected_first_date || "").trim() || undefined,
+          };
+        }
+        return {
+          amount: Number(row.amount),
+          due_date: (row.due_date || "").trim() || undefined,
+          type: "cash",
+        };
+      }),
+    };
+    setAddCustomSubmitting(true);
+    try {
+      const res = await createCustomPlan(userId, payload);
+      if (res.success) {
+        setAddCustomModal(false);
+        setAddCustomForm({ planName: "", manatiAgreementCode: "", installments: [{ amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }] });
+        const listRes = await getCustomPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        fetchBilling();
+      } else {
+        setAddCustomError(res.message || "Failed to create custom plan");
+      }
+    } catch (err) {
+      setAddCustomError(err?.response?.data?.message || "Failed to create custom plan");
+    } finally {
+      setAddCustomSubmitting(false);
+    }
+  };
+
+  const handleAddEftSubmit = async (e) => {
+    e.preventDefault();
+    setAddEftError(null);
+    const { planCode, paymentDate, amount, file, installmentPlanId, installmentNumber, customPlanId } = addEftForm;
+    if (!planCode || !paymentDate || !amount || !file) {
+      setAddEftError("Please fill plan, payment date, amount and upload proof.");
+      return;
+    }
+    const amountNum = Number(amount);
+    if (!(amountNum > 0)) {
+      setAddEftError("Amount must be a positive number (in Rands).");
+      return;
+    }
+    const selectedInstallmentPlanForValidation = installmentPlans.find((p) => p.planCode === planCode);
+    if (selectedInstallmentPlanForValidation && !installmentNumber) {
+      setAddEftError("Select which instalment (1 or 2) this payment is for.");
+      return;
+    }
+    const selectedCustomPlanForValidation = customPlans.find((p) => p.planCode === planCode);
+    if (selectedCustomPlanForValidation && !installmentNumber) {
+      setAddEftError("Select which instalment this payment is for.");
+      return;
+    }
+    setAddEftSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("plan_code", planCode);
+      formData.append("payment_date", paymentDate);
+      formData.append("amount", amountNum);
+      formData.append("file", file);
+      if (installmentPlanId) formData.append("installment_plan_id", installmentPlanId);
+      if (installmentNumber) formData.append("installment_number", installmentNumber);
+      if (customPlanId) formData.append("custom_plan_id", customPlanId);
+      const res = await addEftPaymentAdmin(userId, formData);
+      if (res.success) {
+        setAddEftModal(false);
+        setAddEftForm({ planCode: "", paymentDate: "", amount: "", file: null, installmentPlanId: "", installmentNumber: "", customPlanId: "" });
+        fetchBilling();
+        const listRes = await getStudentInstallmentPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+        const customRes = await getCustomPlans(userId);
+        if (customRes.success && Array.isArray(customRes.data)) setCustomPlans(customRes.data);
+      } else {
+        setAddEftError(res.message || "Failed to add EFT payment");
+      }
+    } catch (err) {
+      setAddEftError(err.response?.data?.message || "Failed to add EFT payment");
+    } finally {
+      setAddEftSubmitting(false);
+    }
+  };
+
+  const selectedPlanIsInstallment = addEftForm.planCode && installmentPlans.some((p) => p.planCode === addEftForm.planCode);
+  const selectedInstallmentPlan = installmentPlans.find((p) => p.planCode === addEftForm.planCode);
+  const selectedPlanIsCustom = addEftForm.planCode && customPlans.some((p) => p.planCode === addEftForm.planCode);
+  const selectedCustomPlan = customPlans.find((p) => p.planCode === addEftForm.planCode);
+
+  if (loading) {
+    return (
+      <div className="px-36 py-12">
+        <p className="text-white text-xl mb-4">Loading student profile...</p>
+        <Loader />
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="px-36 py-12">
+        <p className="text-white text-xl">Student not found</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="mt-4 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-36 py-12">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="mb-6 text-white hover:text-blue-400 flex items-center gap-2"
+      >
+        <span className="text-2xl">←</span> Back
+      </button>
+
+      {/* Student Info Card */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">{student.username}</h1>
+            <p className="text-lg text-gray-600 mt-1">{student.email}</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Joined: {new Date(student.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-3">
+            {/* Account Status Badge */}
+            <span
+              className={`px-4 py-2 rounded-full text-sm font-medium ${
+                student.accBlocked
+                  ? "bg-red-100 text-red-800"
+                  : "bg-green-100 text-green-800"
+              }`}
+            >
+              {student.accBlocked ? "Blocked" : "Active"}
+            </span>
+            {/* Block/Unblock Button */}
+            <button
+              onClick={handleBlockToggle}
+              disabled={blockLoading}
+              className={`px-6 py-2 rounded font-medium ${
+                student.accBlocked
+                  ? "bg-green-600 hover:bg-green-700 text-white"
+                  : "bg-red-600 hover:bg-red-700 text-white"
+              } disabled:opacity-50`}
+            >
+              {blockLoading ? "..." : student.accBlocked ? "Unblock Student" : "Block Student"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bootcamp Enrollments */}
+      <h2 className="text-2xl font-bold text-white mb-4">Bootcamp Enrollments</h2>
+      
+      {student.bootcamps?.length === 0 ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No bootcamp enrollments found</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Bootcamp Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Learning Path
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Progress
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Enrolled
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {student.bootcamps?.map((bootcamp, idx) => (
+                <tr
+                  key={bootcamp._id || idx}
+                  onClick={() => handleBootcampClick(bootcamp)}
+                  className="hover:bg-blue-50 cursor-pointer transition-colors"
+                >
+                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                    {bootcamp.bootcampName}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {bootcamp.learningpathName}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${
+                            bootcamp.completedPercentage >= 100
+                              ? "bg-green-500"
+                              : bootcamp.completedPercentage >= 50
+                              ? "bg-blue-500"
+                              : "bg-orange-500"
+                          }`}
+                          style={{ width: `${Math.min(bootcamp.completedPercentage, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {Math.round(bootcamp.completedPercentage)}%
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {bootcamp.isCompleted ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        Completed
+                      </span>
+                    ) : bootcamp.isDeferred ? (
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                        Deferred
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                        In Progress
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {bootcamp.enrolledAt
+                      ? new Date(bootcamp.enrolledAt).toLocaleDateString()
+                      : "N/A"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Set up Paystack plan: fetch transactions by email → select which to keep → save. Can also backfill for a custom plan. */}
+      <div className="bg-gray-800 rounded-lg p-6 mb-6 mt-10">
+        <h2 className="text-xl font-bold text-white mb-2">
+          {backfillCustomPlan ? "Backfill Paystack for custom plan" : "Set up Paystack plan for this learner"}
+        </h2>
+        {backfillCustomPlan && (
+          <p className="text-sm text-amber-200 mb-2">
+            Linking to custom plan: <strong>{backfillCustomPlan.planName}</strong>. Accepted payments will be marked on that plan&apos;s Paystack installments.
+            <button type="button" onClick={() => setBackfillCustomPlan(null)} className="ml-2 text-gray-400 hover:text-white underline">Cancel</button>
+          </p>
+        )}
+        <p className="text-sm text-gray-400 mb-4">
+          Enter the <strong className="text-gray-300">plan code</strong> (required) and optional <strong className="text-gray-300">payer email</strong>. Click Fetch transactions to load successful and failed payments for that email, then select the ones to keep and save.
+        </p>
+
+        {!paystackPreview ? (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const planCode = (linkPaystackForm.planCode || "").trim();
+              if (!planCode) {
+                setLinkPaystackMessage({ type: "error", text: "Plan code is required." });
+                return;
+              }
+              setLinkPaystackMessage(null);
+              setPaystackPreviewLoading(true);
+              setupPaystackPlanPreview(userId, planCode, (linkPaystackForm.payerEmail || "").trim() || undefined)
+                .then((res) => {
+                  if (res.success && res.data?.transactions) {
+                    const txs = res.data.transactions;
+                    setPaystackPreview({
+                      transactions: txs,
+                      emailUsed: res.data.emailUsed,
+                      planCode: res.data.planCode || planCode,
+                      planName: res.data.planName,
+                    });
+                    setPaystackSelectedRefs(new Set(txs.map((t) => t.reference).filter(Boolean)));
+                  } else {
+                    setLinkPaystackMessage({ type: "error", text: res.message || "No transactions found." });
+                  }
+                })
+                .catch((err) => {
+                  setLinkPaystackMessage({ type: "error", text: err?.response?.data?.message || "Request failed." });
+                })
+                .finally(() => setPaystackPreviewLoading(false));
+            }}
+            className="flex flex-wrap items-end gap-4"
+          >
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Plan code *</label>
+              <input
+                type="text"
+                value={linkPaystackForm.planCode}
+                onChange={(e) => setLinkPaystackForm((f) => ({ ...f, planCode: e.target.value }))}
+                placeholder="e.g. PLN_xxxxxxxx"
+                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500 min-w-[200px]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Payer email (optional)</label>
+              <input
+                type="email"
+                value={linkPaystackForm.payerEmail}
+                onChange={(e) => setLinkPaystackForm((f) => ({ ...f, payerEmail: e.target.value }))}
+                placeholder={student?.email ? `Leave blank to use ${student.email}` : "e.g. payer@example.com"}
+                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500 min-w-[220px]"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={paystackPreviewLoading || !student?.email}
+              className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {paystackPreviewLoading ? "Fetching…" : "Fetch transactions"}
+            </button>
+          </form>
+        ) : (
+          <>
+            <p className="text-sm text-gray-400 mb-2">
+              Email: <span className="text-gray-300">{paystackPreview.emailUsed}</span>
+              {" · "}
+              Plan: <span className="text-gray-300">{paystackPreview.planCode || "—"}</span>
+            </p>
+            <div className="overflow-x-auto mb-4">
+              <table className="min-w-full text-sm text-left text-gray-300">
+                <thead>
+                  <tr className="border-b border-gray-600">
+                    <th className="py-2 pr-2 w-10">
+                      <input
+                        type="checkbox"
+                        checked={paystackSelectedRefs.size === paystackPreview.transactions.length && paystackPreview.transactions.every((t) => t.reference)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setPaystackSelectedRefs(new Set(paystackPreview.transactions.map((t) => t.reference).filter(Boolean)));
+                          } else {
+                            setPaystackSelectedRefs(new Set());
+                          }
+                        }}
+                        className="rounded"
+                      />
+                    </th>
+                    <th className="py-2 pr-4">Date</th>
+                    <th className="py-2 pr-4">Amount</th>
+                    <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 pr-4">Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paystackPreview.transactions.map((tx) => (
+                    <tr key={tx.reference || tx.id} className="border-b border-gray-700">
+                      <td className="py-2 pr-2">
+                        {tx.reference ? (
+                          <input
+                            type="checkbox"
+                            checked={paystackSelectedRefs.has(tx.reference)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setPaystackSelectedRefs((s) => new Set([...s, tx.reference]));
+                              } else {
+                                setPaystackSelectedRefs((s) => {
+                                  const n = new Set(s);
+                                  n.delete(tx.reference);
+                                  return n;
+                                });
+                              }
+                            }}
+                            className="rounded"
+                          />
+                        ) : (
+                          <span className="text-gray-500">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4">{tx.paidAt ? formatDate(tx.paidAt) : "—"}</td>
+                      <td className="py-2 pr-4">{formatAmount(tx.amount, tx.currency)}</td>
+                      <td className="py-2 pr-4">
+                        <span className={tx.status === "accepted" ? "text-green-400" : "text-amber-400"}>
+                          {tx.status === "accepted" ? "Success" : "Failed"}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs">{tx.reference || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPaystackPreview(null);
+                  setPaystackSelectedRefs(new Set());
+                  setLinkPaystackMessage(null);
+                }}
+                className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-500"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={paystackSaveLoading || paystackSelectedRefs.size === 0}
+                onClick={() => {
+                  const selected = paystackPreview.transactions.filter((t) => t.reference && paystackSelectedRefs.has(t.reference));
+                  if (selected.length === 0) return;
+                  setLinkPaystackMessage(null);
+                  setPaystackSaveLoading(true);
+                  setupPaystackPlan(
+                    userId,
+                    paystackPreview.planCode,
+                    (linkPaystackForm.payerEmail || "").trim() || undefined,
+                    selected,
+                    backfillCustomPlan?.planId || undefined
+                  )
+                    .then((res) => {
+                      if (res.success) {
+                        const d = res.data || {};
+                        const parts = [res.message];
+                        if (d.paymentsLeft != null) parts.push(`Payments left: ${d.paymentsLeft} of ${d.totalPaymentsRequired ?? "?"}.`);
+                        setLinkPaystackMessage({ type: "success", text: parts.join(" ") });
+                        setPaystackPreview(null);
+                        setPaystackSelectedRefs(new Set());
+                        setBackfillCustomPlan(null);
+                        fetchBilling();
+                        if (backfillCustomPlan?.planId) {
+                          getCustomPlans(userId).then((r) => { if (r?.success && Array.isArray(r.data)) setCustomPlans(r.data); });
+                        }
+                      } else {
+                        setLinkPaystackMessage({ type: "error", text: res.message || "Save failed." });
+                      }
+                    })
+                    .catch((err) => {
+                      setLinkPaystackMessage({ type: "error", text: err?.response?.data?.message || "Request failed." });
+                    })
+                    .finally(() => setPaystackSaveLoading(false));
+                }}
+                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {paystackSaveLoading ? "Saving…" : `Save selected (${paystackSelectedRefs.size})`}
+              </button>
+            </div>
+          </>
+        )}
+        {linkPaystackMessage && (
+          <p className={`mt-3 text-sm ${linkPaystackMessage.type === "success" ? "text-green-400" : "text-red-400"}`}>
+            {linkPaystackMessage.text}
+          </p>
+        )}
+      </div>
+
+      {/* Link Manati financing – attach agreement code so student sees it under Billing */}
+      <div className="bg-gray-800 rounded-lg p-6 mb-6 mt-10">
+        <h2 className="text-xl font-bold text-white mb-2">Link Manati financing</h2>
+        <p className="text-sm text-gray-400 mb-4">
+          Attach a Manati agreement code to this learner so their financing plan and statement appear under Billing. Use &quot;Refresh from Manati&quot; on the plan to load the latest statement.
+        </p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const code = (linkManatiCode || "").trim();
+            if (!code) {
+              setLinkManatiMessage({ type: "error", text: "Agreement code is required." });
+              return;
+            }
+            setLinkManatiMessage(null);
+            setLinkManatiSubmitting(true);
+            addStudentManatiPlan(userId, code, "Company app (student profile)")
+              .then((res) => {
+                if (res.success) {
+                  setLinkManatiMessage({ type: "success", text: res.message || "Manati agreement linked." });
+                  setLinkManatiCode("");
+                  fetchBilling();
+                } else {
+                  setLinkManatiMessage({ type: "error", text: res.message || "Failed to link." });
+                }
+              })
+              .catch((err) => {
+                setLinkManatiMessage({ type: "error", text: err?.response?.data?.message || "Request failed." });
+              })
+              .finally(() => setLinkManatiSubmitting(false));
+          }}
+          className="flex flex-wrap items-end gap-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Agreement code</label>
+            <input
+              type="text"
+              value={linkManatiCode}
+              onChange={(e) => setLinkManatiCode(e.target.value)}
+              placeholder="e.g. CS1156617615"
+              className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500 min-w-[200px]"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={linkManatiSubmitting}
+            className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+          >
+            {linkManatiSubmitting ? "Linking…" : "Link Manati"}
+          </button>
+        </form>
+        {linkManatiMessage && (
+          <p className={`mt-3 text-sm ${linkManatiMessage.type === "success" ? "text-green-400" : "text-red-400"}`}>
+            {linkManatiMessage.text}
+          </p>
+        )}
+      </div>
+
+      {/* Billing (Paystack or Financing) */}
+      <h2 className="text-2xl font-bold text-white mb-4 mt-10">Billing</h2>
+      {billingLoading ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">Loading billing...</p>
+        </div>
+      ) : !billing.plans?.length ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No billing records</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Plan
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Agreement / Reference
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Payments made
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Total required
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Next payment
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {billing.plans.map((plan, idx) => {
+                const isManati = plan.partner === "Manati";
+                const is2InstallmentEft = (plan.planCode || "").startsWith("2INST-");
+                const isCustom = (plan.planCode || "").startsWith("CUSTOM-");
+                const paymentsMade = isManati && (plan.manatiPaymentCount != null)
+                  ? plan.manatiPaymentCount
+                  : (plan.paymentCount ?? 0);
+                const totalRequired = plan.totalPaymentsRequired ?? "—";
+                const billingTypeLabel = isManati
+                  ? "Financing (Manati)"
+                  : is2InstallmentEft
+                    ? "2-installment EFT"
+                    : isCustom
+                      ? "Custom"
+                      : "Paystack";
+                const billingTypeClass = isManati
+                  ? "bg-purple-100 text-purple-800"
+                  : is2InstallmentEft
+                    ? "bg-emerald-100 text-emerald-800"
+                    : isCustom
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-blue-100 text-blue-800";
+                return (
+                  <tr
+                    key={plan.planCode || idx}
+                    className={isManati ? "hover:bg-purple-50 cursor-pointer transition-colors" : is2InstallmentEft ? "hover:bg-emerald-50 cursor-pointer transition-colors" : isCustom ? "hover:bg-amber-50 cursor-pointer transition-colors" : "hover:bg-blue-50 cursor-pointer transition-colors"}
+                    onClick={() => handleBillingRowClick(plan)}
+                  >
+                    <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                      {plan.planName || plan.planCode || "—"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 ${billingTypeClass} text-xs rounded-full`}>
+                        {billingTypeLabel}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {plan.agreementCode || plan.planCode || "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-800">
+                      {paymentsMade}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {totalRequired === "—" ? "—" : String(totalRequired)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {plan.nextPaymentDate ? formatDate(plan.nextPaymentDate) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 2-installment EFT plans */}
+      <div className="flex items-center justify-between mb-4 mt-10">
+        <h2 className="text-2xl font-bold text-white">2-installment EFT plans</h2>
+        <button
+          type="button"
+          onClick={() => { setAddInstallmentModal(true); setAddInstallmentError(null); }}
+          className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
+        >
+          Add 2-installment plan
+        </button>
+      </div>
+      {installmentPlansLoading ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">Loading plans…</p>
+        </div>
+      ) : !installmentPlans.length ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No 2-installment EFT plans. Add one to define two EFT installments for this student.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {installmentPlans.map((plan) => (
+            <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                <span className="font-semibold text-gray-800">{plan.planName || "2-installment EFT"}</span>
+                <span className="text-sm text-gray-600">Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}</span>
+              </div>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Installment</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Due date</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {(plan.installments || []).map((inst) => (
+                    <tr key={inst.number}>
+                      <td className="px-6 py-3 text-sm text-gray-800">Instalment {inst.number}</td>
+                      <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(inst.amount, plan.currency)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-600">{inst.dueDate ? formatDate(inst.dueDate) : "—"}</td>
+                      <td className="px-6 py-3">
+                        <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
+                          {inst.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="px-6 py-2 text-xs text-gray-500">Use &quot;Add EFT payment&quot; below and select plan <strong>{plan.planCode}</strong> to record payments for instalment 1 or 2.</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add 2-installment plan modal */}
+      {addInstallmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !addInstallmentSubmitting && setAddInstallmentModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Add 2-installment EFT plan</h3>
+            <p className="text-sm text-gray-600 mb-4">Both installments are EFT (cash). Set amounts in Rands and due date for instalment 2 (instalment 1 due date is optional).</p>
+            <form onSubmit={handleAddInstallmentPlanSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Plan name (optional)</label>
+                <input
+                  type="text"
+                  value={addInstallmentForm.planName}
+                  onChange={(e) => setAddInstallmentForm((f) => ({ ...f, planName: e.target.value }))}
+                  placeholder="e.g. Bootcamp 2025"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instalment 1 amount (R)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={addInstallmentForm.amount1}
+                  onChange={(e) => setAddInstallmentForm((f) => ({ ...f, amount1: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instalment 1 due date (optional)</label>
+                <input
+                  type="date"
+                  value={addInstallmentForm.dueDate1}
+                  onChange={(e) => setAddInstallmentForm((f) => ({ ...f, dueDate1: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instalment 2 amount (R)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={addInstallmentForm.amount2}
+                  onChange={(e) => setAddInstallmentForm((f) => ({ ...f, amount2: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Instalment 2 due date</label>
+                <input
+                  type="date"
+                  value={addInstallmentForm.dueDate2}
+                  onChange={(e) => setAddInstallmentForm((f) => ({ ...f, dueDate2: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              {addInstallmentError && <p className="text-sm text-red-600">{addInstallmentError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={addInstallmentSubmitting}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {addInstallmentSubmitting ? "Creating…" : "Create plan"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddInstallmentModal(false)}
+                  disabled={addInstallmentSubmitting}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom payment plans */}
+      <div className="flex items-center justify-between mb-4 mt-10">
+        <h2 className="text-2xl font-bold text-white">Custom payment plans</h2>
+        <button
+          type="button"
+          onClick={() => { setAddCustomModal(true); setAddCustomError(null); }}
+          className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700"
+        >
+          Add custom plan
+        </button>
+      </div>
+      {customPlansLoading ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">Loading custom plans…</p>
+        </div>
+      ) : !customPlans.length ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No custom payment plans. Add one to define cash + Paystack or multiple cash installments with dates.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {customPlans.map((plan) => (
+            <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
+                <span className="font-semibold text-gray-800">{plan.planName || "Custom plan"}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}</span>
+                  {(plan.installments || []).some((i) => i.type === "paystack" && (i.paystackPlanCode || "").trim()) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstPaystack = (plan.installments || []).find((i) => i.type === "paystack" && (i.paystackPlanCode || "").trim());
+                        if (firstPaystack?.paystackPlanCode) {
+                          setBackfillCustomPlan({ planId: plan._id, planCode: firstPaystack.paystackPlanCode.trim(), planName: plan.planName || plan.planCode });
+                          setLinkPaystackForm((f) => ({ ...f, planCode: firstPaystack.paystackPlanCode.trim(), payerEmail: "" }));
+                          setPaystackPreview(null);
+                          setLinkPaystackMessage(null);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium text-amber-800 bg-amber-100 rounded-lg hover:bg-amber-200"
+                    >
+                      Backfill Paystack
+                    </button>
+                  )}
+                </div>
+              </div>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Installment</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Due date</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Type</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {(plan.installments || []).map((inst) => (
+                    <tr key={inst.number}>
+                      <td className="px-6 py-3 text-sm text-gray-800">Instalment {inst.number}</td>
+                      <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(inst.amount, plan.currency)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-600">{inst.dueDate ? formatDate(inst.dueDate) : "—"}</td>
+                      <td className="px-6 py-3 text-sm text-gray-600">{inst.type === "paystack" ? (inst.paystackPlanCode ? `Paystack (${inst.paystackPlanCode})` : "Paystack") : "Cash (EFT)"}</td>
+                      <td className="px-6 py-3">
+                        <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
+                          {inst.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        {inst.type === "cash" && inst.status === "pending" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAddEftForm({
+                                planCode: plan.planCode,
+                                planName: plan.planName || "",
+                                installmentPlanId: "",
+                                customPlanId: plan._id,
+                                installmentNumber: String(inst.number),
+                                paymentDate: new Date().toISOString().slice(0, 10),
+                                amount: inst.amount ? String(Number(inst.amount) / 100) : "",
+                                file: null,
+                              });
+                              setAddEftModal(true);
+                              setAddEftError(null);
+                            }}
+                            className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200"
+                          >
+                            Add POP
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(plan.manatiAgreementCode || "").trim() && (
+                <div className="px-6 py-3 bg-purple-50 border-t border-purple-100 flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-purple-800">Manati (agreement: {plan.manatiAgreementCode})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleManatiRowClick({ agreementCode: plan.manatiAgreementCode, planName: plan.planName || plan.planCode })}
+                    className="px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-100 rounded-lg hover:bg-purple-200"
+                  >
+                    View statement
+                  </button>
+                  <span className="text-xs text-purple-600">Statement is loaded by scraping Manati TaskFlow.</span>
+                </div>
+              )}
+              <p className="px-6 py-2 text-xs text-gray-500">Use &quot;Add POP&quot; above for cash instalments or &quot;Add EFT payment&quot; below and select plan <strong>{plan.planCode}</strong>.</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add custom plan modal */}
+      {addCustomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !addCustomSubmitting && setAddCustomModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Add custom payment plan</h3>
+            <p className="text-sm text-gray-600 mb-4">Define multiple installments; each can be Cash (EFT) or Paystack. Optionally add a Manati agreement code for cash + Manati plans (statement is shown via scraping).</p>
+            <form onSubmit={handleAddCustomPlanSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Plan name (optional)</label>
+                <input
+                  type="text"
+                  value={addCustomForm.planName}
+                  onChange={(e) => setAddCustomForm((f) => ({ ...f, planName: e.target.value }))}
+                  placeholder="e.g. Bootcamp 2025 – custom"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Manati agreement code (optional – for cash + Manati)</label>
+                <input
+                  type="text"
+                  value={addCustomForm.manatiAgreementCode || ""}
+                  onChange={(e) => setAddCustomForm((f) => ({ ...f, manatiAgreementCode: e.target.value }))}
+                  placeholder="e.g. CS1697227222"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-0.5">Student will see Manati statement (scraped) for this agreement code under this plan.</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Installments</label>
+                  <button
+                    type="button"
+                            onClick={() => setAddCustomForm((f) => ({ ...f, installments: [...f.installments, { amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }] }))}
+                    className="text-xs text-indigo-600 hover:underline"
+                  >
+                    + Add row
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {addCustomForm.installments.map((row, idx) => {
+                    const isPaystack = (row.type || "cash").toLowerCase() === "paystack";
+                    return (
+                      <div key={idx} className="border border-gray-200 rounded p-2 bg-gray-50 space-y-1">
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <span className="text-xs font-medium text-gray-500 w-8">#{idx + 1}</span>
+                          <select
+                            value={row.type || "cash"}
+                            onChange={(e) => setAddCustomForm((f) => ({
+                              ...f,
+                              installments: f.installments.map((r, i) => i === idx ? { ...r, type: e.target.value, paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null } : r),
+                            }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm"
+                          >
+                            <option value="cash">Cash (EFT)</option>
+                            <option value="paystack">Paystack (plan code)</option>
+                          </select>
+                          {isPaystack ? (
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Paystack plan code (e.g. PLN_xxx)"
+                                value={row.paystack_plan_code || ""}
+                                onChange={(e) => setAddCustomForm((f) => ({
+                                  ...f,
+                                  installments: f.installments.map((r, i) => i === idx ? { ...r, paystack_plan_code: e.target.value, paystackLookup: null } : r),
+                                }))}
+                                className="flex-1 min-w-[140px] border border-gray-300 rounded px-2 py-1 text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handlePaystackLookup(idx)}
+                                disabled={paystackLookupLoading === idx || !(row.paystack_plan_code || "").trim()}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded hover:bg-blue-200 disabled:opacity-50 shrink-0"
+                              >
+                                {paystackLookupLoading === idx ? "Looking up…" : "Look up"}
+                              </button>
+                              <span className="text-xs text-gray-500 shrink-0">Expected first payment:</span>
+                              <input
+                                type="date"
+                                value={row.paystack_expected_first_date || ""}
+                                onChange={(e) => setAddCustomForm((f) => ({
+                                  ...f,
+                                  installments: f.installments.map((r, i) => i === idx ? { ...r, paystack_expected_first_date: e.target.value } : r),
+                                }))}
+                                className="w-[140px] border border-gray-300 rounded px-2 py-1 text-sm shrink-0"
+                                title="When you expect the first Paystack payment for this plan"
+                              />
+                              <div className="w-full mt-1">
+                                <label className="text-xs text-gray-600 block mb-0.5">
+                                  Payment link {addCustomForm.installments.findIndex((r) => (r.type || "cash").toLowerCase() === "paystack") === idx ? "(required for first Paystack)" : "(optional)"}
+                                </label>
+                                <input
+                                  type="url"
+                                  value={row.paystack_payment_url || ""}
+                                  onChange={(e) => setAddCustomForm((f) => ({
+                                    ...f,
+                                    installments: f.installments.map((r, i) => i === idx ? { ...r, paystack_payment_url: e.target.value } : r),
+                                  }))}
+                                  placeholder="https://… Paystack payment page URL"
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                />
+                              </div>
+                              {row.paystackLookup && (
+                                <span className="text-xs text-green-700 shrink-0">
+                                  {row.paystackLookup.invoice_limit != null
+                                    ? `${row.paystackLookup.invoice_limit} payment(s) required`
+                                    : "Plan found"}
+                                  {row.paystackLookup.name ? ` · ${row.paystackLookup.name}` : ""}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                min="1"
+                                step="0.01"
+                                placeholder="Amount (R)"
+                                value={row.amount}
+                                onChange={(e) => setAddCustomForm((f) => ({
+                                  ...f,
+                                  installments: f.installments.map((r, i) => i === idx ? { ...r, amount: e.target.value } : r),
+                                }))}
+                                className="w-24 min-w-[100px] border border-gray-300 rounded px-2 py-1 text-sm shrink-0"
+                              />
+                              <input
+                                type="date"
+                                placeholder="Due"
+                                value={row.due_date || ""}
+                                onChange={(e) => setAddCustomForm((f) => ({
+                                  ...f,
+                                  installments: f.installments.map((r, i) => i === idx ? { ...r, due_date: e.target.value } : r),
+                                }))}
+                                className="w-[140px] border border-gray-300 rounded px-2 py-1 text-sm shrink-0"
+                              />
+                            </>
+                          )}
+                          {addCustomForm.installments.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setAddCustomForm((f) => ({ ...f, installments: f.installments.filter((_, i) => i !== idx) }))}
+                              className="text-red-600 hover:underline text-xs shrink-0"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {addCustomError && <p className="text-sm text-red-600">{addCustomError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={addCustomSubmitting}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {addCustomSubmitting ? "Creating…" : "Create plan"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddCustomModal(false)}
+                  disabled={addCustomSubmitting}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EFT proof-of-payment submissions */}
+      <div className="flex items-center justify-between mb-4 mt-10">
+        <h2 className="text-2xl font-bold text-white">EFT / Cash proof of payment</h2>
+        <button
+          type="button"
+          onClick={() => { setAddEftModal(true); setAddEftError(null); }}
+          className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+        >
+          Add EFT payment
+        </button>
+      </div>
+      {eftLoading ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">Loading EFT submissions…</p>
+        </div>
+      ) : !eftSubmissions.length ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No EFT submissions</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Plan</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {eftSubmissions.map((s) => (
+                <tr key={s._id}>
+                  <td className="px-6 py-4 text-sm text-gray-800">{formatDate(s.paymentDate)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-800">{s.planName || s.planCode}</td>
+                  <td className="px-6 py-4 text-sm text-gray-800">{formatAmount(s.amount, s.currency)}</td>
+                  <td className="px-6 py-4">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      s.status === "approved" ? "bg-green-100 text-green-800" :
+                      s.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"
+                    }`}>
+                      {s.status}
+                    </span>
+                    {s.rejectionReason && <span className="ml-1 text-xs text-gray-500">– {s.rejectionReason}</span>}
+                  </td>
+                  <td className="px-6 py-4 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleViewEftProof(s._id)}
+                      className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                    >
+                      View proof
+                    </button>
+                    {s.status === "pending" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleApproveEft(s._id)}
+                          disabled={eftActionId === s._id}
+                          className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {eftActionId === s._id ? "…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRejectModal(s)}
+                          disabled={eftActionId === s._id}
+                          className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add EFT payment modal (admin) */}
+      {addEftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !addEftSubmitting && setAddEftModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Add EFT payment (proof of payment)</h3>
+            <p className="text-sm text-gray-600 mb-4">This will be added to the student&apos;s billing. Upload proof, date and amount.</p>
+            <form onSubmit={handleAddEftSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
+                {(billing.plans || []).length > 0 ? (
+                  <select
+                    value={addEftForm.planCode}
+                    onChange={(e) => {
+                      const code = e.target.value;
+                      const plan = billing.plans?.find((p) => p.planCode === code);
+                      const instPlan = installmentPlans.find((p) => p.planCode === code);
+                      const customPlan = customPlans.find((p) => p.planCode === code);
+                      setAddEftForm((f) => ({
+                        ...f,
+                        planCode: code,
+                        planName: plan?.planName || "",
+                        installmentPlanId: instPlan ? instPlan._id : "",
+                        customPlanId: customPlan ? customPlan._id : "",
+                        installmentNumber: "",
+                      }));
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    required
+                  >
+                    <option value="">Select plan</option>
+                    {billing.plans.map((p) => (
+                      <option key={p.planCode} value={p.planCode}>{p.planName || p.planCode}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={addEftForm.planCode}
+                    onChange={(e) => setAddEftForm((f) => ({ ...f, planCode: e.target.value }))}
+                    placeholder="e.g. PLN_xxx or plan name"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    required
+                  />
+                )}
+              </div>
+              {selectedPlanIsInstallment && selectedInstallmentPlan && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Apply to instalment</label>
+                  <select
+                    value={addEftForm.installmentNumber}
+                    onChange={(e) => setAddEftForm((f) => ({ ...f, installmentNumber: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    required
+                  >
+                    <option value="">Select 1 or 2</option>
+                    <option value="1">Instalment 1</option>
+                    <option value="2">Instalment 2</option>
+                  </select>
+                </div>
+              )}
+              {selectedPlanIsCustom && selectedCustomPlan && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Apply to instalment</label>
+                  <select
+                    value={addEftForm.installmentNumber}
+                    onChange={(e) => setAddEftForm((f) => ({ ...f, installmentNumber: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    required
+                  >
+                    <option value="">Select instalment</option>
+                    {(selectedCustomPlan.installments || []).map((inst) => (
+                      <option key={inst.number} value={inst.number}>
+                        Instalment {inst.number} ({inst.type}) {inst.status === "paid" ? "– paid" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment date</label>
+                <input
+                  type="date"
+                  value={addEftForm.paymentDate}
+                  onChange={(e) => setAddEftForm((f) => ({ ...f, paymentDate: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (R)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={addEftForm.amount}
+                  onChange={(e) => setAddEftForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="e.g. 5000"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Proof of payment (PDF/image)</label>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  onChange={(e) => setAddEftForm((f) => ({ ...f, file: e.target.files?.[0] || null }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              {addEftError && <p className="text-sm text-red-600">{addEftError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={addEftSubmitting}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                >
+                  {addEftSubmitting ? "Adding…" : "Add to billing"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddEftModal(false)}
+                  disabled={addEftSubmitting}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reject EFT modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setRejectModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Reject EFT submission</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Optional: add a reason to show the student (e.g. &quot;Proof unclear, please resubmit&quot;).
+            </p>
+            <textarea
+              id="eft-reject-reason"
+              rows={3}
+              className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+              placeholder="Reason (optional)"
+              defaultValue=""
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  const reason = document.getElementById("eft-reject-reason")?.value?.trim() || "";
+                  handleRejectEft(rejectModal._id, reason);
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Confirm reject
+              </button>
+              <button
+                type="button"
+                onClick={() => setRejectModal(null)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manati full statement modal */}
+      {statementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={closeStatementModal}>
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-800">
+                Manati statement – {statementModal.planName} ({statementModal.agreementCode})
+              </h3>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleRefreshManatiStatement}
+                  disabled={statementRefreshing}
+                  className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {statementRefreshing ? "Refreshing…" : "Refresh from Manati"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeStatementModal}
+                  className="text-gray-500 hover:text-gray-800 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {statementLoading && (
+                <p className="text-gray-500">Loading statement…</p>
+              )}
+              {!statementLoading && !statementData && (
+                <p className="text-gray-500 mb-4">No statement data yet. Click &quot;Refresh from Manati&quot; to fetch the latest (updates for both student and admin).</p>
+              )}
+              {!statementLoading && statementData && (
+                <>
+                  {statementData.scrapedAt && (
+                    <p className="text-sm text-gray-500 mb-4">Last scraped: {formatDate(statementData.scrapedAt)}</p>
+                  )}
+                  {(statementData.loans?.length || 0) === 0 && (
+                    <p className="text-gray-500">No loan data in this statement.</p>
+                  )}
+                  {statementData.loans?.map((loan, idx) => (
+                    <div key={loan.loanId || idx} className="mb-8">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-3">{loan.loanId || `Loan ${idx + 1}`}</h4>
+                      {loan.overview && Object.keys(loan.overview).length > 0 && (
+                        <div className="mb-4 overflow-x-auto">
+                          <table className="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+                            <tbody>
+                              {Object.entries(loan.overview).map(([k, v]) => (
+                                <tr key={k} className="border-b border-gray-100 last:border-0">
+                                  <td className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50">{k}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-800">{v}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {loan.transactions?.length > 0 && (() => {
+                        const totalDebit = loan.transactions.reduce((sum, tr) => sum + parseAmountString(tr.Debit), 0);
+                        const totalCredit = loan.transactions.reduce((sum, tr) => sum + parseAmountString(tr.Credit), 0);
+                        return (
+                          <div className="mb-4">
+                            <h5 className="text-sm font-semibold text-gray-600 mb-2">Transactions</h5>
+                            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Reference</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Type</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Debit</th>
+                                    <th className="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">Credit</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {loan.transactions.map((tr, i) => {
+                                    const ref = (tr.Reference || "").toLowerCase();
+                                    const type = (tr.Type || "").toLowerCase();
+                                    const isUnsuccessful = ref.includes("unsuccessful") || type.includes("unsuccessful");
+                                    return (
+                                      <tr key={i} className={isUnsuccessful ? "bg-red-50 text-red-800" : ""}>
+                                        <td className="px-4 py-2 text-sm">{tr.Date || "—"}</td>
+                                        <td className="px-4 py-2 text-sm">{tr.Reference || "—"}</td>
+                                        <td className="px-4 py-2 text-sm">{tr.Type || "—"}</td>
+                                        <td className="px-4 py-2 text-sm">{tr.Debit ?? "—"}</td>
+                                        <td className="px-4 py-2 text-sm">{tr.Credit ?? "—"}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot className="bg-gray-100 border-t-2 border-gray-300">
+                                  <tr>
+                                    <td colSpan={3} className="px-4 py-2 text-sm font-semibold text-gray-800">Total</td>
+                                    <td className="px-4 py-2 text-sm font-semibold text-gray-800">{formatTotal(totalDebit)}</td>
+                                    <td className="px-4 py-2 text-sm font-semibold text-gray-800">{formatTotal(totalCredit)}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {loan.disbursements?.length > 0 && (() => {
+                        const keys = Object.keys(loan.disbursements[0] || {});
+                        const amountKey = keys.find((k) => /amount/i.test(k));
+                        const totalDisbursed = amountKey
+                          ? loan.disbursements.reduce((sum, row) => sum + parseAmountString(row[amountKey]), 0)
+                          : 0;
+                        return (
+                          <div>
+                            <h5 className="text-sm font-semibold text-gray-600 mb-2">Disbursements</h5>
+                            <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    {keys.map((h) => (
+                                      <th key={h} className="px-4 py-2 text-left text-xs font-bold text-gray-500 uppercase">{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {loan.disbursements.map((row, i) => (
+                                    <tr key={i}>
+                                      {keys.map((key, j) => (
+                                        <td key={j} className="px-4 py-2 text-sm">{row[key] ?? "—"}</td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot className="bg-gray-100 border-t-2 border-gray-300">
+                                  <tr>
+                                    {keys.map((key, colIndex) => (
+                                      <td key={key} className="px-4 py-2 text-sm font-semibold text-gray-800">
+                                        {colIndex === 0 ? "Total" : key === amountKey ? formatTotal(totalDisbursed) : ""}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paystack (and other) payments modal */}
+      {paymentsModalPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setPaymentsModalPlan(null)}>
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-800">
+                Payments – {paymentsModalPlan.planName || paymentsModalPlan.planCode} ({paymentsModalPlan.agreementCode || paymentsModalPlan.planCode || "—"})
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPaymentsModalPlan(null)}
+                className="text-gray-500 hover:text-gray-800 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {!paymentsModalPlan.payments?.length ? (
+                <p className="text-gray-500">No payment records for this plan.</p>
+              ) : (
+                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Reference</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {paymentsModalPlan.payments.map((p, i) => {
+                        const isFailed = p.status === "failed" || p.status === "rejected";
+                        const showGenerateLink = isFailed && !p.isOutstanding || (p.isOutstanding && p.expired);
+                        const showPayNow = p.isOutstanding && p.paymentUrl && !p.expired;
+                        return (
+                          <tr key={p.reference || p.paymentUrl || i} className={isFailed ? "bg-red-50" : ""}>
+                            <td className="px-4 py-3 text-sm text-gray-800">{formatDate(p.paidAt)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-800">{formatAmount(p.amount, p.currency)}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 text-xs rounded-full ${p.status === "accepted" ? "bg-green-100 text-green-800" : isFailed ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
+                                {p.expired ? "Expired" : p.status || "—"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{p.paymentType || "—"}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 font-mono">{p.reference || "—"}</td>
+                            <td className="px-4 py-3">
+                              {showPayNow && (
+                                <a href={p.paymentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
+                                  Pay now
+                                </a>
+                              )}
+                              {showGenerateLink && (
+                                <button
+                                  type="button"
+                                  disabled={generateLinkLoading}
+                                  onClick={async () => {
+                                    setGenerateLinkLoading(true);
+                                    const res = await generatePaymentLink(userId, {
+                                      planCode: paymentsModalPlan.planCode,
+                                      amount: p.amount ?? paymentsModalPlan.amount,
+                                      currency: p.currency || paymentsModalPlan.currency,
+                                      subscriptionCode: paymentsModalPlan.subscriptionCode || undefined,
+                                    });
+                                    setGenerateLinkLoading(false);
+                                    if (res.success && res.data?.paymentUrl) {
+                                      window.open(res.data.paymentUrl, "_blank");
+                                      getStudentBilling(userId).then((billingRes) => {
+                                        if (billingRes?.success && billingRes.plans) {
+                                          setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+                                          const updatedPlan = billingRes.plans.find((pl) => pl.planCode === paymentsModalPlan.planCode);
+                                          if (updatedPlan) setPaymentsModalPlan(updatedPlan);
+                                        }
+                                      });
+                                    } else {
+                                      alert(res.message || "Failed to generate link");
+                                    }
+                                  }}
+                                  className="text-indigo-600 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  {generateLinkLoading ? "Generating…" : p.expired ? "Generate new link" : "Generate payment link"}
+                                </button>
+                              )}
+                              {!showPayNow && !showGenerateLink && "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default StudentProfile;

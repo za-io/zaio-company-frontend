@@ -114,6 +114,15 @@ export const checkEnrollmentEligibility = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+export const createAccountsForEmails = (payload) =>
+  axios
+    .post(`${API_URL}/create-accounts-for-emails`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+
 export const enrollStudentsIntoLP = (payload) =>
   axios
     .post(`${BASE_URL}/dashboard/enrollmany`, payload)
@@ -151,6 +160,24 @@ export const pingStudent = (payload) =>
     .post(`${BASE_URL}/bootcamp/ping-student`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const sendDiscordDM = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/send-discord-dm`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: 'Failed to send Discord message' };
+    });
+
+export const trackWhatsAppMessage = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/track-whatsapp`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: 'Failed to track WhatsApp message' };
+    });
 
 export const mapCompanyBootcamp = (payload) =>
   axios
@@ -261,3 +288,73 @@ export const tutorSignOffQCTOLW = (assessmentId, submissionId, tutorSignature = 
     })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+// Student enrolled bootcamps
+export const getEnrolledBootcamps = () => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  
+  return axios
+    .get(`${BASE_URL}/bootcamp/enrolled`, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { enrolledBootcamps: [] };
+    });
+};
+
+// Archive a bootcamp
+export const archiveBootcamp = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  
+  return axios
+    .post(`${BASE_URL}/bootcamp/archive/${bootcampId}`, {}, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: "Failed to archive bootcamp" };
+    });
+};
+
+// Archive multiple bootcamps
+export const archiveManyBootcamps = (bootcampIds) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  
+  return axios
+    .post(`${BASE_URL}/bootcamp/archive-many`, { bootcampIds }, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: "Failed to archive bootcamps" };
+    });
+};
+
+// Get bootcamp config for editing
+export const getBootcampConfig = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  
+  return axios
+    .get(`${BASE_URL}/bootcamp/config/${bootcampId}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: "Failed to get bootcamp config" };
+    });
+};
+
+// Edit bootcamp configuration
+export const editBootcampConfig = (bootcampId, config) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  
+  return axios
+    .put(`${BASE_URL}/bootcamp/config/${bootcampId}`, config, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: "Failed to update bootcamp config" };
+    });
+};
