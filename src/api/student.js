@@ -272,6 +272,19 @@ export const getUserBootcampAnalytics = (user_id, bootcamp_id) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Tutor bootcamps with average progress and student count */
+export const getTutorBootcampsWithProgress = async (tutorId) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${tutorId}/tutor-bootcamps-summary`
+    );
+    return response?.data?.data ?? [];
+  } catch (error) {
+    console.log(error);
+    return [];
+  }
+};
+
 export const getUserBootcampAnalyticsForTutor = async (
   tutorid,
   bootcamp_id
@@ -280,7 +293,6 @@ export const getUserBootcampAnalyticsForTutor = async (
     const response = await axios.get(
       API_URL + `/${tutorid}/tutor-bootcamp/${bootcamp_id}`
     );
-    console.log(response.data);
     return response.data;
   } catch (error) {
     console.log(error);
@@ -382,6 +394,19 @@ export const getBootcampAssignment = async (userid, courseid) => {
   } catch (error) {
     console.log(error);
     return [];
+  }
+};
+
+/** Get a student's Google Classroom assignments (graded + not graded) for tutor view */
+export const getStudentGoogleClassroomAssignments = async (userid) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/student/${userid}/google-classroom/assignments`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return { success: false, data: [] };
   }
 };
 

@@ -339,20 +339,33 @@ const AnalyticsTable = ({
                           </span>
                         </td>
 
-                        {/* View Calendar */}
+                        {/* View Calendar / Student Profile */}
                         <td className="px-4 py-4 text-center">
-                          <button
-                            className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              window.open(
-                                `https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`,
-                                "_blank"
-                              );
-                            }}
-                          >
-                            View
-                          </button>
+                          <div className="flex items-center justify-center gap-2 flex-wrap">
+                            <button
+                              className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                window.open(
+                                  `https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`,
+                                  "_blank"
+                                );
+                              }}
+                            >
+                              View
+                            </button>
+                            <button
+                              className="px-3 py-1.5 bg-teal-600/20 text-teal-400 hover:bg-teal-600/30 rounded-lg text-xs font-medium transition-colors"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (ba?.userid?._id) {
+                                  navigate(`/student-profile/${ba.userid._id}`);
+                                }
+                              }}
+                            >
+                              Profile
+                            </button>
+                          </div>
                         </td>
 
                         {/* Account Status */}
