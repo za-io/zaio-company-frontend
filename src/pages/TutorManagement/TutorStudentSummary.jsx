@@ -246,9 +246,19 @@ const StudentSummary = () => {
                 });
               });
             });
-            if (flat.length > 0) {
-              const sum = flat.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0);
-              gcAssignmentAvg = sum / flat.length;
+            // Separate project assignment (CSTN, capstone, final, etc.) from regular assignments
+            const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
+            const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
+            
+            // Project Mark from the identified project assignment (overrides stored finalprojectmark)
+            const finalProjectMarkFromGc = projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
+              ? Number(projectAssignment.mark)
+              : null;
+            
+            // Assignments average only from regular assignments (exclude project)
+            if (regularAssignments.length > 0) {
+              const sum = regularAssignments.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0);
+              gcAssignmentAvg = sum / regularAssignments.length;
             }
           }
         } catch (_) {}
@@ -268,12 +278,29 @@ const StudentSummary = () => {
           flat = assignmentResults.flatMap((r) => r.list || []);
         }
 
+        // Final determination of project mark from GC or stored value (after all fetching)
+        let projectMarkToUse = res.data[0]?.finalprojectmark || 0;
+        if (flat.length > 0) {
+          const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
+          const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
+          const finalProjectMarkFromGc = projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
+            ? Number(projectAssignment.mark)
+            : null;
+          if (regularAssignments.length > 0) {
+            const sum = regularAssignments.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0);
+            gcAssignmentAvg = sum / regularAssignments.length;
+          }
+          if (finalProjectMarkFromGc != null && finalProjectMarkFromGc > 0) {
+            projectMarkToUse = finalProjectMarkFromGc;
+          }
+        }
+
         const finalModuleMarkWithGc = Math.min(100, parseFloat((avgModuleMarks * 0.5 + gcAssignmentAvg * 0.5).toFixed(2)));
-        const newFinalMarkWithGc = Math.min(100, Math.round(finalModuleMarkWithGc * 0.6 + (Number(res.data[0]?.finalprojectmark) || 0) * 0.4));
+        const newFinalMarkWithGc = Math.min(100, Math.round(finalModuleMarkWithGc * 0.6 + (Number(projectMarkToUse) || 0) * 0.4));
 
         setModuleMarkAvg(finalModuleMarkWithGc);
         setUserSummary(userSummaryWithAvg);
-        setFinalProjectMark(res.data[0].finalprojectmark);
+        setFinalProjectMark(projectMarkToUse);
         setCourseMark(newFinalMarkWithGc);
         setAllAssignments(flat);
       }
@@ -287,6 +314,20 @@ const StudentSummary = () => {
   const handleRefresh = async () => {
     await fetchUserSummary();
   }
+
+  // Check if an assignment is a Project/Capstone (for Project Mark, not Assignments avg)
+  const isProjectAssignment = (title) => {
+    if (!title || typeof title !== "string") return false;
+    const lower = title.toLowerCase();
+    return (
+      lower.includes("cstn") ||
+      lower.includes("capstone") ||
+      lower.includes("cap stone") ||
+      /\bcap\b/.test(lower) ||
+      lower.includes("final project") ||
+      /\bfinal\b/.test(lower)
+    );
+  };
   
   // MCQ % = actual marks (e.g. 79%), not completion (14/14). Same for challenges: use averageMarks.
   const getMcqPercent = (module) => {
