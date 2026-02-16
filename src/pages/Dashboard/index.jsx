@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getAllBootcamps, getAllOCCohorts } from "../../api/company";
+import { getAllBootcamps, getAllOCCohorts, getMyTutorBookings } from "../../api/company";
 import { searchStudents } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import ActiveBootcampsTable from "../../components/ActiveBootcamps/ActiveBootcampsTable";
@@ -101,6 +101,127 @@ const StudentSearch = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// Tutor: group upcoming bookings into today, tomorrow, rest of week
+const TIMEZONE = "Africa/Harare";
+const formatBookingTime = (dateStr) =>
+  new Date(dateStr).toLocaleString("en-GB", {
+    timeZone: TIMEZONE,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+function bucketBookings(upcoming) {
+  const list = upcoming || [];
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const tomorrowEnd = new Date(tomorrowStart);
+  tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+
+  const today = list.filter((b) => {
+    const start = new Date(b.start);
+    return start >= todayStart && start < tomorrowStart;
+  });
+  const tomorrow = list.filter((b) => {
+    const start = new Date(b.start);
+    return start >= tomorrowStart && start < tomorrowEnd;
+  });
+  const restOfWeek = list.filter((b) => {
+    const start = new Date(b.start);
+    return start >= tomorrowEnd;
+  });
+  return { today, tomorrow, restOfWeek };
+}
+
+const TutorDashboardBookings = () => {
+  const [loading, setLoading] = useState(true);
+  const [bookings, setBookings] = useState({ today: [], tomorrow: [], restOfWeek: [] });
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getMyTutorBookings()
+      .then((res) => {
+        if (cancelled || !res?.success) return;
+        const upcoming = Array.isArray(res.upcoming) ? res.upcoming : [];
+        setBookings(bucketBookings(upcoming));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const BookingCard = ({ b }) => (
+    <div className="flex justify-between items-start flex-wrap gap-2 p-4 rounded-xl bg-white/5 border border-white/10">
+      <div>
+        <p className="text-white font-medium">{b.studentId?.username || b.studentId?.email || "Student"}</p>
+        <p className="text-gray-500 text-sm">{formatBookingTime(b.start)}</p>
+        {b.learningPathId?.learningpathname && (
+          <p className="text-gray-400 text-sm mt-0.5">Bootcamp: {b.learningPathId.learningpathname}</p>
+        )}
+      </div>
+      {b.meetLink && (
+        <a href={b.meetLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline text-sm font-medium whitespace-nowrap">
+          Join meeting
+        </a>
+      )}
+    </div>
+  );
+
+  if (loading) return <Loader />;
+
+  return (
+    <div className="max-w-3xl">
+      <h1 className="text-2xl font-bold text-white mb-1">My bookings</h1>
+      <p className="text-gray-400 mb-6">Your scheduled sessions for today, tomorrow and the rest of the week.</p>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-white mb-3">Today</h2>
+        {bookings.today.length === 0 ? (
+          <p className="text-gray-500 text-sm">No sessions today.</p>
+        ) : (
+          <ul className="space-y-2">
+            {bookings.today.map((b) => (
+              <li key={b._id}><BookingCard b={b} /></li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-white mb-3">Tomorrow</h2>
+        {bookings.tomorrow.length === 0 ? (
+          <p className="text-gray-500 text-sm">No sessions tomorrow.</p>
+        ) : (
+          <ul className="space-y-2">
+            {bookings.tomorrow.map((b) => (
+              <li key={b._id}><BookingCard b={b} /></li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-white mb-3">Rest of the week</h2>
+        {bookings.restOfWeek.length === 0 ? (
+          <p className="text-gray-500 text-sm">No other sessions this week.</p>
+        ) : (
+          <ul className="space-y-2">
+            {bookings.restOfWeek.map((b) => (
+              <li key={b._id}><BookingCard b={b} /></li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 };
@@ -319,43 +440,7 @@ const Dashboard = () => {
       )}
 
       {["TUTOR"]?.includes(user?.role) && (
-        <>
-          {/* <h1 className="text-4xl font-bold text-gray-100">Bootcamps:</h1>
-          {user?.bootcamps?.length > 0 && (
-            <div className="grid grid-cols-3 gap-16 mt-12">
-              {user?.bootcamps?.map((program) => (
-                <div
-                  key={program.id}
-                  className="flex flex-col w-full h-full bg-gray-200 rounded-xl"
-                >
-                  <div className="p-2 flex flex-col items-center justify-center">
-                    <h1 className="text-4xl font-bold mt-2">
-                      {program.bootcampName}
-                    </h1>
-
-                    <Link
-                      to={`/student/analytics?bootcamp=${program._id}`}
-                      state={{
-                        program,
-                      }}
-                      className="w-full"
-                    >
-                      <button className="bg-blue-700 w-full py-2 rounded-xl mt-2 text-gray-100">
-                        View Users
-                      </button>
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )} */}
-          <Link
-            to={"/tutor/analytics"}
-            className="bg-blue-500 ms-4 px-12 py-3 rounded font-medium text-white"
-          >
-            Analytics
-          </Link>
-        </>
+        <TutorDashboardBookings />
       )}
 
       {loading && <Loader />}

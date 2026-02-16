@@ -250,6 +250,11 @@ const StudentSummary = () => {
             const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
             const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
             
+            console.log("🔍 [First Pass] Assignment Breakdown:");
+            console.log("  Total assignments:", flat.length);
+            console.log("  Project assignment:", projectAssignment ? (projectAssignment.title || projectAssignment.name) : "None found");
+            console.log("  Regular assignments count:", regularAssignments.length);
+            
             // Project Mark from the identified project assignment (overrides stored finalprojectmark)
             const finalProjectMarkFromGc = projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
               ? Number(projectAssignment.mark)
@@ -257,8 +262,11 @@ const StudentSummary = () => {
             
             // Assignments average only from regular assignments (exclude project)
             if (regularAssignments.length > 0) {
-              const sum = regularAssignments.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0);
+              const marks = regularAssignments.map((a) => a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0);
+              const sum = marks.reduce((acc, m) => acc + m, 0);
               gcAssignmentAvg = sum / regularAssignments.length;
+              console.log("  [First Pass] Regular marks:", marks);
+              console.log("  [First Pass] Average:", gcAssignmentAvg);
             }
           }
         } catch (_) {}
@@ -283,15 +291,36 @@ const StudentSummary = () => {
         if (flat.length > 0) {
           const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
           const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
+          
+          console.log("🔍 Assignment Breakdown:");
+          console.log("  Total assignments:", flat.length);
+          console.log("  All assignment titles:", flat.map(a => a.title || a.name));
+          console.log("  Project assignment:", projectAssignment ? (projectAssignment.title || projectAssignment.name) : "None found");
+          console.log("  Regular assignments:", regularAssignments.length);
+          console.log("  Regular assignment titles:", regularAssignments.map(a => a.title || a.name));
+          
           const finalProjectMarkFromGc = projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
             ? Number(projectAssignment.mark)
             : null;
+          
           if (regularAssignments.length > 0) {
-            const sum = regularAssignments.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0);
+            const marks = regularAssignments.map((a) => a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0);
+            const sum = marks.reduce((acc, m) => acc + m, 0);
             gcAssignmentAvg = sum / regularAssignments.length;
+            console.log("  Regular assignment marks:", marks);
+            console.log("  Sum:", sum);
+            console.log("  Average (gcAssignmentAvg):", gcAssignmentAvg);
           }
+          
+          if (projectAssignment) {
+            console.log("  Project assignment mark:", projectAssignment.mark);
+          }
+          
           if (finalProjectMarkFromGc != null && finalProjectMarkFromGc > 0) {
             projectMarkToUse = finalProjectMarkFromGc;
+            console.log("  Using GC project mark:", projectMarkToUse);
+          } else {
+            console.log("  Using stored project mark:", projectMarkToUse);
           }
         }
 
@@ -534,8 +563,10 @@ const StudentSummary = () => {
             {showWorking && userSummary.length > 0 && (() => {
               const n = userSummary.length;
               const avgModuleMarks = userSummary.reduce((acc, m) => acc + parseFloat(m?.moduleMark || 0), 0) / n;
-              const assignmentAvgUsed = allAssignments.length > 0
-                ? allAssignments.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0) / allAssignments.length
+              // Filter out project assignment for assignments average display
+              const regularAssignmentsForDisplay = allAssignments.filter((a) => !isProjectAssignment(a.title || a.name));
+              const assignmentAvgUsed = regularAssignmentsForDisplay.length > 0
+                ? regularAssignmentsForDisplay.reduce((acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0), 0) / regularAssignmentsForDisplay.length
                 : userSummary.reduce((acc, m) => acc + parseFloat(m?.assignmentAvg || 0), 0) / n;
               const finalModuleMark = Math.min(100, parseFloat((avgModuleMarks * 0.5 + assignmentAvgUsed * 0.5).toFixed(2)));
               const projectMark = Number(finalProjectMark) || 0;
@@ -573,8 +604,8 @@ const StudentSummary = () => {
                   <div className="space-y-1">
                     <p className="font-medium text-gray-300">3. Assignments average (Google Classroom)</p>
                     <p className="text-gray-400">
-                      {allAssignments.length > 0
-                        ? `${allAssignments.length} assignment(s): average = ${assignmentAvgUsed.toFixed(2)}%`
+                      {regularAssignmentsForDisplay.length > 0
+                        ? `${regularAssignmentsForDisplay.length} assignment(s): average = ${assignmentAvgUsed.toFixed(2)}%`
                         : `Per-module assignment averages: ${assignmentAvgUsed.toFixed(2)}%`}
                     </p>
                   </div>

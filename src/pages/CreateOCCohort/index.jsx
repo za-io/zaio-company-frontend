@@ -7,14 +7,32 @@ const inputClass =
   "w-full px-4 py-3 rounded-lg border border-gray-600 bg-[#0D1117] text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 const labelClass = "block text-sm font-medium text-gray-400 mb-2";
 
+const COHORT_NAME_OPTIONS = [
+  "AI Developer",
+  "Software Developer",
+  "Cyber Security Analyst",
+  "Data Science Practitioner",
+];
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const getYearOptions = () => {
+  const currentYear = new Date().getFullYear();
+  return [currentYear, currentYear + 1, currentYear + 2];
+};
+
 const CreateOCCohort = () => {
   const { user } = useUserStore();
   const [loading, setLoading] = useState(false);
   const [lpList, setLpList] = useState([]);
+  const [qctoLpList, setQctoLpList] = useState([]);
   const [msg, setMsg] = useState(null);
   const [formData, setFormData] = useState({
-    cohortName: "",
+    cohortNameBase: "",
+    cohortMonth: "",
+    cohortYear: "",
     learningPath: "",
+    nonQctoLearningPath: "",
     studentEmails: "",
     date: new Date().toISOString().split("T")[0],
   });
@@ -22,11 +40,10 @@ const CreateOCCohort = () => {
   useEffect(() => {
     const fetchLearningPaths = () => {
       setLoading(true);
-      getAllLPs()
-        .then((res) => {
-          if (res?.status === 200) {
-            setLpList(res?.allLps || []);
-          }
+      Promise.all([getAllLPs(false), getAllLPs(true)])
+        .then(([allRes, qctoRes]) => {
+          if (allRes?.status === 200) setLpList(allRes?.allLps || []);
+          if (qctoRes?.status === 200) setQctoLpList(qctoRes?.allLps || []);
         })
         .catch((err) => {
           console.error("Error fetching learning paths:", err);
@@ -42,18 +59,29 @@ const CreateOCCohort = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === "learningPath" && prev.nonQctoLearningPath === value) {
+        next.nonQctoLearningPath = "";
+      }
+      if (name === "nonQctoLearningPath" && prev.learningPath === value) {
+        next.nonQctoLearningPath = "";
+      }
+      return next;
+    });
   };
+
+  const generatedCohortName =
+    formData.cohortNameBase && formData.cohortMonth && formData.cohortYear
+      ? `${formData.cohortNameBase} ${formData.cohortMonth} ${formData.cohortYear}`
+      : "";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMsg(null);
 
-    if (!formData.cohortName.trim()) {
-      setMsg("Please enter a cohort name");
+    if (!formData.cohortNameBase || !formData.cohortMonth || !formData.cohortYear) {
+      setMsg("Please select occupation, month and year for the cohort name");
       return;
     }
 
@@ -67,11 +95,14 @@ const CreateOCCohort = () => {
       return;
     }
 
+    const cohortName = `${formData.cohortNameBase} ${formData.cohortMonth} ${formData.cohortYear}`;
+
     setLoading(true);
     try {
       const payload = {
-        cohortName: formData.cohortName,
+        cohortName,
         learningPath: formData.learningPath,
+        nonQctoLearningPath: formData.nonQctoLearningPath || undefined,
         studentEmails: formData.studentEmails,
         date: formData.date,
         company_id: user?._id,
@@ -88,8 +119,11 @@ const CreateOCCohort = () => {
           }`
         );
         setFormData({
-          cohortName: "",
+          cohortNameBase: "",
+          cohortMonth: "",
+          cohortYear: "",
           learningPath: "",
+          nonQctoLearningPath: "",
           studentEmails: "",
           date: new Date().toISOString().split("T")[0],
         });
@@ -129,27 +163,78 @@ const CreateOCCohort = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Cohort Name */}
+          {/* Cohort Name: Occupation + Month + Year */}
           <div>
-            <label htmlFor="cohortName" className={labelClass}>
+            <label className={labelClass}>
               Occupation Certificate Cohort Name
             </label>
-            <input
-              className={inputClass}
-              name="cohortName"
-              id="cohortName"
-              type="text"
-              placeholder="Enter cohort name"
-              value={formData.cohortName}
-              onChange={handleInputChange}
-              required
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="cohortNameBase" className="sr-only">Occupation</label>
+                <select
+                  className={inputClass}
+                  name="cohortNameBase"
+                  id="cohortNameBase"
+                  value={formData.cohortNameBase}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Occupation</option>
+                  {COHORT_NAME_OPTIONS.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="cohortMonth" className="sr-only">Month</label>
+                <select
+                  className={inputClass}
+                  name="cohortMonth"
+                  id="cohortMonth"
+                  value={formData.cohortMonth}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Month</option>
+                  {MONTH_NAMES.map((month, i) => (
+                    <option key={month} value={month}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="cohortYear" className="sr-only">Year</label>
+                <select
+                  className={inputClass}
+                  name="cohortYear"
+                  id="cohortYear"
+                  value={formData.cohortYear}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Year</option>
+                  {getYearOptions().map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {generatedCohortName && (
+              <p className="text-gray-400 text-sm mt-2">
+                Cohort name: <span className="text-white font-medium">{generatedCohortName}</span>
+              </p>
+            )}
           </div>
 
-          {/* Learning Path */}
+          {/* OC (QCTO) Learning Path */}
           <div>
             <label htmlFor="learningPath" className={labelClass}>
-              Select OC Learning Path
+              Select OC (QCTO) Learning Path
             </label>
             <select
               className={inputClass}
@@ -159,13 +244,39 @@ const CreateOCCohort = () => {
               onChange={handleInputChange}
               required
             >
-              <option value="">-- Select Learning Path --</option>
-              {lpList.map((lp) => (
+              <option value="">-- Select OC Learning Path --</option>
+              {qctoLpList.map((lp) => (
                 <option key={lp._id} value={lp._id}>
                   {lp.learningpathname}
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Non-QCTO Learning Path (optional – students enrolled in both) */}
+          <div>
+            <label htmlFor="nonQctoLearningPath" className={labelClass}>
+              Non-QCTO Learning Path (optional)
+            </label>
+            <select
+              className={inputClass}
+              name="nonQctoLearningPath"
+              id="nonQctoLearningPath"
+              value={formData.nonQctoLearningPath}
+              onChange={handleInputChange}
+            >
+              <option value="">-- None (OC path only) --</option>
+              {lpList
+                .filter((lp) => lp._id !== formData.learningPath && !qctoLpList.some((q) => q._id === lp._id))
+                .map((lp) => (
+                  <option key={lp._id} value={lp._id}>
+                    {lp.learningpathname}
+                  </option>
+                ))}
+            </select>
+            <p className="text-gray-500 text-xs mt-1">
+              If selected, students will be enrolled in both the OC learning path and this non-QCTO path.
+            </p>
           </div>
 
           {/* Student Emails */}

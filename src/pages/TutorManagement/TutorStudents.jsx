@@ -127,13 +127,14 @@ export default function TutorStudents() {
                       <th className="px-4 py-2 text-left text-sm font-medium text-white">Status</th>
                       <th className="px-4 py-2 text-left text-sm font-medium text-white">Modules complete</th>
                       <th className="px-4 py-2 text-left text-sm font-medium text-white">End date</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium text-white">Classroom linked</th>
                       <th className="px-4 py-2 text-left text-sm font-medium text-white">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
                     {!bootcamps?.length && !deferred?.length && !loading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                        <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                           No students in this bootcamp.
                         </td>
                       </tr>
@@ -181,6 +182,13 @@ export default function TutorStudents() {
                               {isDeferred && student?.deferredDetails?.newBootcampEndDate
                                 ? new Date(student.deferredDetails.newBootcampEndDate).toLocaleDateString()
                                 : "—"}
+                            </td>
+                            <td className="px-4 py-2">
+                              {student?.linkedGoogleClassroomCourseId && String(student.linkedGoogleClassroomCourseId).trim() ? (
+                                <span className="text-green-400 text-sm font-medium">Yes</span>
+                              ) : (
+                                <span className="text-gray-500 text-sm">No</span>
+                              )}
                             </td>
                             <td className="px-4 py-2">
                               <div className="flex items-center gap-3 flex-wrap">

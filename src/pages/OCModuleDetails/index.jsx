@@ -4,6 +4,7 @@ import { getOCModuleDetails } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useUserStore } from "../../store/UserProvider";
 import { FaPlay, FaFileAlt, FaBook, FaTools } from "react-icons/fa";
+import styles from "./OCModuleDetails.module.css";
 
 const OCModuleDetails = () => {
   const { studentId, moduleId } = useParams();
@@ -71,16 +72,16 @@ const OCModuleDetails = () => {
     }
   }, [moduleId, studentId, navigate]);
 
-  const getStatusColor = (status) => {
+  const getStatusClass = (status) => {
     switch (status) {
       case "Completed":
-        return "bg-green-500";
+        return styles.completed;
       case "In Progress":
-        return "bg-yellow-500";
+        return styles.inProgress;
       case "Not Started":
-        return "bg-gray-500";
+        return styles.notStarted;
       default:
-        return "bg-gray-500";
+        return styles.notStarted;
     }
   };
 
@@ -113,33 +114,24 @@ const OCModuleDetails = () => {
     return item;
   };
 
-  // Get lecture/assignment type icon
+  // Get lecture/assignment type icon and icon class for navy theme
   const getItemIcon = (item) => {
     if (!item || typeof item !== 'object') {
-      return <FaFileAlt className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0" />;
+      return <FaFileAlt className={`${styles.itemIcon} ${styles.default}`} />;
     }
-
-    // Check for QCTO Summative Assessment
     if (item.type === "qctosa" || item.isQCTOAssessment || item.qctosummativeid) {
-      return <FaFileAlt className="w-5 h-5 text-purple-500 mr-2 flex-shrink-0" />;
+      return <FaFileAlt className={`${styles.itemIcon} ${styles.qctosa}`} />;
     }
-
-    // Check for QCTO Learner Workbook
     if (item.type === "qctolw" || item.isQCTOLW || item.qctolwid) {
-      return <FaBook className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />;
+      return <FaBook className={`${styles.itemIcon} ${styles.qctolw}`} />;
     }
-
-    // Check for QCTO Practical Module Task
     if (item.type === "qctopmt" || item.isQCTOPMT || item.qctopmtid) {
-      return <FaTools className="w-5 h-5 text-orange-500 mr-2 flex-shrink-0" />;
+      return <FaTools className={`${styles.itemIcon} ${styles.qctopmt}`} />;
     }
-
-    // Default: Regular video lecture (for lectures) or assignment (for assignments)
     if (item.type === "lecture" || item.lecturename) {
-      return <FaPlay className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" />;
+      return <FaPlay className={`${styles.itemIcon} ${styles.lecture}`} />;
     }
-
-    return <FaFileAlt className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0" />;
+    return <FaFileAlt className={`${styles.itemIcon} ${styles.default}`} />;
   };
 
   // Handle lecture click - open in watch page
@@ -246,202 +238,170 @@ const OCModuleDetails = () => {
 
   if (loading) {
     return (
-      <div className="px-36 py-12">
-        <p className="text-white">Loading module details...</p>
+      <div className={styles.page}>
+        <div className={styles.loadingWrap}>
+          <Loader />
+          <p>Loading module details…</p>
+        </div>
       </div>
     );
   }
 
   if (!moduleData) {
     return (
-      <div className="px-36 py-12">
-        <p className="text-white">Module not found</p>
-        <button
-          onClick={() => navigate("/oc-programs")}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-medium mt-4"
-        >
-          ← Back to OC Programs
-        </button>
+      <div className={styles.page}>
+        <div className={styles.errorWrap}>
+          <p className={styles.errorText}>Module not found</p>
+          <button
+            type="button"
+            onClick={() => navigate("/oc-programs")}
+            className={styles.backToPrograms}
+          >
+            ← Back to OC Programs
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="px-36 py-12">
-      <div className="mb-6">
+    <div className={styles.page}>
+      <div className={styles.header}>
         <button
+          type="button"
           onClick={() => window.close()}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-medium mb-4"
+          className={styles.backBtn}
         >
           ← Close Tab
         </button>
-        <h1 className="text-4xl font-bold text-gray-100 mb-2">{moduleData.name}</h1>
-        <div className="flex items-center space-x-4">
-          <span
-            className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full text-white ${getStatusColor(
-              moduleData.status
-            )}`}
-          >
+        <h1 className={styles.title}>{moduleData.name}</h1>
+        <div className={styles.meta}>
+          <span className={`${styles.statusBadge} ${getStatusClass(moduleData.status)}`}>
             {moduleData.status}
           </span>
           {moduleData.score !== null && (
-            <span className="text-white text-lg">Score: {moduleData.score}%</span>
+            <span className={styles.score}>Score: {moduleData.score}%</span>
           )}
           {studentData && (
-            <span className="text-gray-300">Student: {studentData.name}</span>
+            <span className={styles.studentName}>Student: {studentData.name}</span>
           )}
         </div>
       </div>
 
       {moduleData.units && moduleData.units.length > 0 ? (
-        <div className="space-y-4">
+        <div className={styles.unitList}>
           {moduleData.units.map((unit) => {
-            const isExpanded = expandedUnits[unit.id] !== false; // Default to true
+            const isExpanded = expandedUnits[unit.id] !== false;
             return (
-              <div key={unit.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                {/* Unit Header - Clickable */}
+              <div key={unit.id} className={styles.unitCard}>
                 <button
+                  type="button"
                   onClick={() => toggleUnit(unit.id)}
-                  className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+                  className={styles.unitHeader}
                 >
-                  <h2 className="text-xl font-bold text-gray-800">{unit.name}</h2>
+                  <h2 className={styles.unitTitle}>{unit.name}</h2>
                   <svg
-                    className={`w-5 h-5 text-gray-500 transition-transform ${
-                      isExpanded ? "transform rotate-180" : ""
-                    }`}
+                    className={`${styles.chevron} ${isExpanded ? styles.expanded : ""}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
-                {/* Collapsible Content */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-gray-200">
+                  <div className={styles.unitBody}>
                     {unit.lectures && unit.lectures.length > 0 && (
-                      <div className="mt-4">
-                        <h3 className="text-md font-semibold text-gray-700 mb-3">Lectures</h3>
-                        <ul className="space-y-2">
+                      <>
+                        <h3 className={styles.sectionTitle}>Lectures</h3>
+                        <ul className={styles.itemList}>
                           {unit.lectures.map((lecture, idx) => {
                             const isCompleted = isItemCompleted(lecture, "lecture");
                             const lectureName = getItemName(lecture);
-                            const isClickable = lecture && typeof lecture === 'object' && lecture.id;
+                            const isClickable = lecture && typeof lecture === "object" && lecture.id;
                             return (
                               <li
                                 key={lecture.id || idx}
-                                className={`flex items-center text-gray-700 pl-4 ${
-                                  isClickable ? "cursor-pointer hover:bg-gray-50 rounded px-2 py-1" : ""
-                                }`}
+                                className={styles.item}
                                 onClick={() => isClickable && handleLectureClick(lecture, unit)}
+                                onKeyDown={(e) => isClickable && (e.key === "Enter" || e.key === " ") && handleLectureClick(lecture, unit)}
+                                role={isClickable ? "button" : null}
+                                tabIndex={isClickable ? 0 : undefined}
                               >
-                                {/* Type icon */}
                                 {getItemIcon(lecture)}
-                                {/* Completion checkmark */}
                                 {isCompleted && (
-                                  <svg
-                                    className="w-4 h-4 text-green-500 mr-1 flex-shrink-0"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <path
-                                      fillRule="evenodd"
-                                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                      clipRule="evenodd"
-                                    />
+                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                   </svg>
                                 )}
-                                <span className={isClickable ? "text-blue-600 hover:text-blue-800 hover:underline" : ""}>
-                                  {lectureName}
-                                </span>
+                                <span className={styles.itemName}>{lectureName}</span>
                               </li>
                             );
                           })}
                         </ul>
-                      </div>
+                      </>
                     )}
 
-                          {unit.assignments && unit.assignments.length > 0 && (
-                      <div className="mt-4">
-                        <h3 className="text-md font-semibold text-gray-700 mb-3">Assignments</h3>
-                        <ul className="space-y-2">
+                    {unit.assignments && unit.assignments.length > 0 && (
+                      <>
+                        <h3 className={styles.sectionTitle}>Assignments</h3>
+                        <ul className={styles.itemList}>
                           {unit.assignments.map((assignment, idx) => {
                             const isCompleted = isItemCompleted(assignment, "assignment");
                             const assignmentName = getItemName(assignment);
                             return (
                               <li
                                 key={assignment.id || idx}
-                                className="flex items-center text-gray-700 pl-4 cursor-pointer hover:bg-gray-50 rounded px-2 py-1"
+                                className={styles.item}
                                 onClick={() => handleAssignmentClick(assignment)}
+                                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleAssignmentClick(assignment)}
+                                role="button"
+                                tabIndex={0}
                               >
-                                {/* Type icon */}
                                 {getItemIcon(assignment)}
-                                {/* Completion checkmark */}
                                 {isCompleted && (
-                                  <svg
-                                    className="w-4 h-4 text-green-500 mr-1 flex-shrink-0"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <path
-                                      fillRule="evenodd"
-                                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                      clipRule="evenodd"
-                                    />
+                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                   </svg>
                                 )}
-                                <span className="text-blue-600 hover:text-blue-800 hover:underline">
-                                  {assignmentName}
-                                </span>
+                                <span className={styles.itemName}>{assignmentName}</span>
                               </li>
                             );
                           })}
                         </ul>
-                      </div>
+                      </>
                     )}
 
                     {unit.quizzes && unit.quizzes.length > 0 && (
-                      <div className="mt-4">
-                        <h3 className="text-md font-semibold text-gray-700 mb-3">Quizzes</h3>
-                        <ul className="space-y-2">
+                      <>
+                        <h3 className={styles.sectionTitle}>Quizzes</h3>
+                        <ul className={styles.itemList}>
                           {unit.quizzes.map((quiz, idx) => {
                             const isCompleted = isItemCompleted(quiz, "quiz");
                             const quizName = getItemName(quiz);
                             return (
                               <li
                                 key={quiz.id || idx}
-                                className="flex items-center text-gray-700 pl-4 cursor-pointer hover:bg-gray-50 rounded px-2 py-1"
+                                className={styles.item}
                                 onClick={() => handleQuizClick(quiz)}
+                                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && handleQuizClick(quiz)}
+                                role="button"
+                                tabIndex={0}
                               >
                                 {isCompleted ? (
-                                  <svg
-                                    className="w-5 h-5 text-green-500 mr-2 flex-shrink-0"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
-                                  >
-                                    <path
-                                      fillRule="evenodd"
-                                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                      clipRule="evenodd"
-                                    />
+                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                   </svg>
                                 ) : (
-                                  <div className="w-5 h-5 mr-2 flex-shrink-0" />
+                                  <span className={styles.checkIcon} style={{ visibility: "hidden" }} aria-hidden>✓</span>
                                 )}
-                                <span className="text-blue-600 hover:text-blue-800 hover:underline">
-                                  {quizName}
-                                </span>
+                                <span className={styles.itemName}>{quizName}</span>
                               </li>
                             );
                           })}
                         </ul>
-                      </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -450,8 +410,8 @@ const OCModuleDetails = () => {
           })}
         </div>
       ) : (
-        <div className="bg-white rounded-lg p-6">
-          <p className="text-gray-600">No units available for this module.</p>
+        <div className={styles.emptyState}>
+          <p>No units available for this module.</p>
         </div>
       )}
     </div>

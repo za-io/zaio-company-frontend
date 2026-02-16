@@ -38,9 +38,9 @@ export const getAllcompanies = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const getAllLPs = () =>
+export const getAllLPs = (qctoOnly = false) =>
   axios
-    .get(API_URL + `/all/learningpaths`)
+    .get(API_URL + `/all/learningpaths`, qctoOnly ? { params: { qctoOnly: "true" } } : {})
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
@@ -229,6 +229,16 @@ export const getCohortStudents = (cohortId) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Add students to an existing OC cohort (comma-separated emails). Call createAccountsForEmails first if you want to create accounts and email new users. */
+export const addStudentsToOCCohort = (cohortId, payload) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/${cohortId}/add-students`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+
 export const assignAssessor = (cohortId, assessorId) =>
   axios
     .post(`${BASE_URL}/oc-cohort/${cohortId}/assign-assessor`, {
@@ -358,3 +368,74 @@ export const editBootcampConfig = (bootcampId, config) => {
       return { success: false, message: "Failed to update bootcamp config" };
     });
 };
+
+// ----- Tutor booking / availability (tutor dashboard) -----
+const tutorBookingHeaders = () => {
+  const token = localStorage.getItem("TOKEN");
+  return token ? { "auth-token": token } : {};
+};
+
+export const getMyTutorAvailability = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/availability`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, data: null };
+    });
+
+export const setMyTutorAvailability = (payload) =>
+  axios
+    .put(`${BASE_URL}/tutor-booking/availability`, payload, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to save" };
+    });
+
+export const getMyTutorBookings = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/tutor-bookings`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, data: [] };
+    });
+
+export const getMyTutorReviews = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/my-reviews`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, reviews: [] };
+    });
+
+export const getAdminTutorBookings = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/admin/all-bookings`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, bookings: [] };
+    });
+
+// Google Calendar: get OAuth URL to connect calendar (tutor)
+export const getGoogleCalendarAuthUrl = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/google-calendar/auth-url`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, authUrl: null, message: err?.response?.data?.message };
+    });
+
+// Google Calendar: disconnect (tutor)
+export const disconnectGoogleCalendar = () =>
+  axios
+    .post(`${BASE_URL}/tutor-booking/google-calendar/disconnect`, {}, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message };
+    });

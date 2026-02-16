@@ -10,6 +10,8 @@ import {
   getAllAssessors,
   getAllModerators,
   assignTutorToStudent,
+  createAccountsForEmails,
+  addStudentsToOCCohort,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
@@ -33,6 +35,11 @@ const ViewOCPrograms = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedTutor, setSelectedTutor] = useState("");
   const [tutors, setTutors] = useState([]);
+  const [showAddStudentsModal, setShowAddStudentsModal] = useState(false);
+  const [addStudentsEmails, setAddStudentsEmails] = useState("");
+  const [addStudentsCreateAccounts, setAddStudentsCreateAccounts] = useState(true);
+  const [addStudentsMessage, setAddStudentsMessage] = useState(null);
+  const [addStudentsSubmitting, setAddStudentsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchOCPrograms = async () => {
@@ -114,11 +121,6 @@ const ViewOCPrograms = () => {
     }
   }, [user]);
 
-  const getStudentCount = (emails) => {
-    if (!emails) return 0;
-    return emails.split(",").filter((email) => email.trim()).length;
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     try {
@@ -133,20 +135,16 @@ const ViewOCPrograms = () => {
     }
   };
 
+  const canAssignRoles = user?.role && ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user.role);
+
   const handleAssignAssessor = (program) => {
-    // Only allow admin roles to assign assessors
-    if (!user?.role || !["SUPER_ADMIN", "COMPANY_ADMIN"].includes(user.role)) {
-      return;
-    }
+    if (!canAssignRoles) return;
     setSelectedProgram(program);
     setShowAssessorModal(true);
   };
 
   const handleAssignModerator = (program) => {
-    // Only allow admin roles to assign moderators
-    if (!user?.role || !["SUPER_ADMIN", "COMPANY_ADMIN"].includes(user.role)) {
-      return;
-    }
+    if (!canAssignRoles) return;
     setSelectedProgram(program);
     setShowModeratorModal(true);
   };
@@ -233,10 +231,7 @@ const ViewOCPrograms = () => {
   };
 
   const handleAssignTutor = (student) => {
-    // Only allow admin roles to assign tutors
-    if (!user?.role || !["SUPER_ADMIN", "COMPANY_ADMIN"].includes(user.role)) {
-      return;
-    }
+    if (!canAssignRoles) return;
     if (!student.enrollmentId) {
       alert("Error: Student enrollment ID not found. Please refresh and try again.");
       return;
@@ -275,193 +270,322 @@ const ViewOCPrograms = () => {
     }
   };
 
+  const handleOpenAddStudents = (program) => {
+    setSelectedProgram(program);
+    setAddStudentsEmails("");
+    setAddStudentsMessage(null);
+    setShowAddStudentsModal(true);
+  };
+
+  const handleAddStudentsSubmit = async () => {
+    const emails = addStudentsEmails
+      .split(/[\s,]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (!emails.length) {
+      setAddStudentsMessage({ type: "error", text: "Enter at least one email." });
+      return;
+    }
+    if (!selectedProgram?._id) return;
+    setAddStudentsSubmitting(true);
+    setAddStudentsMessage(null);
+    try {
+      if (addStudentsCreateAccounts) {
+        await createAccountsForEmails({ emails });
+      }
+      const res = await addStudentsToOCCohort(selectedProgram._id, { emails: emails.join(",") });
+      if (res?.status === 200 && res?.success) {
+        setAddStudentsMessage({
+          type: "success",
+          text: res.message + (res.missingEmails?.length ? ` ${res.missingEmails.length} email(s) not found.` : ""),
+        });
+        setAddStudentsEmails("");
+        const listRes = await getAllOCCohorts(user?._id);
+        if (listRes?.status === 200 && listRes?.data) setOcPrograms(listRes.data);
+        setTimeout(() => {
+          setShowAddStudentsModal(false);
+          setSelectedProgram(null);
+        }, 2000);
+      } else {
+        setAddStudentsMessage({ type: "error", text: res?.message || "Enrollment failed." });
+      }
+    } catch (err) {
+      setAddStudentsMessage({
+        type: "error",
+        text: err?.response?.data?.message || err?.message || "Something went wrong.",
+      });
+    } finally {
+      setAddStudentsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="px-36 py-12">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-bold text-gray-100">OC Programs</h1>
-        {selectedProgram && showStudentsTable && (
-          <div className="flex space-x-4">
-            {/* Only show Assign Assessor/Moderator buttons for admin roles */}
-            {user?.role && ["SUPER_ADMIN", "COMPANY_ADMIN"].includes(user.role) && (
-              <>
-                <button
-                  onClick={() => handleAssignAssessor(selectedProgram)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded font-medium transition-colors"
-                >
-                  Assign Assessor
-                </button>
-                <button
-                  onClick={() => handleAssignModerator(selectedProgram)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded font-medium transition-colors"
-                >
-                  Assign Moderator
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => {
-                setShowStudentsTable(false);
-                setSelectedProgram(null);
-                setStudents([]);
-              }}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded font-medium transition-colors"
-            >
-              Back to Programs
-            </button>
-          </div>
-        )}
+    <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8">
+      {/* Page Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-1">OC Programs</h1>
+        <p className="text-gray-400">View and manage your Occupational Certificate cohorts and students</p>
       </div>
 
       {loading ? (
-        <Loader />
+        <div className="flex flex-col items-center justify-center py-24">
+          <Loader />
+          <p className="text-gray-400 mt-4">Loading…</p>
+        </div>
       ) : error ? (
-        <div className="text-red-500 text-lg">{error}</div>
+        <div className="bg-[#161B22] border border-gray-800 rounded-xl p-6 max-w-2xl">
+          <p className="text-red-400 text-lg">{error}</p>
+        </div>
       ) : showStudentsTable ? (
-        <div className="overflow-x-auto">
-          <h2 className="text-2xl font-bold text-gray-100 mb-4">
-            Students - {selectedProgram?.cohortName}
-          </h2>
-          {/* Debug info - remove after testing */}
-          <div className="mb-4 p-2 bg-gray-700 rounded text-sm text-yellow-200">
-            Debug: User Role = {user?.role || "undefined"} | Is Admin = {user?.role && (user.role === "SUPER_ADMIN" || user.role === "COMPANY_ADMIN") ? "YES" : "NO"} | Students Count = {students.length}
+        <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 max-w-7xl">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+            <h2 className="text-xl font-semibold text-white">
+              Students — {selectedProgram?.cohortName}
+            </h2>
+            <div className="flex flex-wrap gap-3">
+              {canAssignRoles && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleAssignAssessor(selectedProgram);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    Assign Assessor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleAssignModerator(selectedProgram);
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer"
+                  >
+                    Assign Moderator
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStudentsTable(false);
+                  setSelectedProgram(null);
+                  setStudents([]);
+                }}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer"
+              >
+                Back to Programs
+              </button>
+            </div>
           </div>
-          <table className="overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
-            <thead className="border-b text-2xl bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Email
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  ID Number
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Start Date
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Tutor
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {students.map((student) => (
-                <tr
-                  key={student.id}
-                  className="hover:bg-gray-100"
-                >
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {student.name}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {student.email}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {student.idNumber}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {formatDate(student.startDate)}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {student.tutor ? (
-                      <span className="text-green-600 font-semibold">
-                        {student.tutor.name}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 italic">Not Assigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    <div className="flex space-x-2">
-                      {user?.role && (user.role === "SUPER_ADMIN" || user.role === "COMPANY_ADMIN") && (
-                        <button
-                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs"
-                          onClick={() => handleAssignTutor(student)}
-                        >
-                          {student.tutor ? "Change Tutor" : "Assign Tutor"}
-                        </button>
-                      )}
-                    <button
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs"
-                      onClick={() => handleViewStudentDetails(student)}
-                    >
-                      View Details
-                    </button>
-                    </div>
-                  </td>
+          <div className="rounded-lg border border-gray-700 overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-800/80">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Email</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">ID Number</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Start Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Tutor</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {students.map((student) => (
+                  <tr key={student.id} className="hover:bg-gray-800/40 transition-colors">
+                    <td className="px-4 py-3 text-sm text-gray-200">{student.name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-200">{student.email}</td>
+                    <td className="px-4 py-3 text-sm text-gray-200">{student.idNumber || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-200">{formatDate(student.startDate)}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {student.tutor ? (
+                        <span className="text-emerald-400 font-medium">{student.tutor.name}</span>
+                      ) : (
+                        <span className="text-gray-500 italic">Not Assigned</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        {canAssignRoles && (
+                          <button
+                            type="button"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleAssignTutor(student);
+                            }}
+                          >
+                            {student.tutor ? "Change Tutor" : "Assign Tutor"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleViewStudentDetails(student);
+                          }}
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : ocPrograms.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-white text-xl">
-            No OC programs found. Create your first OC cohort to get started.
-          </p>
+        <div className="bg-[#161B22] rounded-xl border border-gray-800 p-12 max-w-2xl text-center">
+          <div className="w-14 h-14 rounded-xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+          </div>
+          <p className="text-gray-300 text-lg mb-1">No OC programs yet</p>
+          <p className="text-gray-500 text-sm">Create your first OC cohort to get started.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="overflow-hidden border rounded-lg min-w-full divide-y divide-gray-200 bg-white my-4">
-            <thead className="border-b text-2xl bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Cohort Name
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Learning Path
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Number of Students
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Date Created
-                </th>
-                <th className="px-6 py-3 text-xs font-bold text-left text-gray-500 uppercase">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {ocPrograms.map((program) => (
-                <tr
-                  key={program._id || program.id}
-                  className="hover:bg-gray-100"
-                >
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {program.cohortName || "N/A"}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {program.learningPathName || "N/A"}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {program.studentCount || 0}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    {formatDate(program.date || program.createdAt)}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
-                    <button
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs"
-                      onClick={() => handleViewStudents(program)}
-                    >
-                      View
-                    </button>
-                  </td>
+        <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 max-w-7xl">
+          <h2 className="text-lg font-semibold text-white mb-4">All cohorts</h2>
+          <div className="rounded-lg border border-gray-700 overflow-hidden">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-800/80">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Cohort Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Learning Path</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Students</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Date Created</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {ocPrograms.map((program) => (
+                  <tr key={program._id || program.id} className="hover:bg-gray-800/40 transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-white">{program.cohortName || "N/A"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-200">{program.learningPathName || "N/A"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-200">{program.studentCount ?? 0}</td>
+                    <td className="px-4 py-3 text-sm text-gray-200">{formatDate(program.date || program.createdAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        {canAssignRoles && (
+                          <button
+                            type="button"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenAddStudents(program);
+                            }}
+                          >
+                            Add students
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleViewStudents(program);
+                          }}
+                        >
+                          View
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
+
+      {/* Add students modal */}
+      <Modal
+        centered
+        dialogClassName="rounded-xl overflow-hidden"
+        contentClassName="bg-[#161B22] border border-gray-800"
+        show={showAddStudentsModal}
+        onHide={() => {
+          setShowAddStudentsModal(false);
+          setAddStudentsEmails("");
+          setAddStudentsMessage(null);
+          setSelectedProgram(null);
+        }}
+      >
+        <Modal.Header closeButton className="bg-gray-800/90 text-white border-gray-700">
+          <Modal.Title>Add students — {selectedProgram?.cohortName || "Cohort"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="bg-[#161B22] text-white">
+          <p className="text-gray-400 text-sm mb-4">
+            Enter comma-separated emails. Students will be enrolled in this OC program using the cohort&apos;s learning path and config.
+          </p>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Student emails</label>
+            <textarea
+              placeholder="student1@example.com, student2@example.com"
+              value={addStudentsEmails}
+              onChange={(e) => setAddStudentsEmails(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="mb-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="add-students-create-accounts"
+              checked={addStudentsCreateAccounts}
+              onChange={(e) => setAddStudentsCreateAccounts(e.target.checked)}
+              className="rounded border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500"
+            />
+            <label htmlFor="add-students-create-accounts" className="text-sm text-gray-300">
+              Create accounts and email students who don&apos;t have an account
+            </label>
+          </div>
+          {addStudentsMessage && (
+            <p className={`text-sm mb-4 ${addStudentsMessage.type === "error" ? "text-red-400" : "text-green-400"}`}>
+              {addStudentsMessage.text}
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddStudentsModal(false);
+                setAddStudentsEmails("");
+                setAddStudentsMessage(null);
+                setSelectedProgram(null);
+              }}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={addStudentsSubmitting}
+              onClick={handleAddStudentsSubmit}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {addStudentsSubmitting ? (addStudentsCreateAccounts ? "Enrolling…" : "Adding…") : "Add students"}
+            </button>
+          </div>
+        </Modal.Body>
+      </Modal>
 
       {/* Assign Assessor Modal */}
       <Modal
         centered
+        dialogClassName="rounded-xl overflow-hidden"
+        contentClassName="bg-[#161B22] border border-gray-800"
         show={showAssessorModal}
         onHide={() => {
           setShowAssessorModal(false);
@@ -469,10 +593,10 @@ const ViewOCPrograms = () => {
           setSelectedProgram(null);
         }}
       >
-        <Modal.Header closeButton className="bg-gray-800 text-white border-gray-700">
+        <Modal.Header closeButton className="bg-gray-800/90 text-white border-gray-700">
           <Modal.Title>Assign Assessor</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="bg-gray-800 text-white">
+        <Modal.Body className="bg-[#161B22] text-white">
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Select Assessor
@@ -515,6 +639,8 @@ const ViewOCPrograms = () => {
       {/* Assign Moderator Modal */}
       <Modal
         centered
+        dialogClassName="rounded-xl overflow-hidden"
+        contentClassName="bg-[#161B22] border border-gray-800"
         show={showModeratorModal}
         onHide={() => {
           setShowModeratorModal(false);
@@ -522,10 +648,10 @@ const ViewOCPrograms = () => {
           setSelectedProgram(null);
         }}
       >
-        <Modal.Header closeButton className="bg-gray-800 text-white border-gray-700">
+        <Modal.Header closeButton className="bg-gray-800/90 text-white border-gray-700">
           <Modal.Title>Assign Moderator</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="bg-gray-800 text-white">
+        <Modal.Body className="bg-[#161B22] text-white">
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Select Moderator
@@ -568,6 +694,8 @@ const ViewOCPrograms = () => {
       {/* Assign Tutor Modal */}
       <Modal
         centered
+        dialogClassName="rounded-xl overflow-hidden"
+        contentClassName="bg-[#161B22] border border-gray-800"
         show={showTutorModal}
         onHide={() => {
           setShowTutorModal(false);
@@ -575,12 +703,12 @@ const ViewOCPrograms = () => {
           setSelectedStudent(null);
         }}
       >
-        <Modal.Header closeButton className="bg-gray-800 text-white border-gray-700">
+        <Modal.Header closeButton className="bg-gray-800/90 text-white border-gray-700">
           <Modal.Title>
-            Assign Tutor - {selectedStudent?.name || "Student"}
+            Assign Tutor — {selectedStudent?.name || "Student"}
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body className="bg-gray-800 text-white">
+        <Modal.Body className="bg-[#161B22] text-white">
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Select Tutor

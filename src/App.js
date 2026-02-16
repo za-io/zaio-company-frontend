@@ -35,6 +35,11 @@ import { ViewTutor } from "./pages/Stu_Success_Manager/ViewTutor";
 import { ViewTutorBootcampAnalytics } from "./pages/Stu_Success_Manager/TutorBootcampAnalytics";
 import { TutorRefreshStatsPage } from "./pages/Stu_Success_Manager/TutorRefreshStatsPage";
 import SupportSessions from "./pages/SupportSessions";
+import TutorAvailability from "./pages/TutorAvailability";
+import MyBookings from "./pages/MyBookings";
+import MyReviews from "./pages/MyReviews";
+import TutorBookingsAdmin from "./pages/TutorBookingsAdmin";
+import TutorSettings from "./pages/TutorSettings";
 import CreateOCCohort from "./pages/CreateOCCohort";
 import ViewOCPrograms from "./pages/ViewOCPrograms";
 import OCStudentDetails from "./pages/OCStudentDetails";
@@ -57,6 +62,39 @@ const AppHelper = () => {
               // component={<TutorAnalytics />}
               component={<TutorBootcamps />}
             />
+          }
+        />
+        <Route
+          path="/tutor-availability"
+          element={
+            <ProtectedRoute
+              path="/tutor-availability"
+              component={<TutorAvailability />}
+            />
+          }
+        />
+        <Route
+          path="/my-bookings"
+          element={
+            <ProtectedRoute path="/my-bookings" component={<MyBookings />} />
+          }
+        />
+        <Route
+          path="/reviews"
+          element={
+            <ProtectedRoute path="/reviews" component={<MyReviews />} />
+          }
+        />
+        <Route
+          path="/tutor-settings"
+          element={
+            <ProtectedRoute path="/tutor-settings" component={<TutorSettings />} />
+          }
+        />
+        <Route
+          path="/tutor-bookings-admin"
+          element={
+            <ProtectedRoute path="/tutor-bookings-admin" component={<TutorBookingsAdmin />} />
           }
         />
         <Route
