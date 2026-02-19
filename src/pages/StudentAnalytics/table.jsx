@@ -8,7 +8,7 @@ import { WarningModal } from "./WarningModal";
 import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
-import { getAllTutors } from "../../api/company";
+import { getAllTutors, getEditTilesToken } from "../../api/company";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
 import { RxCheckCircled } from "react-icons/rx";
 
@@ -344,12 +344,21 @@ const AnalyticsTable = ({
                           <div className="flex items-center justify-center gap-2 flex-wrap">
                             <button
                               className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors"
-                              onClick={(event) => {
+                              onClick={async (event) => {
                                 event.stopPropagation();
-                                window.open(
-                                  `https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`,
-                                  "_blank"
-                                );
+                                const baseUrl = `https://www.zaio.io/app/zaio-profile/${ba?.userid?.email}`;
+                                const canEditTiles = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN"].includes(user?.role);
+                                if (canEditTiles && ba?.userid?.email) {
+                                  try {
+                                    const res = await getEditTilesToken(ba.userid.email);
+                                    const qs = res?.success && res?.token ? `?editTiles=${encodeURIComponent(res.token)}` : "";
+                                    window.open(baseUrl + qs, "_blank");
+                                  } catch {
+                                    window.open(baseUrl, "_blank");
+                                  }
+                                } else {
+                                  window.open(baseUrl, "_blank");
+                                }
                               }}
                             >
                               View

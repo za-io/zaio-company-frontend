@@ -94,6 +94,16 @@ export const fetchCalPreviewData = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Get short-lived token so student app allows this admin to edit calendar tile colours for the given student. */
+export const getEditTilesToken = (studentEmail) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${API_URL}/edit-tiles-token`, { studentEmail: studentEmail || "" }, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({ success: false, token: null }));
+};
+
 export const syncUserProgress = ({ learningpath, userid, date }) =>
   axios
     .get(
