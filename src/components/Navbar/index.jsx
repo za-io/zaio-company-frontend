@@ -20,7 +20,7 @@ const Navbar = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
+  
   const handleLogout = () => {
     localStorage.removeItem("TOKEN");
     localStorage.clear();
@@ -106,7 +106,7 @@ const Navbar = () => {
           {/* Left: Logo & User */}
           <Link to="/" className="flex items-center gap-3">
             <img className="h-8" src={logo} alt="Zaio" />
-            {user?.email && user?.role !== "TUTOR" && (
+          {user?.email && user?.role !== "TUTOR" && (
               <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-gray-700">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
                   {user?.company_username?.charAt(0)?.toUpperCase() || "U"}
@@ -115,8 +115,8 @@ const Navbar = () => {
                   {user?.company_username}
                 </span>
               </div>
-            )}
-          </Link>
+          )}
+        </Link>
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2">
@@ -275,7 +275,7 @@ const Navbar = () => {
 
             {/* Settings (tutors) */}
             {user?.email && user?.role === "TUTOR" && (
-              <button
+            <button
                 onClick={() => navigate("/tutor-settings")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   location.pathname === "/tutor-settings"
@@ -288,13 +288,13 @@ const Navbar = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <span className="hidden md:inline">Settings</span>
-              </button>
-            )}
-
+            </button>
+          )}
+          
             {/* View OC Programs */}
             {user?.email && canViewOC && (
-              <button
-                onClick={() => navigate("/oc-programs")}
+            <button
+              onClick={() => navigate("/oc-programs")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   location.pathname === "/oc-programs"
                     ? "bg-emerald-600 text-white"
@@ -305,26 +305,26 @@ const Navbar = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 <span className="hidden md:inline">OC Programs</span>
-              </button>
-            )}
-
+            </button>
+          )}
+          
             {/* Divider */}
             {user?.email && (
               <div className="w-px h-8 bg-gray-700 mx-1 hidden sm:block" />
             )}
 
             {/* Logout */}
-            {user?.email && (
-              <button
-                onClick={handleLogout}
+          {user?.email && (
+            <button
+              onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all"
-              >
+            >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
                 <span className="hidden sm:inline">Logout</span>
-              </button>
-            )}
+            </button>
+          )}
           </div>
         </div>
       </div>

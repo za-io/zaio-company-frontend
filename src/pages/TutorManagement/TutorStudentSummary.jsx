@@ -55,15 +55,15 @@ function Assignments({setAssignmentState, assignmentModule}) {
       <div className="flex justify-between items-center mb-3">
         <h1 className="text-lg font-bold text-white">
           {assignmentModule?.locationState?.userid?.username} / {assignmentModule?.module?.coursename} / Assignments
-        </h1>
-        <button
+            </h1>
+            <button
           type="button"
           className="p-2 rounded text-red-400 hover:bg-gray-700 transition"
           onClick={() => setAssignmentState(false)}
           aria-label="Close"
         >
           <RxCross1 className="w-5 h-5" />
-        </button>
+            </button>
       </div>
       <p className="text-gray-400 text-sm mb-3">Avg mark: {calculateAverage()}%</p>
 
@@ -77,9 +77,9 @@ function Assignments({setAssignmentState, assignmentModule}) {
         ) : (
           assignments.map((assignment, index) => (
             <div key={index} className="grid grid-cols-2 px-4 py-3 border-t border-gray-700 text-gray-300">
-              <div>{assignment.name}</div>
-              <div>{assignment.mark}%</div>
-            </div>
+            <div>{assignment.name}</div>
+            <div>{assignment.mark}%</div>
+          </div>
           ))
         )}
         {showInputRow && (
@@ -103,21 +103,21 @@ function Assignments({setAssignmentState, assignmentModule}) {
       </div>
 
       <div className="flex justify-end items-center gap-3 mt-4">
-        <button
+          <button
           type="button"
-          onClick={addAssignment}
+            onClick={addAssignment}
           className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition text-sm"
-        >
-          Add Assignment Data
-        </button>
-        <button
+          >
+            Add Assignment Data
+          </button>
+          <button
           type="button"
-          onClick={saveAssignment}
-          disabled={!showInputRow}
+            onClick={saveAssignment}
+            disabled={!showInputRow}
           className={`px-4 py-2 rounded text-sm transition ${showInputRow ? "bg-green-700 hover:bg-green-600 text-white" : "bg-gray-700 text-gray-400 cursor-not-allowed"}`}
-        >
-          Save
-        </button>
+          >
+            Save
+          </button>
       </div>
     </div>
   );
@@ -343,7 +343,7 @@ const StudentSummary = () => {
   const handleRefresh = async () => {
     await fetchUserSummary();
   }
-
+  
   // Check if an assignment is a Project/Capstone (for Project Mark, not Assignments avg)
   const isProjectAssignment = (title) => {
     if (!title || typeof title !== "string") return false;
@@ -497,15 +497,15 @@ const StudentSummary = () => {
                 className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition text-sm disabled:opacity-50"
               >
                 Refresh
-              </button>
-              <button
+        </button>
+        <button
                 type="button"
-                onClick={handlePassBootcamp}
+          onClick={handlePassBootcamp}
                 className="px-4 py-2 rounded bg-amber-600 text-white hover:bg-amber-500 transition text-sm"
-              >
+        >
                 Pass Bootcamp
-              </button>
-            </div>
+        </button>
+      </div>
 
             {/* Summary card - dark theme */}
             <div className="border border-gray-600 rounded-xl bg-gray-900/40 p-4 max-w-7xl w-full mb-4">
@@ -515,38 +515,38 @@ const StudentSummary = () => {
               </p>
               <p className="text-gray-300">{`Final Module Mark: ${modulemarkAvg}%`}</p>
               <p className="text-gray-300">
-                Final Project Mark:{" "}
-                {isEditingProjectMark ? (
+          Final Project Mark:{" "}
+          {isEditingProjectMark ? (
                   <span className="inline-flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={finalProjectMark}
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={finalProjectMark}
                       onChange={(e) => setFinalProjectMark(Number(e.target.value))}
                       className="w-16 px-2 py-1 rounded bg-gray-700 border border-gray-600 text-white"
-                    />
-                    <button
+              />
+              <button
                       type="button"
-                      onClick={handleSaveProjectMark}
+                onClick={handleSaveProjectMark}
                       className="px-2 py-1 rounded text-sm bg-green-600 text-white hover:bg-green-500"
-                    >
-                      Save
-                    </button>
-                  </span>
-                ) : (
-                  <span>
-                    {finalProjectMark}%
-                    <button
+              >
+                Save
+              </button>
+            </span>
+          ) : (
+            <span>
+              {finalProjectMark}%
+              <button
                       type="button"
-                      onClick={() => setIsEditingProjectMark(true)}
+                onClick={() => setIsEditingProjectMark(true)}
                       className="ml-2 px-2 py-1 rounded text-sm bg-gray-600 text-white hover:bg-gray-500"
-                    >
-                      Edit
-                    </button>
-                  </span>
-                )}
-              </p>
+              >
+                Edit
+              </button>
+            </span>
+          )}
+        </p>
               <h3 className="text-lg font-semibold text-white mt-4">
                 Final Mark: {courseMark}% (Final Module Mark × 0.6 + Project × 0.4)
               </h3>
@@ -638,9 +638,9 @@ const StudentSummary = () => {
                       <th>Platform Progress</th>
                       <th>Module Mark</th>
                       <th>Expected Completion Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              </tr>
+            </thead>
+            <tbody>
                     {loading ? (
                       <tr>
                         <td colSpan="6" className="active-bootcamps-loading">
@@ -657,7 +657,7 @@ const StudentSummary = () => {
                           </td>
                           <td>
                             {module.completed.challenge}/{module.total.challenge} ({module.averageMarks?.challenge?.total > 0 ? Math.ceil((module.averageMarks.challenge.marks / module.averageMarks.challenge.total) * 100) : 0}%)
-                          </td>
+                      </td>
                           <td>{module.platformProgress != null && module.platformProgress !== "" ? `${module.platformProgress}%` : "—"}</td>
                           <td>
                             {module.moduleMark}%
@@ -666,9 +666,9 @@ const StudentSummary = () => {
                               className="ml-2 px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-500 transition whitespace-nowrap"
                               onClick={() => handleMarkCourseComplete(userid, module)}
                             >
-                              Mark as Complete
-                            </button>
-                          </td>
+                      Mark as Complete
+                    </button>
+                  </td>
                           <td>
                             {summaryStateResolved?.bootcampEndDate
                               ? moment(summaryStateResolved.bootcampEndDate).format("DD MMMM YYYY")
@@ -716,12 +716,12 @@ const StudentSummary = () => {
                                 <span className="text-gray-500">Not graded</span>
                               )}
                             </td>
-                          </tr>
+                </tr>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
+            </tbody>
+          </table>
+        </div>
               ) : (
                 <p className="text-gray-400 text-sm py-4">
                   No Google Classroom assignments for this bootcamp. If the student has linked a classroom, they can refresh assignments on their Google Classroom page.

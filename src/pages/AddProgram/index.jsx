@@ -995,7 +995,7 @@ export const AddProgram = () => {
               );
               return;
             }
-          } else {
+        } else {
             showMessage(
               `The following students need to create accounts first: ${res?.missingEmails?.join(", ")}`,
               "error"
@@ -1003,11 +1003,11 @@ export const AddProgram = () => {
             return;
           }
         }
-        const enrollRes = await enrollStudentsIntoLP({
+          const enrollRes = await enrollStudentsIntoLP({
           emails: studentEmails,
           learningpathid: selectedLP?._id,
-        });
-        setAllEnrolled(true);
+          });
+          setAllEnrolled(true);
         if (!completedSteps.includes(1)) {
           setCompletedSteps([...completedSteps, 1]);
         }
@@ -1217,7 +1217,7 @@ export const AddProgram = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-3">
                     Bootcamp Type <span className="text-red-400">*</span>
-                  </label>
+            </label>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       type="button"
@@ -1235,7 +1235,7 @@ export const AddProgram = () => {
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                           </svg>
-                        </div>
+          </div>
                         <div className="text-left">
                           <p className={`font-semibold ${bootcampType === "manual" ? "text-white" : "text-gray-300"}`}>
                             Manual
@@ -1275,13 +1275,13 @@ export const AddProgram = () => {
                       <span className="font-medium">Auto Enrollment:</span> Students will be enrolled via an API endpoint. You'll receive an API key after creation.
                     </p>
                   )}
-                </div>
+        </div>
 
                 {/* Program Type Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-3">
                     Program Type <span className="text-red-400">*</span>
-                  </label>
+            </label>
                   <ProgramTypeSelector
                     selectedType={selectedProgramType}
                     setSelectedType={setSelectedProgramType}
@@ -1308,7 +1308,7 @@ export const AddProgram = () => {
                           </option>
                         ))}
                       </select>
-                    </div>
+          </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         Year <span className="text-red-400">*</span>
@@ -1324,15 +1324,15 @@ export const AddProgram = () => {
                           </option>
                         ))}
                       </select>
-                    </div>
+        </div>
                   </div>
                 ) : (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Custom Program Name <span className="text-red-400">*</span>
-                    </label>
+            </label>
                     <input
-                      type="text"
+              type="text"
                       value={customProgramName}
                       onChange={(e) => setCustomProgramName(e.target.value)}
                       placeholder="e.g., Advanced JavaScript Workshop 2026"
@@ -1355,8 +1355,8 @@ export const AddProgram = () => {
                         {months.find(m => m.value === programMonth)?.name} {programYear}
                       </p>
                     )}
-                  </div>
-                </div>
+          </div>
+        </div>
 
                 {/* Hidden input for form submission */}
                 <input type="hidden" name="programName" value={getFullProgramName()} />
@@ -1390,41 +1390,41 @@ export const AddProgram = () => {
                 {/* Google Classroom */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Google Classroom Link
-                  </label>
-                  <input
-                    name="googleClassroom"
+              Google Classroom Link
+            </label>
+            <input
+              name="googleClassroom"
                     type="url"
                     placeholder="https://classroom.google.com/..."
                     value={googleClassroom}
                     onChange={(e) => setGoogleClassroom(e.target.value)}
                     className="w-full bg-[#0D1117] text-white border border-gray-700 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-                  />
-                </div>
+            />
+          </div>
 
                 {/* Committed Minutes */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Daily Committed Minutes
-                  </label>
-                  <input
-                    name="commitedMins"
-                    type="number"
+            </label>
+            <input
+              name="commitedMins"
+              type="number"
                     placeholder="e.g., 120"
                     value={commitedMins}
                     onChange={(e) => setCommitedMins(e.target.value)}
                     className="w-full bg-[#0D1117] text-white border border-gray-700 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-                  />
+            />
                   <p className="mt-1 text-xs text-gray-500">
                     Expected daily study time in minutes
                   </p>
-                </div>
+        </div>
 
                 {/* Tutors */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Assign Tutors
-                  </label>
+            </label>
                   <TutorDropdown
                     tutors={allTutors}
                     selectedTutors={selectedTutors}
@@ -1435,7 +1435,7 @@ export const AddProgram = () => {
                       {selectedTutors.length} tutor{selectedTutors.length !== 1 ? "s" : ""} selected
                     </p>
                   )}
-                </div>
+          </div>
 
                 <button
                   type="button"
@@ -1455,7 +1455,7 @@ export const AddProgram = () => {
                 </button>
               </div>
             )}
-          </div>
+        </div>
 
           {/* Section 2: Students - Only for manual bootcamps */}
           {bootcampType === "manual" && (
@@ -1471,7 +1471,7 @@ export const AddProgram = () => {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
-                </div>
+          </div>
                 <div>
                   <h3 className="text-white font-semibold">Step 2: Add Students</h3>
                   <p className="text-gray-500 text-sm">Enter student emails and enroll them</p>
@@ -1485,14 +1485,14 @@ export const AddProgram = () => {
               <svg className={`w-5 h-5 text-gray-500 transition-transform ${currentStep === 1 ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-            </div>
+        </div>
 
             {currentStep === 1 && (
               <div className="p-6 space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Student Emails <span className="text-red-400">*</span>
-                  </label>
+          </label>
                   <textarea
                     name="emails"
                     rows={6}
@@ -1508,8 +1508,8 @@ export const AddProgram = () => {
                 </div>
 
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
+                <input
+                  type="checkbox"
                     checked={createAccountsIfNotFound}
                     onChange={(e) => setCreateAccountsIfNotFound(e.target.checked)}
                     className="w-4 h-4 rounded border-gray-600 bg-[#0D1117] text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
@@ -1517,7 +1517,7 @@ export const AddProgram = () => {
                   <span className="text-sm text-gray-300">
                     Create accounts if email not found
                   </span>
-                </label>
+              </label>
 
                 <div className="flex gap-3">
                   <button
@@ -1540,8 +1540,8 @@ export const AddProgram = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
-                </div>
-              </div>
+          </div>
+        </div>
             )}
           </div>
           )}
@@ -1576,7 +1576,7 @@ export const AddProgram = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Start Date
-                  </label>
+            </label>
                   <CalendarDatePicker
                     selectedDate={startDate}
                     onDateSelect={setStartDate}
@@ -1584,8 +1584,8 @@ export const AddProgram = () => {
                   />
                   <p className="mt-2 text-xs text-gray-500">
                     When should the bootcamp begin?
-                  </p>
-                </div>
+            </p>
+          </div>
 
                 {/* Weekday Selector */}
                 <div>
@@ -1599,7 +1599,7 @@ export const AddProgram = () => {
                   <p className="mt-2 text-xs text-gray-500">
                     Select the days when bootcamp tasks will be scheduled
                   </p>
-                </div>
+        </div>
 
                 {/* Holidays with Calendar Range Picker */}
                 <div>
@@ -1616,8 +1616,8 @@ export const AddProgram = () => {
                 </div>
 
                 <div className="flex gap-3">
-                  <button
-                    type="submit"
+        <button
+          type="submit"
                     onClick={() => setFlow(flowTypes.preview_cal)}
                     className="flex-1 py-3 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
                   >
@@ -1626,22 +1626,22 @@ export const AddProgram = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                     Preview Calendar
-                  </button>
-                  <button
+        </button>
+        <button
                     type="button"
-                    onClick={() => {
+          onClick={() => {
                       if (!completedSteps.includes(2)) {
                         setCompletedSteps([...completedSteps, 2]);
                       }
                       setCurrentStep(3);
-                    }}
+          }}
                     className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
-                  >
+        >
                     Next
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                  </button>
+        </button>
                 </div>
               </div>
             )}
@@ -1730,9 +1730,9 @@ export const AddProgram = () => {
                 </div>
 
                 {/* Create Button */}
-                <button
+        <button
                   type="submit"
-                  onClick={() => {
+          onClick={() => {
                     setAllEnrolled(true);
                     setFlow(flowTypes.bootcamp_api);
                   }}
@@ -1756,14 +1756,14 @@ export const AddProgram = () => {
                       Create Bootcamp
                     </>
                   )}
-                </button>
+        </button>
               </div>
             )}
           </div>
-        </form>
+      </form>
 
         {/* Calendar Preview */}
-        {calendarData && flow === flowTypes.preview_cal && (
+      {calendarData && flow === flowTypes.preview_cal && (
           <div className="mt-8 bg-[#161B22] rounded-2xl border border-gray-800 p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
@@ -1776,18 +1776,18 @@ export const AddProgram = () => {
                 <p className="text-gray-500 text-sm">Preview of bootcamp schedule</p>
               </div>
             </div>
-            <Calendar tasks={calendarData} date={date} />
-          </div>
-        )}
+          <Calendar tasks={calendarData} date={date} />
+        </div>
+      )}
 
-        <TasksModal />
+      <TasksModal />
       </div>
 
       {/* Loading Overlay */}
       {loading && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-[#161B22] rounded-2xl p-8 flex flex-col items-center">
-            <Loader />
+          <Loader />
             <p className="text-white mt-4">Processing...</p>
           </div>
         </div>

@@ -313,7 +313,7 @@ Zaio Team`;
                     placeholder="Email subject"
                     required
                   />
-                </div>
+              </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
@@ -613,23 +613,23 @@ const getChannelLabel = (channel) => {
 };
 
 const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics }) => {
-  const handleClose = () => {
-    setShowModal(false);
-  };
-
+    const handleClose = () => {
+      setShowModal(false);
+    };
+  
   // Count messages by channel
   const messageCounts = showModal?.pingStatusDetails?.reduce((acc, item) => {
     const channel = item.channel || "email";
     acc[channel] = (acc[channel] || 0) + 1;
     return acc;
   }, {}) || {};
-
-  return (
-    <Modal
-      centered
-      size="lg"
-      show={showModal}
-      onHide={handleClose}
+  
+    return (
+      <Modal
+        centered
+        size="lg"
+        show={showModal}
+        onHide={handleClose}
       contentClassName="bg-transparent border-0"
     >
       <div className="bg-[#161B22] rounded-xl border border-gray-800 overflow-hidden max-h-[90vh] overflow-y-auto">
@@ -689,7 +689,7 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics 
                 const channel = item.channel || "email";
                 const channelInfo = getChannelLabel(channel);
                 
-                return (
+                        return (
                   <div
                     key={idx}
                     className="bg-[#0D1117] rounded-lg border border-gray-800 overflow-hidden"
@@ -750,10 +750,10 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics 
           >
             Close
           </button>
+              </div>
         </div>
-      </div>
-    </Modal>
-  );
+      </Modal>
+    );
 };
 
 export const StudentPingModal = ({
