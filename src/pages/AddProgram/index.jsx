@@ -1387,20 +1387,23 @@ export const AddProgram = () => {
                   )}
                 </div>
 
-                {/* Google Classroom */}
+                {/* Google Classroom - link or course ID to connect bootcamp to Classroom for tutor markings */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-              Google Classroom Link
-            </label>
-            <input
-              name="googleClassroom"
-                    type="url"
-                    placeholder="https://classroom.google.com/..."
+                    Google Classroom link or course ID
+                  </label>
+                  <input
+                    name="googleClassroom"
+                    type="text"
+                    placeholder="Paste link (e.g. https://classroom.google.com/c/XXX) or course ID"
                     value={googleClassroom}
                     onChange={(e) => setGoogleClassroom(e.target.value)}
                     className="w-full bg-[#0D1117] text-white border border-gray-700 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
-            />
-          </div>
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Connects this bootcamp to Google Classroom so tutors can view and mark submissions. Paste the course link or numeric ID.
+                  </p>
+                </div>
 
                 {/* Committed Minutes */}
                 <div>

@@ -365,6 +365,19 @@ export const getBootcampConfig = (bootcampId) => {
     });
 };
 
+// Link/unlink Google Classroom course to bootcamp
+export const linkBootcampGoogleClassroom = (bootcampId, googleClassroomCourseId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .put(`${BASE_URL}/bootcamp/config/${bootcampId}/link-google-classroom`, { googleClassroomCourseId }, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to update" };
+    });
+};
+
 // Edit bootcamp configuration
 export const editBootcampConfig = (bootcampId, config) => {
   const token = localStorage.getItem("TOKEN");
@@ -449,3 +462,88 @@ export const disconnectGoogleCalendar = () =>
       console.log(err);
       return { success: false, message: err?.response?.data?.message };
     });
+
+// Google Classroom: tutor connect + fetch ungraded submissions for bootcamp students
+export const getTutorGoogleClassroomConfig = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/google-classroom/config`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch(() => ({ success: false, clientId: null }));
+
+export const getTutorGoogleClassroomAuthUrl = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/google-classroom/auth-url`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to get auth URL" };
+    });
+
+export const exchangeTutorGoogleClassroomCode = (code) =>
+  axios
+    .post(`${BASE_URL}/tutor-booking/google-classroom/exchange-code`, { code }, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to connect" };
+    });
+
+export const getTutorClassroomSubmissions = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/google-classroom/submissions`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, data: [], message: err?.response?.data?.message };
+    });
+
+export const getTutorClassroomConnectionStatus = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/google-classroom/connection-status`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch(() => ({ success: false, connected: false }));
+
+export const getLinkableBootcamps = () =>
+  axios
+    .get(`${BASE_URL}/tutor-booking/google-classroom/linkable-bootcamps`, { headers: tutorBookingHeaders() })
+    .then((res) => res.data)
+    .catch(() => ({ success: false, bootcamps: [] }));
+
+export const linkClassroomSubmissions = (bootcampIds) =>
+  axios
+    .post(
+      `${BASE_URL}/tutor-booking/google-classroom/link-submissions`,
+      { bootcampIds: Array.isArray(bootcampIds) ? bootcampIds : [] },
+      { headers: tutorBookingHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to link submissions",
+    }));
+
+export const setAssignmentInTalks = (bootcampId, courseWorkId, submissionUserId, { studentEmail, assignmentTitle, submissionLink } = {}) =>
+  axios
+    .post(
+      `${BASE_URL}/tutor-booking/google-classroom/assignment-in-talks`,
+      { bootcampId, courseWorkId, submissionUserId, studentEmail, assignmentTitle, submissionLink },
+      { headers: tutorBookingHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to set",
+    }));
+
+export const linkClassroomUserManually = (zaioUserId, googleClassroomUserId, bootcampId) =>
+  axios
+    .post(
+      `${BASE_URL}/tutor-booking/google-classroom/link-manually`,
+      { zaioUserId, googleClassroomUserId, bootcampId },
+      { headers: tutorBookingHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to link",
+    }));

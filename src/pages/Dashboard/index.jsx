@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getAllBootcamps, getAllOCCohorts, getMyTutorBookings } from "../../api/company";
+import {
+  getAllBootcamps,
+  getAllOCCohorts,
+  getMyTutorBookings,
+  getTutorClassroomConnectionStatus,
+  getTutorClassroomSubmissions,
+} from "../../api/company";
 import { searchStudents } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import ActiveBootcampsTable from "../../components/ActiveBootcamps/ActiveBootcampsTable";
@@ -117,6 +123,9 @@ const formatBookingTime = (dateStr) =>
     minute: "2-digit",
   });
 
+const OVERDUE_HOURS = 48;
+const IN_TALKS_EXTRA_DAYS = 3;
+
 function bucketBookings(upcoming) {
   const list = upcoming || [];
   const now = new Date();
@@ -140,6 +149,108 @@ function bucketBookings(upcoming) {
   });
   return { today, tomorrow, restOfWeek };
 }
+
+const TutorAssignmentStats = () => {
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [urgent, setUrgent] = useState(0);
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getTutorClassroomConnectionStatus()
+      .then((res) => {
+        if (cancelled || !res?.connected) {
+          setConnected(false);
+          setTotal(0);
+          setUrgent(0);
+          return;
+        }
+        setConnected(true);
+        return getTutorClassroomSubmissions();
+      })
+      .then((res) => {
+        if (cancelled || !res?.data) return;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setTotal(list.length);
+        const extraMs = IN_TALKS_EXTRA_DAYS * 24 * 60 * 60 * 1000;
+        const deadlineMs = OVERDUE_HOURS * 60 * 60 * 1000;
+        const urgentCount = list.filter((item) => {
+          const submittedAt = item.assignment?.submittedAt;
+          if (!submittedAt) return false;
+          const extra = item.inTalks ? extraMs : 0;
+          return new Date(submittedAt).getTime() + deadlineMs + extra < Date.now();
+        }).length;
+        setUrgent(urgentCount);
+      })
+      .catch(() => {
+        if (!cancelled) setTotal(0);
+        setUrgent(0);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!loading && !connected) return null;
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div className="p-5 rounded-xl bg-white/5 border border-white/10 animate-pulse">
+          <div className="h-4 bg-white/10 rounded w-32 mb-3" />
+          <div className="h-8 bg-white/10 rounded w-16" />
+        </div>
+        <div className="p-5 rounded-xl bg-white/5 border border-white/10 animate-pulse">
+          <div className="h-4 bg-white/10 rounded w-40 mb-3" />
+          <div className="h-8 bg-white/10 rounded w-16" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <Link
+        to="/tutor/analytics?q=markings"
+        className="block p-5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-gray-400 text-sm mb-1">Assignments to mark</p>
+            <p className="text-2xl font-bold text-white">{total}</p>
+          </div>
+          <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+        </div>
+      </Link>
+      <Link
+        to="/tutor/analytics?q=markings"
+        className="block p-5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-gray-400 text-sm mb-1">Need urgent attention</p>
+            <p className={`text-2xl font-bold ${urgent > 0 ? "text-amber-400" : "text-white"}`}>{urgent}</p>
+          </div>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${urgent > 0 ? "bg-amber-500/20" : "bg-gray-500/20"}`}>
+            <svg className={`w-6 h-6 ${urgent > 0 ? "text-amber-400" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+        </div>
+        {urgent > 0 && (
+          <p className="text-amber-400/80 text-xs mt-2">Not marked within 48 hours of submission</p>
+        )}
+      </Link>
+    </div>
+  );
+};
 
 const TutorDashboardBookings = () => {
   const [loading, setLoading] = useState(true);
@@ -440,7 +551,10 @@ const Dashboard = () => {
       )}
 
       {["TUTOR"]?.includes(user?.role) && (
-        <TutorDashboardBookings />
+        <>
+          <TutorAssignmentStats />
+          <TutorDashboardBookings />
+        </>
       )}
 
       {loading && <Loader />}

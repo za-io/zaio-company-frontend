@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getEnrolledBootcamps, archiveBootcamp, archiveManyBootcamps, getBootcampConfig, editBootcampConfig } from "../../api/company";
+import { getEnrolledBootcamps, archiveBootcamp, archiveManyBootcamps, getBootcampConfig, editBootcampConfig, linkBootcampGoogleClassroom } from "../../api/company";
 import Loader from "../loader/loader";
 import "./ActiveBootcampsTable.css";
 import {
@@ -430,6 +430,106 @@ function formatBootcampDate(dateStr) {
   }
 }
 
+function parseCourseId(input) {
+  if (!input || typeof input !== "string") return "";
+  const trimmed = input.trim();
+  const urlMatch = trimmed.match(/classroom\.google\.com\/[^/]+\/c\/([a-zA-Z0-9_-]+)/) || trimmed.match(/classroom\.google\.com\/c\/([a-zA-Z0-9_-]+)/);
+  return urlMatch ? urlMatch[1] : trimmed;
+}
+
+const LinkGoogleClassroomModal = ({ isOpen, onClose, bootcampId, bootcampName, onSave }) => {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [linkedCourseId, setLinkedCourseId] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    if (isOpen && bootcampId) {
+      setLoading(true);
+      setMessage(null);
+      setInputValue("");
+      getBootcampConfig(bootcampId).then((res) => {
+        if (res.success && res.bootcamp?.linkedGoogleClassroomCourseId) {
+          setLinkedCourseId(res.bootcamp.linkedGoogleClassroomCourseId);
+          setInputValue(res.bootcamp.linkedGoogleClassroomCourseId);
+        } else setLinkedCourseId("");
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    }
+  }, [isOpen, bootcampId]);
+
+  const handleLink = async () => {
+    const courseId = parseCourseId(inputValue);
+    if (!courseId) {
+      setMessage({ type: "error", text: "Enter a Google Classroom course ID or paste the course URL." });
+      return;
+    }
+    setSaving(true);
+    setMessage(null);
+    const result = await linkBootcampGoogleClassroom(bootcampId, courseId);
+    setSaving(false);
+    if (result.success) {
+      setMessage({ type: "success", text: "Google Classroom linked successfully!" });
+      setLinkedCourseId(courseId);
+      setTimeout(() => { onSave(); onClose(); }, 1000);
+    } else setMessage({ type: "error", text: result.message || "Failed to link" });
+  };
+
+  const handleUnlink = async () => {
+    setSaving(true);
+    setMessage(null);
+    const result = await linkBootcampGoogleClassroom(bootcampId, "");
+    setSaving(false);
+    if (result.success) {
+      setMessage({ type: "success", text: "Google Classroom unlinked." });
+      setLinkedCourseId("");
+      setInputValue("");
+      setTimeout(() => { onSave(); onClose(); }, 800);
+    } else setMessage({ type: "error", text: result.message || "Failed to unlink" });
+  };
+
+  if (!isOpen) return null;
+  return (
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+        <div className="edit-modal-header">
+          <h2>Link Google Classroom</h2>
+          <button className="edit-modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="edit-modal-body">
+          {bootcampName && <p style={{ color: "#94a3b8", marginBottom: 16 }}>{bootcampName}</p>}
+          {message && <div className={`edit-modal-message ${message.type}`}>{message.text}</div>}
+          {loading ? (
+            <div className="edit-modal-loading"><Loader size={24} /><p>Loading...</p></div>
+          ) : (
+            <>
+              <div className="edit-form-group">
+                <label>Google Classroom course ID or URL</label>
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="e.g. 123456789 or https://classroom.google.com/c/123456789"
+                />
+              </div>
+              {linkedCourseId && <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>Currently linked: <code>{linkedCourseId}</code></p>}
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button type="button" className="edit-modal-save" onClick={handleLink} disabled={saving || !inputValue.trim()}>
+                  {saving ? "Saving..." : "Link"}
+                </button>
+                {linkedCourseId && (
+                  <button type="button" className="dropdown-item archive-btn" onClick={handleUnlink} disabled={saving}>Unlink</button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function ActiveBootcampsTable() {
   const navigate = useNavigate();
   const [bootcamps, setBootcamps] = useState([]);
@@ -439,6 +539,9 @@ function ActiveBootcampsTable() {
   const [archiving, setArchiving] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingBootcampId, setEditingBootcampId] = useState(null);
+  const [linkClassroomModalOpen, setLinkClassroomModalOpen] = useState(false);
+  const [linkingBootcampId, setLinkingBootcampId] = useState(null);
+  const [linkingBootcampName, setLinkingBootcampName] = useState("");
   const dropdownRef = useRef(null);
 
   const fetchBootcamps = () => {
@@ -487,6 +590,14 @@ function ActiveBootcampsTable() {
     e.stopPropagation();
     setEditingBootcampId(bootcampId);
     setEditModalOpen(true);
+    setOpenDropdown(null);
+  };
+
+  const handleLinkClassroom = (e, bootcampId, bootcampName) => {
+    e.stopPropagation();
+    setLinkingBootcampId(bootcampId);
+    setLinkingBootcampName(bootcampName || "Bootcamp");
+    setLinkClassroomModalOpen(true);
     setOpenDropdown(null);
   };
 
@@ -660,6 +771,12 @@ function ActiveBootcampsTable() {
                             Edit Config
                           </button>
                           <button
+                            className="dropdown-item edit-btn"
+                            onClick={(e) => handleLinkClassroom(e, b._id, b.bootcampName || b.learningpath?.learningpathname)}
+                          >
+                            Link Google Classroom
+                          </button>
+                          <button
                             className="dropdown-item archive-btn"
                             onClick={(e) => handleArchive(e, b._id, b.bootcampName)}
                           >
@@ -687,14 +804,17 @@ function ActiveBootcampsTable() {
         </table>
       </div>
 
-      {/* Edit Config Modal */}
       <EditConfigModal
         isOpen={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setEditingBootcampId(null);
-        }}
+        onClose={() => { setEditModalOpen(false); setEditingBootcampId(null); }}
         bootcampId={editingBootcampId}
+        onSave={fetchBootcamps}
+      />
+      <LinkGoogleClassroomModal
+        isOpen={linkClassroomModalOpen}
+        onClose={() => { setLinkClassroomModalOpen(false); setLinkingBootcampId(null); setLinkingBootcampName(""); }}
+        bootcampId={linkingBootcampId}
+        bootcampName={linkingBootcampName}
         onSave={fetchBootcamps}
       />
     </div>

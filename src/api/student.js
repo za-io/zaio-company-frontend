@@ -272,6 +272,19 @@ export const getUserBootcampAnalytics = (user_id, bootcamp_id) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Tutor: unmarked Google Classroom assignments for tutor's bootcamp students */
+export const getTutorUnmarkedGoogleClassroomAssignments = async (tutorId) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/${tutorId}/tutor-unmarked-classroom-assignments`
+    );
+    return response?.data?.data ?? [];
+  } catch (error) {
+    console.log(error);
+    return [];
+  }
+};
+
 /** Tutor bootcamps with average progress and student count */
 export const getTutorBootcampsWithProgress = async (tutorId) => {
   try {
