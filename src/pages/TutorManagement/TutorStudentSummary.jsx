@@ -371,13 +371,13 @@ const StudentSummary = () => {
   };
 
   // Per-module: only MCQs = MCQ%; only Challenges = Challenge%; both = (MCQ % × 0.4) + (Challenge % × 0.6).
-  // Uses marks-based percentages (bracket %), not completion ratio.
+  // If no MCQs and no challenges: 100% (nothing to complete).
   const calculateModuleMark = (module) => {
     const hasMcq = (module.total?.mcq || 0) > 0;
     const hasChallenge = (module.total?.challenge || 0) > 0;
     const mcqPercentage = getMcqPercent(module);
     const challengePercentage = getChallengePercent(module);
-    if (!hasMcq && !hasChallenge) return "0.00";
+    if (!hasMcq && !hasChallenge) return "100.00";
     if (hasMcq && !hasChallenge) return Math.min(100, mcqPercentage).toFixed(2);
     if (!hasMcq && hasChallenge) return Math.min(100, challengePercentage).toFixed(2);
     return (mcqPercentage * 0.4 + challengePercentage * 0.6).toFixed(2);
