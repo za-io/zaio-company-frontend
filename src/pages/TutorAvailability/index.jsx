@@ -20,23 +20,18 @@ const DAYS = [
 
 const SLOT_DURATIONS = [15, 30, 45, 60];
 
-const defaultDaySlot = (dayOfWeek) => ({
-  dayOfWeek,
-  startTime: "09:00",
-  endTime: "17:00",
-});
+const defaultTimeRange = () => ({ startTime: "09:00", endTime: "17:00" });
+
+const initialDayRanges = () =>
+  DAYS.reduce((acc, d) => ({ ...acc, [d.value]: [] }), {});
 
 export default function TutorAvailability() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(30);
-  const [weeklySlots, setWeeklySlots] = useState(() =>
-    DAYS.map((d) => defaultDaySlot(d.value))
-  );
-  const [enabledDays, setEnabledDays] = useState(() =>
-    DAYS.reduce((acc, d) => ({ ...acc, [d.value]: false }), {})
-  );
+  // dayRanges[dayOfWeek] = [{ startTime, endTime }, ...] — multiple ranges per day
+  const [dayRanges, setDayRanges] = useState(initialDayRanges);
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
   const [calendarDisconnecting, setCalendarDisconnecting] = useState(false);
   const location = useLocation();
@@ -55,23 +50,24 @@ export default function TutorAvailability() {
         if (availRes.data.weeklySlots?.length) {
           const byDay = {};
           availRes.data.weeklySlots.forEach((s) => {
-            byDay[s.dayOfWeek] = {
-              startTime: s.startTime || "09:00",
-              endTime: s.endTime || "17:00",
-            };
+            const day = s.dayOfWeek;
+            if (!byDay[day]) byDay[day] = [];
+            if (s.startTime && s.endTime) {
+              byDay[day].push({
+                startTime: s.startTime,
+                endTime: s.endTime,
+              });
+            }
           });
-          setWeeklySlots(
-            DAYS.map((d) => ({
-              dayOfWeek: d.value,
-              startTime: byDay[d.value]?.startTime ?? "09:00",
-              endTime: byDay[d.value]?.endTime ?? "17:00",
-            }))
-          );
-          const enabled = {};
-          availRes.data.weeklySlots.forEach((s) => {
-            enabled[s.dayOfWeek] = !!(s.startTime && s.endTime);
+          setDayRanges((prev) => {
+            const next = { ...prev };
+            DAYS.forEach((d) => {
+              next[d.value] = byDay[d.value]?.length
+                ? byDay[d.value]
+                : [];
+            });
+            return next;
           });
-          setEnabledDays((prev) => ({ ...prev, ...enabled }));
         }
       }
     } catch (e) {
@@ -122,27 +118,54 @@ export default function TutorAvailability() {
   };
 
   const handleDayToggle = (dayOfWeek) => {
-    setEnabledDays((prev) => ({ ...prev, [dayOfWeek]: !prev[dayOfWeek] }));
+    setDayRanges((prev) => {
+      const next = { ...prev };
+      if (next[dayOfWeek]?.length) {
+        next[dayOfWeek] = [];
+      } else {
+        next[dayOfWeek] = [defaultTimeRange()];
+      }
+      return next;
+    });
   };
 
-  const handleTimeChange = (dayOfWeek, field, value) => {
-    setWeeklySlots((prev) =>
-      prev.map((s) =>
-        s.dayOfWeek === dayOfWeek ? { ...s, [field]: value } : s
-      )
-    );
+  const handleTimeChange = (dayOfWeek, slotIndex, field, value) => {
+    setDayRanges((prev) => {
+      const list = [...(prev[dayOfWeek] || [])];
+      list[slotIndex] = { ...list[slotIndex], [field]: value };
+      return { ...prev, [dayOfWeek]: list };
+    });
+  };
+
+  const handleAddRange = (dayOfWeek) => {
+    setDayRanges((prev) => ({
+      ...prev,
+      [dayOfWeek]: [...(prev[dayOfWeek] || []), defaultTimeRange()],
+    }));
+  };
+
+  const handleRemoveRange = (dayOfWeek, slotIndex) => {
+    setDayRanges((prev) => {
+      const list = (prev[dayOfWeek] || []).filter((_, i) => i !== slotIndex);
+      return { ...prev, [dayOfWeek]: list };
+    });
   };
 
   const handleSave = async () => {
     setSaving(true);
     setMessage(null);
-    const slotsToSave = weeklySlots
-      .filter((s) => enabledDays[s.dayOfWeek])
-      .map((s) => ({
-        dayOfWeek: s.dayOfWeek,
-        startTime: s.startTime,
-        endTime: s.endTime,
-      }));
+    const slotsToSave = [];
+    DAYS.forEach((d) => {
+      (dayRanges[d.value] || []).forEach((r) => {
+        if (r.startTime && r.endTime) {
+          slotsToSave.push({
+            dayOfWeek: d.value,
+            startTime: r.startTime,
+            endTime: r.endTime,
+          });
+        }
+      });
+    });
     try {
       const res = await setMyTutorAvailability({
         slotDurationMinutes,
@@ -201,50 +224,78 @@ export default function TutorAvailability() {
         </select>
       </div>
 
-      {/* Per-day availability */}
+      {/* Per-day availability: multiple time ranges per day */}
       <div className="space-y-4 mb-8">
-        {DAYS.map(({ label, value: dayOfWeek }) => (
-          <div
-            key={dayOfWeek}
-            className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10"
-          >
-            <label className="flex items-center gap-2 cursor-pointer min-w-[140px]">
-              <input
-                type="checkbox"
-                checked={!!enabledDays[dayOfWeek]}
-                onChange={() => handleDayToggle(dayOfWeek)}
-                className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
-              />
-              <span className="text-white">{label}</span>
-            </label>
-            {enabledDays[dayOfWeek] && (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-sm">From</span>
-                  <input
-                    type="time"
-                    value={weeklySlots.find((s) => s.dayOfWeek === dayOfWeek)?.startTime || "09:00"}
-                    onChange={(e) =>
-                      handleTimeChange(dayOfWeek, "startTime", e.target.value)
-                    }
-                    className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
-                  />
+        {DAYS.map(({ label, value: dayOfWeek }) => {
+          const ranges = dayRanges[dayOfWeek] || [];
+          const enabled = ranges.length > 0;
+          return (
+            <div
+              key={dayOfWeek}
+              className="p-4 rounded-xl bg-white/5 border border-white/10"
+            >
+              <label className="flex items-center gap-2 cursor-pointer min-w-[140px] mb-3">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={() => handleDayToggle(dayOfWeek)}
+                  className="rounded border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500"
+                />
+                <span className="text-white">{label}</span>
+              </label>
+              {enabled && (
+                <div className="space-y-3 pl-6">
+                  {ranges.map((range, slotIndex) => (
+                    <div
+                      key={slotIndex}
+                      className="flex flex-wrap items-center gap-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 text-sm">From</span>
+                        <input
+                          type="time"
+                          value={range.startTime || "09:00"}
+                          onChange={(e) =>
+                            handleTimeChange(dayOfWeek, slotIndex, "startTime", e.target.value)
+                          }
+                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 text-sm">To</span>
+                        <input
+                          type="time"
+                          value={range.endTime || "17:00"}
+                          onChange={(e) =>
+                            handleTimeChange(dayOfWeek, slotIndex, "endTime", e.target.value)
+                          }
+                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+                        />
+                      </div>
+                      {ranges.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRange(dayOfWeek, slotIndex)}
+                          className="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => handleAddRange(dayOfWeek)}
+                    className="inline-flex items-center gap-1.5 mt-1 px-3 py-1.5 rounded-lg border border-blue-500/50 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-sm font-medium"
+                  >
+                    <span aria-hidden>+</span>
+                    Add another time (e.g. 16:00–18:00 on same day)
+                  </button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500 text-sm">To</span>
-                  <input
-                    type="time"
-                    value={weeklySlots.find((s) => s.dayOfWeek === dayOfWeek)?.endTime || "17:00"}
-                    onChange={(e) =>
-                      handleTimeChange(dayOfWeek, "endTime", e.target.value)
-                    }
-                    className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Connect Google Calendar */}
