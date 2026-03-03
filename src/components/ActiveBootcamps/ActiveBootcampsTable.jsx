@@ -530,10 +530,15 @@ const LinkGoogleClassroomModal = ({ isOpen, onClose, bootcampId, bootcampName, o
   );
 };
 
+const BOOTCAMPS_PAGE_SIZE = 4;
+
 function ActiveBootcampsTable() {
   const navigate = useNavigate();
   const [bootcamps, setBootcamps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [openDropdown, setOpenDropdown] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [archiving, setArchiving] = useState(false);
@@ -544,14 +549,15 @@ function ActiveBootcampsTable() {
   const [linkingBootcampName, setLinkingBootcampName] = useState("");
   const dropdownRef = useRef(null);
 
-  const fetchBootcamps = () => {
+  const fetchBootcamps = (pageNum = page) => {
     setLoading(true);
-    getEnrolledBootcamps()
+    getEnrolledBootcamps({ page: pageNum, limit: BOOTCAMPS_PAGE_SIZE })
       .then((res) => {
-        console.log("Enrolled bootcamps response:", res);
         const list = res?.enrolledBootcamps || [];
         setBootcamps(Array.isArray(list) ? list : []);
-        setSelectedIds([]); // Clear selection after refresh
+        setTotal(res?.total ?? 0);
+        setTotalPages(res?.totalPages ?? 0);
+        setSelectedIds([]);
       })
       .catch((err) => {
         console.log("Error fetching bootcamps:", err);
@@ -561,8 +567,8 @@ function ActiveBootcampsTable() {
   };
 
   useEffect(() => {
-    fetchBootcamps();
-  }, []);
+    fetchBootcamps(page);
+  }, [page]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -606,7 +612,7 @@ function ActiveBootcampsTable() {
     if (window.confirm(`Are you sure you want to archive "${bootcampName}"? It will be hidden from the list.`)) {
       const result = await archiveBootcamp(bootcampId);
       if (result.success) {
-        fetchBootcamps();
+        fetchBootcamps(page);
       } else {
         alert(result.message || "Failed to archive bootcamp");
       }
@@ -634,14 +640,14 @@ function ActiveBootcampsTable() {
 
   const handleBulkArchive = async () => {
     if (selectedIds.length === 0) return;
-    
+
     if (window.confirm(`Are you sure you want to archive ${selectedIds.length} bootcamp(s)? They will be hidden from the list.`)) {
       setArchiving(true);
       const result = await archiveManyBootcamps(selectedIds);
       setArchiving(false);
-      
+
       if (result.success) {
-        fetchBootcamps();
+        fetchBootcamps(page);
       } else {
         alert(result.message || "Failed to archive bootcamps");
       }
@@ -804,18 +810,44 @@ function ActiveBootcampsTable() {
         </table>
       </div>
 
+      {totalPages > 1 && (
+        <div className="active-bootcamps-pagination">
+          <span className="pagination-info">
+            Page {page} of {totalPages} ({total} bootcamp{total !== 1 ? "s" : ""} total)
+          </span>
+          <div className="pagination-buttons">
+            <button
+              type="button"
+              className="pagination-btn"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="pagination-btn"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       <EditConfigModal
         isOpen={editModalOpen}
         onClose={() => { setEditModalOpen(false); setEditingBootcampId(null); }}
         bootcampId={editingBootcampId}
-        onSave={fetchBootcamps}
+        onSave={() => fetchBootcamps(page)}
       />
       <LinkGoogleClassroomModal
         isOpen={linkClassroomModalOpen}
         onClose={() => { setLinkClassroomModalOpen(false); setLinkingBootcampId(null); setLinkingBootcampName(""); }}
         bootcampId={linkingBootcampId}
         bootcampName={linkingBootcampName}
-        onSave={fetchBootcamps}
+        onSave={() => fetchBootcamps(page)}
       />
     </div>
   );

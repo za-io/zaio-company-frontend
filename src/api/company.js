@@ -309,17 +309,18 @@ export const tutorSignOffQCTOLW = (assessmentId, submissionId, tutorSignature = 
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-// Student enrolled bootcamps
-export const getEnrolledBootcamps = () => {
+// Student enrolled bootcamps (paginated, default 4 per page)
+export const getEnrolledBootcamps = ({ page = 1, limit = 4 } = {}) => {
   const token = localStorage.getItem("TOKEN");
   const headers = token ? { "auth-token": token } : {};
-  
+  const params = { page, limit };
+
   return axios
-    .get(`${BASE_URL}/bootcamp/enrolled`, { headers })
+    .get(`${BASE_URL}/bootcamp/enrolled`, { headers, params })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
-      return { enrolledBootcamps: [] };
+      return { enrolledBootcamps: [], total: 0, page: 1, limit: 4, totalPages: 0 };
     });
 };
 
