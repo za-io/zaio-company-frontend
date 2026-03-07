@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 const formatDate = (dateStr) => {
@@ -72,6 +72,9 @@ const StudentProfile = () => {
   const [addUpfrontForm, setAddUpfrontForm] = useState({ amount: "", paymentDate: new Date().toISOString().slice(0, 10), file: null });
   const [addUpfrontSubmitting, setAddUpfrontSubmitting] = useState(false);
   const [addUpfrontError, setAddUpfrontError] = useState(null);
+  const [studentNumberValue, setStudentNumberValue] = useState("");
+  const [studentNumberSaving, setStudentNumberSaving] = useState(false);
+  const [studentNumberMessage, setStudentNumberMessage] = useState(null);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -81,6 +84,7 @@ const StudentProfile = () => {
       console.log("Profile result:", result);
       if (result?.success) {
         setStudent(result.student);
+        setStudentNumberValue(result.student?.studentNumber ?? "");
       }
     } catch (err) {
       console.error("Error fetching profile:", err);
@@ -153,6 +157,25 @@ const StudentProfile = () => {
       .finally(() => { if (!cancelled) setCustomPlansLoading(false); });
     return () => { cancelled = true; };
   }, [userId]);
+
+  const handleSaveStudentNumber = async () => {
+    if (!userId) return;
+    setStudentNumberMessage(null);
+    setStudentNumberSaving(true);
+    try {
+      const res = await updateStudentNumber(userId, studentNumberValue.trim() || null);
+      if (res.success) {
+        setStudent((s) => (s ? { ...s, studentNumber: studentNumberValue.trim() || null } : s));
+        setStudentNumberMessage("Student number saved");
+        setTimeout(() => setStudentNumberMessage(null), 3000);
+      } else {
+        setStudentNumberMessage(res.message || "Failed to save");
+      }
+    } catch (err) {
+      setStudentNumberMessage("Failed to save student number");
+    }
+    setStudentNumberSaving(false);
+  };
 
   const handleBlockToggle = async () => {
     if (!student) return;
@@ -513,6 +536,29 @@ const StudentProfile = () => {
             <p className="text-sm text-gray-500 mt-2">
               Joined: {new Date(student.createdAt).toLocaleDateString()}
             </p>
+            {/* Student Number */}
+            <div className="mt-4 flex items-center gap-2 flex-wrap">
+              <label className="text-sm font-medium text-gray-600">Student number:</label>
+              <input
+                type="text"
+                value={studentNumberValue}
+                onChange={(e) => setStudentNumberValue(e.target.value)}
+                placeholder="e.g. STU12345"
+                className="border border-gray-300 rounded px-3 py-1.5 text-sm w-48 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button
+                onClick={handleSaveStudentNumber}
+                disabled={studentNumberSaving}
+                className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {studentNumberSaving ? "Saving..." : "Save"}
+              </button>
+              {studentNumberMessage && (
+                <span className={`text-sm ${studentNumberMessage.includes("saved") ? "text-green-600" : "text-red-600"}`}>
+                  {studentNumberMessage}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex flex-col items-end gap-3">
             {/* Account Status Badge */}
@@ -1963,6 +2009,16 @@ const StudentProfile = () => {
                                   Pay now
                                 </a>
                               )}
+                              {p.xeroInvoiceUrl && (
+                                <a
+                                  href={p.xeroInvoiceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline text-sm ml-2"
+                                >
+                                  Invoice
+                                </a>
+                              )}
                               {showGenerateLink && (
                                 <button
                                   type="button"
@@ -1994,7 +2050,7 @@ const StudentProfile = () => {
                                   {generateLinkLoading ? "Generating…" : p.expired ? "Generate new link" : "Generate payment link"}
                                 </button>
                               )}
-                              {!showPayNow && !showGenerateLink && "—"}
+                              {!showPayNow && !showGenerateLink && !p.xeroInvoiceUrl && "—"}
                             </td>
                           </tr>
                         );

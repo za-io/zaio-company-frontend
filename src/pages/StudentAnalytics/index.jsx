@@ -7,6 +7,7 @@ import {
 import {
   addIntoExiting,
   createAccountsForEmails,
+  createOrLinkAccountWithStudentNumber,
   getBootcampConfig,
   getAllTutors,
 } from "../../api/company";
@@ -52,6 +53,11 @@ const StudentAnalytics = () => {
   const [addStudentsCreateAccounts, setAddStudentsCreateAccounts] = useState(true);
   const [addStudentsMessage, setAddStudentsMessage] = useState(null);
   const [addStudentsSubmitting, setAddStudentsSubmitting] = useState(false);
+  const [addSingleStudentOpen, setAddSingleStudentOpen] = useState(false);
+  const [addSingleStudentEmail, setAddSingleStudentEmail] = useState("");
+  const [addSingleStudentNumber, setAddSingleStudentNumber] = useState("");
+  const [addSingleStudentMessage, setAddSingleStudentMessage] = useState(null);
+  const [addSingleStudentSubmitting, setAddSingleStudentSubmitting] = useState(false);
   const { user } = useUserStore();
 
   const fetchDropdownData = async () => {
@@ -128,17 +134,31 @@ const StudentAnalytics = () => {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white">Student Analytics</h1>
         {searchType === "bootcamp" && bootcampId && !["TUTOR"]?.includes(user?.role) && (
-          <button
-            type="button"
-            onClick={() => {
-              setAddStudentsEmails("");
-              setAddStudentsMessage(null);
-              setAddStudentsOpen(true);
-            }}
-            className="px-4 py-2 rounded-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-          >
-            Add students
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAddStudentsEmails("");
+                setAddStudentsMessage(null);
+                setAddStudentsOpen(true);
+              }}
+              className="px-4 py-2 rounded-lg font-semibold bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            >
+              Add students
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAddSingleStudentEmail("");
+                setAddSingleStudentNumber("");
+                setAddSingleStudentMessage(null);
+                setAddSingleStudentOpen(true);
+              }}
+              className="px-4 py-2 rounded-lg font-semibold bg-teal-600 hover:bg-teal-700 text-white transition-colors"
+            >
+              Add Single student
+            </button>
+          </div>
         )}
       </div>
 
@@ -249,6 +269,127 @@ const StudentAnalytics = () => {
                 {addStudentsSubmitting
                   ? (addStudentsCreateAccounts ? "Enrolling…" : "Adding…")
                   : (addStudentsCreateAccounts ? "Enroll students" : "Add students")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Single student modal */}
+      {addSingleStudentOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-[#161B22] rounded-xl border border-gray-700 max-w-lg w-full p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-white mb-4">Add Single student to bootcamp</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              Enter email and student number. The student number will be linked to the account (or used as password for new accounts), then the student will be enrolled.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Email address</label>
+              <input
+                type="email"
+                placeholder="student@example.com"
+                value={addSingleStudentEmail}
+                onChange={(e) => setAddSingleStudentEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-600 bg-[#0D1117] text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Student number</label>
+              <input
+                type="text"
+                placeholder="STU12345"
+                value={addSingleStudentNumber}
+                onChange={(e) => setAddSingleStudentNumber(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-600 bg-[#0D1117] text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {addSingleStudentMessage && (
+              <p className={`text-sm mb-4 ${addSingleStudentMessage.type === "error" ? "text-red-400" : "text-green-400"}`}>
+                {addSingleStudentMessage.text}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAddSingleStudentOpen(false);
+                  setAddSingleStudentEmail("");
+                  setAddSingleStudentNumber("");
+                  setAddSingleStudentMessage(null);
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={addSingleStudentSubmitting}
+                onClick={async () => {
+                  const email = addSingleStudentEmail.trim().toLowerCase();
+                  const studentNumber = addSingleStudentNumber.trim();
+                  if (!email) {
+                    setAddSingleStudentMessage({ type: "error", text: "Enter email address." });
+                    return;
+                  }
+                  if (!studentNumber) {
+                    setAddSingleStudentMessage({ type: "error", text: "Enter student number." });
+                    return;
+                  }
+                  setAddSingleStudentSubmitting(true);
+                  setAddSingleStudentMessage(null);
+                  try {
+                    const linkRes = await createOrLinkAccountWithStudentNumber({ email, student_number: studentNumber });
+                    if (!linkRes?.success) {
+                      setAddSingleStudentMessage({ type: "error", text: linkRes?.message || "Failed to create or link account." });
+                      setAddSingleStudentSubmitting(false);
+                      return;
+                    }
+                    const configRes = await getBootcampConfig(bootcampId);
+                    if (!configRes?.success || !configRes?.bootcamp) {
+                      setAddSingleStudentMessage({ type: "error", text: configRes?.message || "Failed to load bootcamp config." });
+                      setAddSingleStudentSubmitting(false);
+                      return;
+                    }
+                    const bc = configRes.bootcamp;
+                    const tutorsRes = await getAllTutors();
+                    const tutorList = Array.isArray(tutorsRes) ? tutorsRes : tutorsRes?.data || tutorsRes?.tutors || [];
+                    const tutorIds = tutorList.map((t) => t._id).filter(Boolean);
+                    const startDate = bc.startDate ? (typeof bc.startDate === "string" ? bc.startDate.split("T")[0] : bc.startDate) : null;
+                    if (!startDate) {
+                      setAddSingleStudentMessage({ type: "error", text: "Bootcamp has no start date. Set it in bootcamp config first." });
+                      setAddSingleStudentSubmitting(false);
+                      return;
+                    }
+                    const res = await addIntoExiting({
+                      bootcampDocId: bootcampId,
+                      emails: email,
+                      startDate,
+                      commitedMins: bc.commitedMins ?? 360,
+                      holidays: bc.holidays || "",
+                      selectedWeekdays: bc.selectedWeekdays || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                      tutors: tutorIds,
+                      googleClassroom: "",
+                    });
+                    if (res?.status === 200) {
+                      setAddSingleStudentMessage({ type: "success", text: "Student enrolled successfully." });
+                      setAddSingleStudentEmail("");
+                      setAddSingleStudentNumber("");
+                      getAnalytics();
+                      setTimeout(() => {
+                        setAddSingleStudentOpen(false);
+                      }, 1500);
+                    } else {
+                      setAddSingleStudentMessage({ type: "error", text: res?.errMsg || "Enrollment failed." });
+                    }
+                  } catch (err) {
+                    setAddSingleStudentMessage({ type: "error", text: err?.response?.data?.errMsg || err?.message || "Something went wrong." });
+                  } finally {
+                    setAddSingleStudentSubmitting(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg font-semibold bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {addSingleStudentSubmitting ? "Enrolling…" : "Add Single student"}
               </button>
             </div>
           </div>

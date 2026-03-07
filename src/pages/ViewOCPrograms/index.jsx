@@ -12,6 +12,7 @@ import {
   assignTutorToStudent,
   createAccountsForEmails,
   addStudentsToOCCohort,
+  createOrLinkAccountWithStudentNumber,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
@@ -40,6 +41,11 @@ const ViewOCPrograms = () => {
   const [addStudentsCreateAccounts, setAddStudentsCreateAccounts] = useState(true);
   const [addStudentsMessage, setAddStudentsMessage] = useState(null);
   const [addStudentsSubmitting, setAddStudentsSubmitting] = useState(false);
+  const [showAddSingleStudentModal, setShowAddSingleStudentModal] = useState(false);
+  const [addSingleStudentEmail, setAddSingleStudentEmail] = useState("");
+  const [addSingleStudentNumber, setAddSingleStudentNumber] = useState("");
+  const [addSingleStudentMessage, setAddSingleStudentMessage] = useState(null);
+  const [addSingleStudentSubmitting, setAddSingleStudentSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchOCPrograms = async () => {
@@ -277,6 +283,62 @@ const ViewOCPrograms = () => {
     setShowAddStudentsModal(true);
   };
 
+  const handleOpenAddSingleStudent = (program) => {
+    setSelectedProgram(program);
+    setAddSingleStudentEmail("");
+    setAddSingleStudentNumber("");
+    setAddSingleStudentMessage(null);
+    setShowAddSingleStudentModal(true);
+  };
+
+  const handleAddSingleStudentSubmit = async () => {
+    const email = addSingleStudentEmail.trim().toLowerCase();
+    const studentNumber = addSingleStudentNumber.trim();
+    if (!email) {
+      setAddSingleStudentMessage({ type: "error", text: "Enter email address." });
+      return;
+    }
+    if (!studentNumber) {
+      setAddSingleStudentMessage({ type: "error", text: "Enter student number." });
+      return;
+    }
+    if (!selectedProgram?._id) return;
+    setAddSingleStudentSubmitting(true);
+    setAddSingleStudentMessage(null);
+    try {
+      const linkRes = await createOrLinkAccountWithStudentNumber({ email, student_number: studentNumber });
+      if (!linkRes?.success) {
+        setAddSingleStudentMessage({ type: "error", text: linkRes?.message || "Failed to create or link account." });
+        setAddSingleStudentSubmitting(false);
+        return;
+      }
+      const res = await addStudentsToOCCohort(selectedProgram._id, { emails: email });
+      if (res?.status === 200 && res?.success) {
+        setAddSingleStudentMessage({
+          type: "success",
+          text: res.message + (res.missingEmails?.length ? ` ${res.missingEmails.length} email(s) not found.` : ""),
+        });
+        setAddSingleStudentEmail("");
+        setAddSingleStudentNumber("");
+        const listRes = await getAllOCCohorts(user?._id);
+        if (listRes?.status === 200 && listRes?.data) setOcPrograms(listRes.data);
+        setTimeout(() => {
+          setShowAddSingleStudentModal(false);
+          setSelectedProgram(null);
+        }, 2000);
+      } else {
+        setAddSingleStudentMessage({ type: "error", text: res?.message || "Enrollment failed." });
+      }
+    } catch (err) {
+      setAddSingleStudentMessage({
+        type: "error",
+        text: err?.response?.data?.message || err?.message || "Something went wrong.",
+      });
+    } finally {
+      setAddSingleStudentSubmitting(false);
+    }
+  };
+
   const handleAddStudentsSubmit = async () => {
     const emails = addStudentsEmails
       .split(/[\s,]+/)
@@ -476,17 +538,30 @@ const ViewOCPrograms = () => {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {canAssignRoles && (
-                          <button
-                            type="button"
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleOpenAddStudents(program);
-                            }}
-                          >
-                            Add students
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleOpenAddStudents(program);
+                              }}
+                            >
+                              Add students
+                            </button>
+                            <button
+                              type="button"
+                              className="bg-teal-600 hover:bg-teal-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleOpenAddSingleStudent(program);
+                              }}
+                            >
+                              Add Single student
+                            </button>
+                          </>
                         )}
                         <button
                           type="button"
@@ -508,6 +583,78 @@ const ViewOCPrograms = () => {
           </div>
         </div>
       )}
+
+      {/* Add Single student modal */}
+      <Modal
+        centered
+        dialogClassName="rounded-xl overflow-hidden"
+        contentClassName="bg-[#161B22] border border-gray-800"
+        show={showAddSingleStudentModal}
+        onHide={() => {
+          setShowAddSingleStudentModal(false);
+          setAddSingleStudentEmail("");
+          setAddSingleStudentNumber("");
+          setAddSingleStudentMessage(null);
+          setSelectedProgram(null);
+        }}
+      >
+        <Modal.Header closeButton className="bg-gray-800/90 text-white border-gray-700">
+          <Modal.Title>Add Single student — {selectedProgram?.cohortName || "Cohort"}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="bg-[#161B22] text-white">
+          <p className="text-gray-400 text-sm mb-4">
+            Enter email and student number. The student number will be linked to the account (or used as password for new accounts), then the student will be enrolled.
+          </p>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Email address</label>
+            <input
+              type="email"
+              placeholder="student@example.com"
+              value={addSingleStudentEmail}
+              onChange={(e) => setAddSingleStudentEmail(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">Student number</label>
+            <input
+              type="text"
+              placeholder="STU12345"
+              value={addSingleStudentNumber}
+              onChange={(e) => setAddSingleStudentNumber(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {addSingleStudentMessage && (
+            <p className={`text-sm mb-4 ${addSingleStudentMessage.type === "error" ? "text-red-400" : "text-green-400"}`}>
+              {addSingleStudentMessage.text}
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddSingleStudentModal(false);
+                setAddSingleStudentEmail("");
+                setAddSingleStudentNumber("");
+                setAddSingleStudentMessage(null);
+                setSelectedProgram(null);
+              }}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={addSingleStudentSubmitting}
+              onClick={handleAddSingleStudentSubmit}
+              className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {addSingleStudentSubmitting ? "Enrolling…" : "Add Single student"}
+            </button>
+          </div>
+        </Modal.Body>
+      </Modal>
 
       {/* Add students modal */}
       <Modal

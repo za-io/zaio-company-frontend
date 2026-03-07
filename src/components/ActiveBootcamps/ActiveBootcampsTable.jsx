@@ -234,7 +234,9 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     startDate: "",
     commitedMins: 360,
     selectedWeekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+    linkedGoogleClassroomCourseId: "",
   });
+  const [linkingClassroom, setLinkingClassroom] = useState(false);
   const [holidayRanges, setHolidayRanges] = useState([]);
   const [message, setMessage] = useState(null);
 
@@ -270,6 +272,7 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
             startDate: bc.startDate ? bc.startDate.split("T")[0] : "",
             commitedMins: bc.commitedMins || 360,
             selectedWeekdays: bc.selectedWeekdays || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+            linkedGoogleClassroomCourseId: bc.googleClassroom || bc.linkedGoogleClassroomCourseId || "",
           });
           setHolidayRanges(parseHolidaysString(bc.holidays));
         } else {
@@ -287,17 +290,37 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
       ...config,
       holidays: formatHolidaysString(),
     };
-    const result = await editBootcampConfig(bootcampId, configToSave);
+    const [configResult, linkResult] = await Promise.all([
+      editBootcampConfig(bootcampId, configToSave),
+      linkBootcampGoogleClassroom(bootcampId, (config.linkedGoogleClassroomCourseId || "").trim()),
+    ]);
     setSaving(false);
-    
-    if (result.success) {
+    if (configResult.success && linkResult.success) {
       setMessage({ type: "success", text: "Configuration saved successfully!" });
-      setTimeout(() => {
-        onSave();
-        onClose();
-      }, 1000);
+      setTimeout(() => { onSave(); onClose(); }, 1000);
+    } else if (!configResult.success) {
+      setMessage({ type: "error", text: configResult.message });
     } else {
-      setMessage({ type: "error", text: result.message });
+      setMessage({ type: "error", text: linkResult.message || "Failed to update Google Classroom link" });
+    }
+  };
+
+  const handleLinkClassroomOnly = async () => {
+    const raw = (config.linkedGoogleClassroomCourseId || "").trim();
+    if (!raw) {
+      setMessage({ type: "error", text: "Enter a Google Classroom invite link or course URL." });
+      return;
+    }
+    setLinkingClassroom(true);
+    setMessage(null);
+    const result = await linkBootcampGoogleClassroom(bootcampId, raw);
+    setLinkingClassroom(false);
+    if (result.success) {
+      setMessage({ type: "success", text: "Google Classroom link saved successfully!" });
+      setConfig((c) => ({ ...c, linkedGoogleClassroomCourseId: raw }));
+      onSave();
+    } else {
+      setMessage({ type: "error", text: result.message || "Failed to save" });
     }
   };
 
@@ -315,7 +338,7 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     <div className="edit-modal-overlay" onClick={onClose}>
       <div className="edit-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="edit-modal-header">
-          <h2>Edit Bootcamp Configuration</h2>
+          <h2>{canEdit ? "Edit Bootcamp Configuration" : "View Bootcamp Configuration"}</h2>
           <button className="edit-modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -326,13 +349,62 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
           </div>
         ) : !canEdit ? (
           <div className="edit-modal-body">
+            {message && (
+              <div className={`edit-modal-message ${message.type}`} style={{ marginBottom: 16 }}>
+                {message.text}
+              </div>
+            )}
             <div className="edit-modal-warning">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <h3>Cannot Edit</h3>
+              <h3>View Only</h3>
               <p>This bootcamp has <strong>{enrolledCount} student(s)</strong> enrolled.</p>
-              <p>Bootcamp configuration cannot be changed once students are enrolled.</p>
+              <p>Configuration cannot be changed once students are enrolled. You can view the current config below.</p>
+            </div>
+            <div className="edit-modal-config-view" style={{ marginTop: "16px", padding: "16px", background: "#f8f9fa", borderRadius: "8px" }}>
+              <div className="edit-form-group" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Bootcamp Name</label>
+                <span>{config.bootcampName || "—"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Start Date</label>
+                <span>{config.startDate || "—"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Daily Committed Minutes</label>
+                <span>{config.commitedMins ?? "—"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Active Days</label>
+                <span>{(config.selectedWeekdays || []).join(", ") || "—"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Holiday Periods</label>
+                <span>{holidayRanges.length > 0 ? holidayRanges.map(r => `${r.start} – ${r.end}`).join(", ") : "None"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+                <label style={{ fontWeight: 600, marginBottom: "8px", display: "block" }}>Google Classroom</label>
+                <p style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>You can add or update the Google Classroom link even when students are enrolled.</p>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "nowrap" }}>
+                  <input
+                    type="text"
+                    value={config.linkedGoogleClassroomCourseId}
+                    onChange={(e) => setConfig({ ...config, linkedGoogleClassroomCourseId: e.target.value })}
+                    placeholder="Paste Google Classroom invite link"
+                    style={{ flex: "1 1 auto", minWidth: 0, padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+                  />
+                  <button
+                    type="button"
+                    className="edit-modal-save"
+                    onClick={handleLinkClassroomOnly}
+                    disabled={linkingClassroom || !config.linkedGoogleClassroomCourseId?.trim()}
+                    style={{ flexShrink: 0, minWidth: 80 }}
+                  >
+                    {linkingClassroom ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -393,6 +465,17 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
                 holidayRanges={holidayRanges}
                 setHolidayRanges={setHolidayRanges}
               />
+            </div>
+
+            <div className="edit-form-group">
+              <label>Google Classroom</label>
+              <input
+                type="text"
+                value={config.linkedGoogleClassroomCourseId}
+                onChange={(e) => setConfig({ ...config, linkedGoogleClassroomCourseId: e.target.value })}
+                placeholder="Paste Google Classroom invite link"
+              />
+              <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Paste the invite link as-is. It will be saved without modification.</p>
             </div>
           </div>
         )}

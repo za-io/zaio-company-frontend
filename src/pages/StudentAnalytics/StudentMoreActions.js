@@ -7,6 +7,7 @@ import {
   updateTutor,
   undoRevokeLPAndBootcampAccess,
   revokeLPAndBootcampAccess,
+  updateStudentNumber,
 } from "../../api/student";
 
 const inputClass =
@@ -22,6 +23,9 @@ export const StudentMoreActionsModal = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [changedTutor, setChangedTutor] = useState(showModal?.tutor?._id);
+  const [studentNumberValue, setStudentNumberValue] = useState(showModal?.userid?.studentNumber ?? "");
+  const [studentNumberSaving, setStudentNumberSaving] = useState(false);
+  const [studentNumberMessage, setStudentNumberMessage] = useState(null);
 
   const handleClose = () => {
     setShowModal(false);
@@ -30,8 +34,10 @@ export const StudentMoreActionsModal = ({
   useEffect(() => {
     if (showModal) {
       setChangedTutor(showModal?.tutor?._id);
+      setStudentNumberValue(showModal?.userid?.studentNumber ?? "");
+      setStudentNumberMessage(null);
     }
-  }, [showModal?.userid?._id, showModal?.tutor?._id]);
+  }, [showModal?.userid?._id, showModal?.tutor?._id, showModal?.userid?.studentNumber]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -127,6 +133,28 @@ export const StudentMoreActionsModal = ({
       });
   };
 
+  const handleLinkStudentNumber = () => {
+    const userId = showModal?.userid?._id;
+    if (!userId) return;
+    setStudentNumberSaving(true);
+    setStudentNumberMessage(null);
+    updateStudentNumber(userId, studentNumberValue.trim() || null)
+      .then((res) => {
+        if (res?.success) {
+          setStudentNumberMessage("Student number saved.");
+          getAnalytics();
+        } else {
+          setStudentNumberMessage(res?.message || "Failed to save.");
+        }
+      })
+      .catch((err) => {
+        setStudentNumberMessage(err?.response?.data?.message || "Failed to save.");
+      })
+      .finally(() => {
+        setStudentNumberSaving(false);
+      });
+  };
+
   const undoRevokeStudentAccess = () => {
     const confirmationCode = window.prompt(
       "Enter the secret code to confirm undo revoke access:"
@@ -200,6 +228,39 @@ export const StudentMoreActionsModal = ({
         </div>
 
         <div className="border-t border-gray-700 pt-6">
+          {/* Link Student Number */}
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-white mb-1">
+              Link student number
+            </p>
+            <p className="text-sm text-gray-400 mb-2">
+              Current: {showModal?.userid?.studentNumber || "Not set"}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="Enter student number"
+                value={studentNumberValue}
+                onChange={(e) => setStudentNumberValue(e.target.value)}
+                maxLength={50}
+              />
+              <button
+                type="button"
+                onClick={handleLinkStudentNumber}
+                className="px-4 py-2 rounded-lg font-semibold bg-teal-600 hover:bg-teal-700 text-white transition-colors disabled:opacity-50"
+                disabled={studentNumberSaving}
+              >
+                {studentNumberSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+            {studentNumberMessage && (
+              <p className={`text-sm mt-2 ${studentNumberMessage.includes("saved") ? "text-green-400" : "text-red-400"}`}>
+                {studentNumberMessage}
+              </p>
+            )}
+          </div>
+
           {/* Update Tutor */}
           <div>
             <p className="text-sm font-semibold text-white mb-1">

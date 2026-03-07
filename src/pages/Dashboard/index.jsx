@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getAllBootcamps,
@@ -15,30 +15,58 @@ import { useUserStore } from "../../store/UserProvider";
 import { CompanyAppRoles } from "../../utils/appUtils";
 
 // Student Search Component with enhanced styling
+const DEBOUNCE_MS = 300;
+
+const SEARCH_TYPES = { email: "email", student_number: "student_number" };
+
 const StudentSearch = () => {
+  const [searchType, setSearchType] = useState(SEARCH_TYPES.student_number);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const debounceRef = useRef(null);
   const navigate = useNavigate();
 
-  const handleSearch = async (query) => {
-    setSearchQuery(query);
-    
-    if (query.length < 3) {
+  const latestQueryRef = useRef("");
+  const runSearch = async (query) => {
+    if (!query || query.trim().length < 3) {
       setSearchResults([]);
       setShowDropdown(false);
       return;
     }
-
+    const q = query.trim();
     setSearching(true);
-    const result = await searchStudents(query);
-    if (result?.success) {
+    const result = await searchStudents(q, searchType);
+    if (latestQueryRef.current === q && result?.success) {
       setSearchResults(result.users || []);
       setShowDropdown(true);
     }
     setSearching(false);
   };
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    latestQueryRef.current = query;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 3) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => runSearch(query), DEBOUNCE_MS);
+  };
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+  useEffect(() => {
+    if (searchQuery.trim().length >= 3) {
+      runSearch(searchQuery);
+    } else {
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchType]);
 
   const handleSelectStudent = (userId) => {
     setShowDropdown(false);
@@ -48,25 +76,34 @@ const StudentSearch = () => {
 
   return (
     <div className="relative w-full max-w-xl">
-      <div className="relative">
-        {/* Search Icon */}
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          placeholder="Search student by email or name..."
-          className="w-full pl-12 pr-12 py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-lg"
-        />
-        {searching && (
-          <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent"></div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <select
+          value={searchType}
+          onChange={(e) => setSearchType(e.target.value)}
+          className="px-4 py-3 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white text-sm font-medium cursor-pointer"
+        >
+          <option value={SEARCH_TYPES.email} className="bg-[#161B22] text-white">Search by email or name</option>
+          <option value={SEARCH_TYPES.student_number} className="bg-[#161B22] text-white">Search by student number</option>
+        </select>
+        <div className="relative flex-1">
+          <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
-        )}
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder={searchType === SEARCH_TYPES.student_number ? "Enter student number..." : "Enter email or name..."}
+            className="w-full pl-12 pr-12 py-4 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400 text-lg"
+          />
+        {searching && (
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-transparent"></div>
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Search Results Dropdown - high z-index so it appears above table */}
@@ -86,6 +123,9 @@ const StudentSearch = () => {
                   <div>
                     <p className="font-semibold text-gray-800">{user.username}</p>
                     <p className="text-sm text-gray-500">{user.email}</p>
+                    {user.studentNumber && (
+                      <p className="text-xs text-gray-400">#{user.studentNumber}</p>
+                    )}
                   </div>
                 </div>
                 {user.accBlocked && (
@@ -451,7 +491,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-white">Find a Student</h2>
-                <p className="text-sm text-gray-400">Search by email or name to view their profile</p>
+                <p className="text-sm text-gray-400">Select search type, then enter email/name or student number</p>
               </div>
             </div>
             <StudentSearch />

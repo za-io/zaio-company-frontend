@@ -13,10 +13,10 @@ export const getCourseItemDetails = (courseId, userId, type) =>
       return { success: false, items: [] };
     });
 
-// Search for students by email
-export const searchStudents = (email) =>
+// Search for students by email/name or student number. type: "email" | "student_number"
+export const searchStudents = (query, type = "email") =>
   axios
-    .get(API_URL + `/search-student?email=${encodeURIComponent(email)}`)
+    .get(API_URL + `/search-student?q=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`)
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
@@ -31,6 +31,18 @@ export const getStudentProfile = (userId) =>
     .catch((err) => {
       console.log(err);
       return { success: false };
+    });
+
+// Update student number (saved in users table)
+export const updateStudentNumber = (userId, studentNumber) =>
+  axios
+    .put(API_URL + `/student-profile/${userId}/student-number`, {
+      student_number: studentNumber,
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to update student number" };
     });
 
 // Get billing for a student (Paystack + Financing/Manati)

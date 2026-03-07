@@ -383,7 +383,7 @@ export default function TutorBootcamps() {
         ) : (
           <>
             {/* My Students - card with list and progress like super student admin */}
-            {activeTab === "students" && (
+        {activeTab === "students" && (
               <div className="border border-gray-600 rounded-xl bg-gray-900/40 p-4 max-w-4xl">
                 <ul className="divide-y divide-gray-700">
                   {list.map((bootcamp, index) => {
@@ -429,10 +429,10 @@ export default function TutorBootcamps() {
                           type="button"
                           onClick={() => navigate(`/tutor/analytics/${id}`)}
                           className="text-blue-400 hover:underline cursor-pointer shrink-0 ml-2"
-                        >
-                          View
+                  >
+                    View
                         </button>
-                      </li>
+                </li>
                     );
                   })}
                 </ul>
@@ -751,8 +751,8 @@ getTutorClassroomSubmissions()
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
+          </div>
+        )}
 
                 {!classroomConnected ? (
                   <p className="text-gray-500 text-sm">Connect above to see unmarked assignments.</p>
@@ -980,9 +980,9 @@ getTutorClassroomSubmissions()
                                   View in Google Classroom
                                 </a>
                               )}
-                            </li>
-                          ))}
-                        </ul>
+                </li>
+              ))}
+              </ul>
                         {returnedTotalPages > 1 && (
                           <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
                             <span className="text-gray-400 text-sm">
@@ -1036,12 +1036,12 @@ getTutorClassroomSubmissions()
                         </p>
                       ) : (
                         <p className="text-gray-500 text-sm">No returns yet</p>
-                      )}
-                    </div>
+              )}
+            </div>
                   </div>
                 )}
-              </div>
-            )}
+          </div>
+        )}
 
             {/* My KPIs */}
             {activeTab === "kpis" && (
@@ -1071,7 +1071,7 @@ getTutorClassroomSubmissions()
                 {list.length === 0 && (
                   <p className="text-gray-400 py-4">No KPIs available at the moment.</p>
                 )}
-              </div>
+          </div>
             )}
           </>
         )}

@@ -133,6 +133,16 @@ export const createAccountsForEmails = (payload) =>
       throw err;
     });
 
+/** Create or link account with student number. Creates new account (password = student_number) or links student_number to existing. */
+export const createOrLinkAccountWithStudentNumber = (payload) =>
+  axios
+    .post(`${API_URL}/create-or-link-account-with-student-number`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+
 export const enrollStudentsIntoLP = (payload) =>
   axios
     .post(`${BASE_URL}/dashboard/enrollmany`, payload)

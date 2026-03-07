@@ -11,6 +11,7 @@ import { StudentPingModal } from "./StudentPingModal";
 import { getAllTutors, getEditTilesToken } from "../../api/company";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
 import { RxCheckCircled } from "react-icons/rx";
+import { HiOutlineClipboardDocument } from "react-icons/hi2";
 
 const AnalyticsTable = ({
   data,
@@ -22,6 +23,15 @@ const AnalyticsTable = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+
+  const copyToClipboard = (text, id) => {
+    if (!text || text === "—") return;
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    });
+  };
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
   const [showWarningModal, setShowWarningModal] = useState(null);
   const [showMoreActionsModal, setShowMoreActionsModal] = useState(null);
@@ -154,7 +164,7 @@ const AnalyticsTable = ({
                   <input
                     list="browsers"
                     value={searchQuery}
-                    placeholder="Search by name or email..."
+                    placeholder="Search by name, email or student #..."
                     onChange={(e) => setSearchQuery(e?.target?.value)}
                     className="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
                   />
@@ -162,6 +172,11 @@ const AnalyticsTable = ({
                     {data?.analytics?.map((d, idx) => (
                       <option key={idx} value={d?.userid?.username} />
                     ))}
+                    {data?.analytics?.map((d, idx) =>
+                      d?.userid?.studentNumber ? (
+                        <option key={`sn-${idx}`} value={d?.userid?.studentNumber} />
+                      ) : null
+                    )}
                   </datalist>
                 </div>
 
@@ -195,6 +210,9 @@ const AnalyticsTable = ({
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Student
+                  </th>
+                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Student #
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Progress
@@ -238,6 +256,9 @@ const AnalyticsTable = ({
                         ?.toLowerCase()
                         ?.includes(searchQuery?.toLowerCase()) ||
                       ba?.userid?.email
+                        ?.toLowerCase()
+                        ?.includes(searchQuery?.toLowerCase()) ||
+                      (ba?.userid?.studentNumber || "")
                         ?.toLowerCase()
                         ?.includes(searchQuery?.toLowerCase())
                   )
@@ -296,10 +317,51 @@ const AnalyticsTable = ({
                               <p className="text-sm font-medium text-white truncate">
                                 {ba?.userid?.username}
                               </p>
-                              <p className="text-xs text-gray-500 truncate">
-                                {ba?.userid?.email}
-                              </p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs text-gray-500 truncate">
+                                  {ba?.userid?.email}
+                                </p>
+                                {ba?.userid?.email && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(ba?.userid?.email, `email-${ba?._id}`);
+                                    }}
+                                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${
+                                      copiedId === `email-${ba?._id}` ? "text-green-400" : "text-gray-500 hover:text-gray-300 hover:bg-gray-700/50"
+                                    }`}
+                                    title={copiedId === `email-${ba?._id}` ? "Copied!" : "Copy email"}
+                                  >
+                                    <HiOutlineClipboardDocument className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
+                          </div>
+                        </td>
+
+                        {/* Student Number */}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-gray-400">
+                              {ba?.userid?.studentNumber || "—"}
+                            </span>
+                            {ba?.userid?.studentNumber && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(ba?.userid?.studentNumber, `sn-${ba?._id}`);
+                                }}
+                                className={`flex-shrink-0 p-0.5 rounded transition-colors ${
+                                  copiedId === `sn-${ba?._id}` ? "text-green-400" : "text-gray-500 hover:text-gray-300 hover:bg-gray-700/50"
+                                }`}
+                                title={copiedId === `sn-${ba?._id}` ? "Copied!" : "Copy student number"}
+                              >
+                                <HiOutlineClipboardDocument className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
 
