@@ -33,6 +33,8 @@ const CreateOCCohort = () => {
     cohortYear: "",
     learningPath: "",
     nonQctoLearningPath: "",
+    skillsProgramId: "",
+    skillsProgramName: "",
     studentEmails: "",
     date: new Date().toISOString().split("T")[0],
   });
@@ -90,6 +92,16 @@ const CreateOCCohort = () => {
       return;
     }
 
+    if (!formData.skillsProgramId?.trim()) {
+      setMsg("Please enter Skills Program ID");
+      return;
+    }
+
+    if (!formData.skillsProgramName?.trim()) {
+      setMsg("Please enter Skills Program Name");
+      return;
+    }
+
     if (!formData.studentEmails.trim()) {
       setMsg("Please enter student emails");
       return;
@@ -103,6 +115,8 @@ const CreateOCCohort = () => {
         cohortName,
         learningPath: formData.learningPath,
         nonQctoLearningPath: formData.nonQctoLearningPath || undefined,
+        skillsProgramId: formData.skillsProgramId.trim(),
+        skillsProgramName: formData.skillsProgramName.trim(),
         studentEmails: formData.studentEmails,
         date: formData.date,
         company_id: user?._id,
@@ -124,6 +138,8 @@ const CreateOCCohort = () => {
           cohortYear: "",
           learningPath: "",
           nonQctoLearningPath: "",
+          skillsProgramId: "",
+          skillsProgramName: "",
           studentEmails: "",
           date: new Date().toISOString().split("T")[0],
         });
@@ -251,6 +267,40 @@ const CreateOCCohort = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Skills Program ID and Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="skillsProgramId" className={labelClass}>
+                Skills Program ID
+              </label>
+              <input
+                className={inputClass}
+                name="skillsProgramId"
+                id="skillsProgramId"
+                type="text"
+                placeholder="e.g. 12345"
+                value={formData.skillsProgramId}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="skillsProgramName" className={labelClass}>
+                Skills Program Name
+              </label>
+              <input
+                className={inputClass}
+                name="skillsProgramName"
+                id="skillsProgramName"
+                type="text"
+                placeholder="e.g. Software Developer"
+                value={formData.skillsProgramName}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
           </div>
 
           {/* Non-QCTO Learning Path (optional – students enrolled in both) */}

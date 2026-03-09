@@ -275,6 +275,98 @@ export const assignModerator = (cohortId, moderatorId) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+// Live Classes
+export const getLiveClasses = (cohortId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/live-classes`)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const createLiveClass = (cohortId, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/oc-cohort/${cohortId}/live-classes`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
+export const updateLiveClass = (cohortId, liveClassId, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .put(`${BASE_URL}/oc-cohort/${cohortId}/live-classes/${liveClassId}`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
+export const deleteLiveClass = (cohortId, liveClassId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .delete(`${BASE_URL}/oc-cohort/${cohortId}/live-classes/${liveClassId}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
+// Bootcamp Live Classes
+export const getBootcampLiveClasses = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/live-classes`, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
+export const createBootcampLiveClass = (bootcampId, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/live-classes`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
+export const updateBootcampLiveClass = (bootcampId, liveClassId, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .put(`${BASE_URL}/bootcamp/${bootcampId}/live-classes/${liveClassId}`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
+export const deleteBootcampLiveClass = (bootcampId, liveClassId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .delete(`${BASE_URL}/bootcamp/${bootcampId}/live-classes/${liveClassId}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
 export const getOCStudentDetails = (studentId) =>
   axios
     .get(`${BASE_URL}/oc-cohort/student/${studentId}`)
@@ -318,6 +410,22 @@ export const tutorSignOffQCTOLW = (assessmentId, submissionId, tutorSignature = 
     })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+/** Get QCTO learner enrollments (optionally filter by cohortId) */
+export const getQCTOLearnerEnrollments = (cohortId = null) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const url = cohortId
+    ? `${BASE_URL}/oc-cohort/qcto-learner-enrollments?cohortId=${cohortId}`
+    : `${BASE_URL}/oc-cohort/qcto-learner-enrollments`;
+  return axios
+    .get(url, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, data: [] };
+    });
+};
 
 // Student enrolled bootcamps (paginated, default 4 per page)
 export const getEnrolledBootcamps = ({ page = 1, limit = 4 } = {}) => {

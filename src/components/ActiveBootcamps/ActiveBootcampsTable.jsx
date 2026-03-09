@@ -1,6 +1,17 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getEnrolledBootcamps, archiveBootcamp, archiveManyBootcamps, getBootcampConfig, editBootcampConfig, linkBootcampGoogleClassroom } from "../../api/company";
+import {
+  getEnrolledBootcamps,
+  archiveBootcamp,
+  archiveManyBootcamps,
+  getBootcampConfig,
+  editBootcampConfig,
+  linkBootcampGoogleClassroom,
+  getBootcampLiveClasses,
+  createBootcampLiveClass,
+  updateBootcampLiveClass,
+  deleteBootcampLiveClass,
+} from "../../api/company";
 import Loader from "../loader/loader";
 import "./ActiveBootcampsTable.css";
 import {
@@ -613,6 +624,260 @@ const LinkGoogleClassroomModal = ({ isOpen, onClose, bootcampId, bootcampName, o
   );
 };
 
+const DEFAULT_LIVE_CLASS_THUMBNAIL =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120'%3E%3Crect fill='%23212a34' width='200' height='120'/%3E%3Ctext x='100' y='65' fill='%236b7280' font-size='14' text-anchor='middle' font-family='system-ui'%3ELive Class%3C/text%3E%3C/svg%3E";
+
+const BootcampLiveClassesModal = ({ isOpen, onClose, bootcampId, bootcampName, onSave }) => {
+  const [liveClasses, setLiveClasses] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingLiveClass, setEditingLiveClass] = useState(null);
+  const [form, setForm] = useState({
+    title: "",
+    day: "Monday",
+    time: "09:00",
+    endTime: "10:00",
+    link: "",
+    thumbnail: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const fetchLiveClasses = () => {
+    if (!bootcampId) return;
+    setLoading(true);
+    getBootcampLiveClasses(bootcampId)
+      .then((res) => {
+        if (res?.status === 200 && res?.success && Array.isArray(res.data)) {
+          setLiveClasses(res.data);
+        } else {
+          setLiveClasses([]);
+        }
+      })
+      .catch(() => setLiveClasses([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (isOpen && bootcampId) {
+      fetchLiveClasses();
+      setShowForm(false);
+      setEditingLiveClass(null);
+      setMessage(null);
+    }
+  }, [isOpen, bootcampId]);
+
+  const handleOpenAdd = () => {
+    setEditingLiveClass(null);
+    setForm({ title: "", day: "Monday", time: "09:00", endTime: "10:00", link: "", thumbnail: "" });
+    setMessage(null);
+    setShowForm(true);
+  };
+
+  const handleOpenEdit = (lc) => {
+    setEditingLiveClass(lc);
+    setForm({
+      title: lc.title || "",
+      day: lc.day || "Monday",
+      time: lc.time || "09:00",
+      endTime: lc.endTime || "10:00",
+      link: lc.link || "",
+      thumbnail: lc.thumbnail || "",
+    });
+    setMessage(null);
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    const { title, day, time, endTime, link, thumbnail } = form;
+    if (!title?.trim()) {
+      setMessage({ type: "error", text: "Title is required." });
+      return;
+    }
+    if (!bootcampId) return;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const payload = { title: title.trim(), day, time, endTime, link: link?.trim() || "", thumbnail: thumbnail?.trim() || "" };
+      if (editingLiveClass) {
+        const res = await updateBootcampLiveClass(bootcampId, editingLiveClass._id, payload);
+        if (res?.status === 200 && res?.success) {
+          setLiveClasses((prev) => prev.map((lc) => (lc._id === editingLiveClass._id ? res.data : lc)));
+          setShowForm(false);
+          setEditingLiveClass(null);
+          onSave?.();
+        } else {
+          setMessage({ type: "error", text: res?.message || "Update failed." });
+        }
+      } else {
+        const res = await createBootcampLiveClass(bootcampId, payload);
+        if (res?.status === 200 && res?.success) {
+          setLiveClasses((prev) => [...prev, res.data]);
+          setShowForm(false);
+          onSave?.();
+        } else {
+          setMessage({ type: "error", text: res?.message || "Create failed." });
+        }
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: err?.response?.data?.message || err?.message || "Something went wrong." });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (lc) => {
+    if (!bootcampId || !window.confirm(`Delete live class "${lc.title}"?`)) return;
+    try {
+      const res = await deleteBootcampLiveClass(bootcampId, lc._id);
+      if (res?.status === 200 && res?.success) {
+        setLiveClasses((prev) => prev.filter((x) => x._id !== lc._id));
+        onSave?.();
+      } else {
+        alert(res?.message || "Delete failed.");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || "Delete failed.");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+        <div className="edit-modal-header">
+          <h2>Live Classes — {bootcampName || "Bootcamp"}</h2>
+          <button className="edit-modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="edit-modal-body">
+          {message && <div className={`edit-modal-message ${message.type}`}>{message.text}</div>}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <span style={{ color: "#94a3b8", fontSize: 14 }}>Schedule live classes for enrolled students</span>
+            <button type="button" className="edit-modal-save" onClick={handleOpenAdd}>
+              + Add Live Class
+            </button>
+          </div>
+
+          {showForm ? (
+            <div style={{ padding: 16, background: "#1e293b", borderRadius: 8, marginBottom: 20 }}>
+              <h4 style={{ marginBottom: 12, color: "#e2e8f0" }}>{editingLiveClass ? "Edit Live Class" : "Add Live Class"}</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: 4, fontSize: 13, color: "#94a3b8" }}>Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Introduction to Cyber Security"
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 4, fontSize: 13, color: "#94a3b8" }}>Day</label>
+                  <select
+                    value={form.day}
+                    onChange={(e) => setForm((f) => ({ ...f, day: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0" }}
+                  >
+                    {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={{ display: "block", marginBottom: 4, fontSize: 13, color: "#94a3b8" }}>Start Time</label>
+                    <input
+                      type="time"
+                      value={form.time}
+                      onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", marginBottom: 4, fontSize: 13, color: "#94a3b8" }}>End Time</label>
+                    <input
+                      type="time"
+                      value={form.endTime}
+                      onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0" }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 4, fontSize: 13, color: "#94a3b8" }}>Link (optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://meet.google.com/..."
+                    value={form.link}
+                    onChange={(e) => setForm((f) => ({ ...f, link: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: 4, fontSize: 13, color: "#94a3b8" }}>Thumbnail URL (optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://example.com/image.jpg"
+                    value={form.thumbnail}
+                    onChange={(e) => setForm((f) => ({ ...f, thumbnail: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0" }}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" className="edit-modal-save" onClick={handleSave} disabled={submitting}>
+                    {submitting ? "Saving…" : editingLiveClass ? "Update" : "Add Live Class"}
+                  </button>
+                  <button
+                    type="button"
+                    className="edit-modal-cancel"
+                    onClick={() => { setShowForm(false); setEditingLiveClass(null); setMessage(null); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="edit-modal-loading"><Loader size={24} /><p>Loading live classes…</p></div>
+          ) : liveClasses.length === 0 ? (
+            <p style={{ color: "#94a3b8", fontSize: 14 }}>No live classes yet. Click &quot;Add Live Class&quot; to create one.</p>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16 }}>
+              {liveClasses.map((lc) => (
+                <div key={lc._id} style={{ background: "#1e293b", borderRadius: 8, overflow: "hidden", border: "1px solid #334155" }}>
+                  <div style={{ aspectRatio: "16/9", background: "#0f172a" }}>
+                    <img
+                      src={lc.thumbnail || DEFAULT_LIVE_CLASS_THUMBNAIL}
+                      alt={lc.title}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      onError={(e) => { e.target.src = DEFAULT_LIVE_CLASS_THUMBNAIL; }}
+                    />
+                  </div>
+                  <div style={{ padding: 12 }}>
+                    <h5 style={{ margin: 0, color: "#e2e8f0", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lc.title}</h5>
+                    <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>{lc.day} • {lc.time} – {lc.endTime}</p>
+                    {lc.link && (
+                      <a href={lc.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#60a5fa", marginTop: 4, display: "block" }}>Join</a>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <button type="button" className="edit-modal-save" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => handleOpenEdit(lc)}>Edit</button>
+                      <button type="button" className="dropdown-item archive-btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => handleDelete(lc)}>Delete</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const BOOTCAMPS_PAGE_SIZE = 4;
 
 function ActiveBootcampsTable() {
@@ -630,6 +895,9 @@ function ActiveBootcampsTable() {
   const [linkClassroomModalOpen, setLinkClassroomModalOpen] = useState(false);
   const [linkingBootcampId, setLinkingBootcampId] = useState(null);
   const [linkingBootcampName, setLinkingBootcampName] = useState("");
+  const [liveClassesModalOpen, setLiveClassesModalOpen] = useState(false);
+  const [liveClassesBootcampId, setLiveClassesBootcampId] = useState(null);
+  const [liveClassesBootcampName, setLiveClassesBootcampName] = useState("");
   const dropdownRef = useRef(null);
 
   const fetchBootcamps = (pageNum = page) => {
@@ -687,6 +955,14 @@ function ActiveBootcampsTable() {
     setLinkingBootcampId(bootcampId);
     setLinkingBootcampName(bootcampName || "Bootcamp");
     setLinkClassroomModalOpen(true);
+    setOpenDropdown(null);
+  };
+
+  const handleLiveClasses = (e, bootcampId, bootcampName) => {
+    e.stopPropagation();
+    setLiveClassesBootcampId(bootcampId);
+    setLiveClassesBootcampName(bootcampName || "Bootcamp");
+    setLiveClassesModalOpen(true);
     setOpenDropdown(null);
   };
 
@@ -866,6 +1142,12 @@ function ActiveBootcampsTable() {
                             Link Google Classroom
                           </button>
                           <button
+                            className="dropdown-item edit-btn"
+                            onClick={(e) => handleLiveClasses(e, b._id, b.bootcampName || b.learningpath?.learningpathname)}
+                          >
+                            Live Classes
+                          </button>
+                          <button
                             className="dropdown-item archive-btn"
                             onClick={(e) => handleArchive(e, b._id, b.bootcampName)}
                           >
@@ -931,6 +1213,13 @@ function ActiveBootcampsTable() {
         bootcampId={linkingBootcampId}
         bootcampName={linkingBootcampName}
         onSave={() => fetchBootcamps(page)}
+      />
+      <BootcampLiveClassesModal
+        isOpen={liveClassesModalOpen}
+        onClose={() => { setLiveClassesModalOpen(false); setLiveClassesBootcampId(null); setLiveClassesBootcampName(""); }}
+        bootcampId={liveClassesBootcampId}
+        bootcampName={liveClassesBootcampName}
+        onSave={() => {}}
       />
     </div>
   );

@@ -78,13 +78,13 @@ const OCStudentDetails = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case "Completed":
-        return "bg-emerald-600 text-white";
+        return "bg-emerald-500/20 text-emerald-400";
       case "In Progress":
-        return "bg-amber-500/90 text-gray-900";
+        return "bg-amber-500/20 text-amber-400";
       case "Not Started":
-        return "bg-gray-600 text-gray-200";
+        return "bg-slate-600/40 text-slate-400";
       default:
-        return "bg-gray-600 text-gray-200";
+        return "bg-slate-600/40 text-slate-400";
     }
   };
 
@@ -107,83 +107,84 @@ const OCStudentDetails = () => {
 
   if (!studentData) {
     return (
-      <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8 flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 flex flex-col items-center justify-center antialiased">
         <Loader />
-        <p className="text-gray-400 mt-4">Loading student details…</p>
+        <p className="text-slate-400 mt-4 text-sm">Loading student details…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8">
-      <div className="mb-8">
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 px-4 sm:px-6 md:px-10 lg:px-20 py-10 text-slate-200 antialiased">
+      <div className="max-w-5xl mx-auto">
+      <div className="mb-10">
         <button
           type="button"
           onClick={() => navigate("/oc-programs")}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer mb-4"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/60 text-slate-300 text-sm font-medium hover:bg-slate-700/60 hover:text-slate-100 transition-colors cursor-pointer mb-4"
         >
           ← Back to OC Programs
         </button>
-        <h1 className="text-3xl font-bold text-white mb-1">Student Details</h1>
-        <p className="text-gray-400">{studentData.name} — OC progress and modules</p>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-100 mb-2 leading-tight">Student Details</h1>
+        <p className="text-slate-400 text-sm">{studentData.name} — OC progress and modules</p>
       </div>
 
-      <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Personal Information</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="bg-slate-800/40 rounded-2xl p-6 mb-8">
+        <h2 className="text-base font-medium text-slate-200 mb-4 tracking-wide">Personal Information</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Name</label>
-            <p className="text-gray-200 text-lg">{studentData.name}</p>
+            <label className="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Name</label>
+            <p className="text-slate-200 text-sm">{studentData.name}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Email</label>
-            <p className="text-gray-200 text-lg">{studentData.email}</p>
+            <label className="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Email</label>
+            <p className="text-slate-200 text-sm">{studentData.email}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">ID Number</label>
-            <p className="text-gray-200 text-lg">{studentData.idNumber || "—"}</p>
+            <label className="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">ID Number</label>
+            <p className="text-slate-200 text-sm">{studentData.idNumber || "—"}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">Start Date</label>
-            <p className="text-gray-200 text-lg">{formatDate(studentData.startDate)}</p>
+            <label className="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Start Date</label>
+            <p className="text-slate-200 text-sm">{formatDate(studentData.startDate)}</p>
           </div>
         </div>
       </div>
 
       {/* Knowledge Modules */}
-      <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Knowledge Modules</h2>
-        <div className="rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-slate-800/40 rounded-2xl p-6 mb-8">
+        <h2 className="text-base font-medium text-slate-200 mb-4 tracking-wide">Knowledge Modules</h2>
+        <div className="rounded-xl overflow-hidden bg-slate-800/30">
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-gray-800/80">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Module Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Score</th>
+              <tr className="bg-slate-800/50 border-b border-slate-700/30">
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Module Name</th>
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Score</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700">
+            <tbody>
               {studentData.knowledgeModules && studentData.knowledgeModules.length > 0 ? (
                 studentData.knowledgeModules.map((module) => (
                   <tr
                     key={module.id}
-                    className="hover:bg-gray-800/40 transition-colors cursor-pointer"
+                    className="border-t border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer first:border-t-0"
                     onClick={(e) => handleModuleClick(module, "KM", e)}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-200">{module.name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(module.status)}`}>
+                    <td className="px-4 py-3.5 text-sm font-medium text-slate-200">{module.name}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(module.status)}`}>
                         {module.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm text-slate-400">
                       {module.score !== null && module.score !== undefined ? `${module.score}%` : "—"}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-500">
                     No Knowledge Modules found
                   </td>
                 </tr>
@@ -194,39 +195,39 @@ const OCStudentDetails = () => {
       </div>
 
       {/* Practical Modules */}
-      <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Practical Modules</h2>
-        <div className="rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-slate-800/40 rounded-2xl p-6 mb-8">
+        <h2 className="text-base font-medium text-slate-200 mb-4 tracking-wide">Practical Modules</h2>
+        <div className="rounded-xl overflow-hidden bg-slate-800/30">
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-gray-800/80">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Module Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Score</th>
+              <tr className="bg-slate-800/50 border-b border-slate-700/30">
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Module Name</th>
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Score</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700">
+            <tbody>
               {studentData.practicalModules && studentData.practicalModules.length > 0 ? (
                 studentData.practicalModules.map((module) => (
                   <tr
                     key={module.id}
-                    className="hover:bg-gray-800/40 transition-colors cursor-pointer"
+                    className="border-t border-slate-700/30 hover:bg-slate-800/40 transition-colors cursor-pointer first:border-t-0"
                     onClick={(e) => handleModuleClick(module, "PM", e)}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-200">{module.name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(module.status)}`}>
+                    <td className="px-4 py-3.5 text-sm font-medium text-slate-200">{module.name}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(module.status)}`}>
                         {module.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm text-slate-400">
                       {module.score !== null && module.score !== undefined ? `${module.score}%` : "—"}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-500">
                     No Practical Modules found
                   </td>
                 </tr>
@@ -237,35 +238,35 @@ const OCStudentDetails = () => {
       </div>
 
       {/* Workplace Modules */}
-      <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Workplace Modules</h2>
-        <div className="rounded-lg border border-gray-700 overflow-hidden">
+      <div className="bg-slate-800/40 rounded-2xl p-6 mb-8">
+        <h2 className="text-base font-medium text-slate-200 mb-4 tracking-wide">Workplace Modules</h2>
+        <div className="rounded-xl overflow-hidden bg-slate-800/30">
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-gray-800/80">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Module Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Score</th>
+              <tr className="bg-slate-800/50 border-b border-slate-700/30">
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Module Name</th>
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Score</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700">
+            <tbody>
               {studentData.workplaceModules && studentData.workplaceModules.length > 0 ? (
                 studentData.workplaceModules.map((module) => (
-                  <tr key={module.id} className="hover:bg-gray-800/40 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-200">{module.name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(module.status)}`}>
+                  <tr key={module.id} className="border-t border-slate-700/30 hover:bg-slate-800/40 transition-colors first:border-t-0">
+                    <td className="px-4 py-3.5 text-sm font-medium text-slate-200">{module.name}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(module.status)}`}>
                         {module.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm text-slate-400">
                       {module.score !== null && module.score !== undefined ? `${module.score}%` : "—"}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-500">
                     No Workplace Modules found
                   </td>
                 </tr>
@@ -277,32 +278,32 @@ const OCStudentDetails = () => {
 
       {/* Non-QCTO Learning Path (when cohort has dual path) */}
       {studentData.nonQctoModules && studentData.nonQctoModules.length > 0 && (
-        <div className="bg-[#161B22] rounded-xl border border-gray-800 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-white mb-1">
+        <div className="bg-slate-800/40 rounded-2xl p-6 mb-8">
+          <h2 className="text-base font-medium text-slate-200 mb-1 tracking-wide">
             Non-QCTO Learning Path
           </h2>
           {studentData.nonQctoLearningPathName && (
-            <p className="text-gray-400 text-sm mb-4">{studentData.nonQctoLearningPathName}</p>
+            <p className="text-slate-400 text-sm mb-4">{studentData.nonQctoLearningPathName}</p>
           )}
-          <div className="rounded-lg border border-gray-700 overflow-hidden">
+          <div className="rounded-xl overflow-hidden bg-slate-800/30">
             <table className="min-w-full border-collapse">
               <thead>
-                <tr className="bg-gray-800/80">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Course / Module</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider">Progress</th>
+                <tr className="bg-slate-800/50 border-b border-slate-700/30">
+                  <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Course / Module</th>
+                  <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3.5 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Progress</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody>
                 {studentData.nonQctoModules.map((module) => (
-                  <tr key={module.id} className="hover:bg-gray-800/40 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-200">{module.name}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(module.status)}`}>
+                  <tr key={module.id} className="border-t border-slate-700/30 hover:bg-slate-800/40 transition-colors first:border-t-0">
+                    <td className="px-4 py-3.5 text-sm font-medium text-slate-200">{module.name}</td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(module.status)}`}>
                         {module.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-sm text-slate-400">
                       {module.completedPercentage != null ? `${module.completedPercentage}%` : (module.score != null ? `${module.score}%` : "—")}
                     </td>
                   </tr>
@@ -312,6 +313,7 @@ const OCStudentDetails = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

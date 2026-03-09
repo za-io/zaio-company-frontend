@@ -17,6 +17,7 @@ const OCModuleDetails = () => {
   const [expandedUnits, setExpandedUnits] = useState({});
   const [completedItems, setCompletedItems] = useState({}); // Track completed lectures, assignments, quizzes
   const isReadOnly = user?.role === "TUTOR"; // Tutors have read-only access
+  const isAssessor = user?.role === "ASSESSOR" || user?.role === "MODERATOR"; // Assessors see only tasks, not videos
 
   useEffect(() => {
     const fetchModuleData = async () => {
@@ -279,18 +280,29 @@ const OCModuleDetails = () => {
           <span className={`${styles.statusBadge} ${getStatusClass(moduleData.status)}`}>
             {moduleData.status}
           </span>
-          {moduleData.score !== null && (
-            <span className={styles.score}>Score: {moduleData.score}%</span>
-          )}
           {studentData && (
             <span className={styles.studentName}>Student: {studentData.name}</span>
           )}
         </div>
       </div>
 
-      {moduleData.units && moduleData.units.length > 0 ? (
+      {(() => {
+        const unitsToShow = moduleData.units && moduleData.units.length > 0
+          ? (isAssessor
+              ? moduleData.units.filter((unit) => {
+                  const hasQctoTasks = unit.lectures?.some((l) =>
+                    l && typeof l === "object" && (l.type === "qctosa" || l.type === "qctolw" || l.type === "qctopmt"
+                      || l.qctosummativeid || l.qctolwid || l.qctopmtid)
+                  );
+                  const hasAssignments = unit.assignments && unit.assignments.length > 0;
+                  const hasQuizzes = unit.quizzes && unit.quizzes.length > 0;
+                  return hasQctoTasks || hasAssignments || hasQuizzes;
+                })
+              : moduleData.units)
+          : [];
+        return unitsToShow.length > 0 ? (
         <div className={styles.unitList}>
-          {moduleData.units.map((unit) => {
+          {unitsToShow.map((unit) => {
             const isExpanded = expandedUnits[unit.id] !== false;
             return (
               <div key={unit.id} className={styles.unitCard}>
@@ -312,11 +324,23 @@ const OCModuleDetails = () => {
 
                 {isExpanded && (
                   <div className={styles.unitBody}>
-                    {unit.lectures && unit.lectures.length > 0 && (
+                    {(() => {
+                      // For assessors: show only QCTO tasks (qctosa, qctolw, qctopmt), hide video lectures
+                      const lecturesToShow = unit.lectures && unit.lectures.length > 0
+                        ? (isAssessor
+                            ? unit.lectures.filter((l) => {
+                                if (!l || typeof l !== "object") return false;
+                                return l.type === "qctosa" || l.type === "qctolw" || l.type === "qctopmt"
+                                  || l.isQCTOAssessment || l.isQCTOLW || l.isQCTOPMT
+                                  || l.qctosummativeid || l.qctolwid || l.qctopmtid;
+                              })
+                            : unit.lectures)
+                        : [];
+                      return lecturesToShow.length > 0 ? (
                       <>
-                        <h3 className={styles.sectionTitle}>Lectures</h3>
+                        <h3 className={styles.sectionTitle}>{isAssessor ? "Tasks" : "Lectures"}</h3>
                         <ul className={styles.itemList}>
-                          {unit.lectures.map((lecture, idx) => {
+                          {lecturesToShow.map((lecture, idx) => {
                             const isCompleted = isItemCompleted(lecture, "lecture");
                             const lectureName = getItemName(lecture);
                             const isClickable = lecture && typeof lecture === "object" && lecture.id;
@@ -341,7 +365,8 @@ const OCModuleDetails = () => {
                           })}
                         </ul>
                       </>
-                    )}
+                      ) : null;
+                    })()}
 
                     {unit.assignments && unit.assignments.length > 0 && (
                       <>
@@ -409,11 +434,12 @@ const OCModuleDetails = () => {
             );
           })}
         </div>
-      ) : (
+        ) : (
         <div className={styles.emptyState}>
-          <p>No units available for this module.</p>
+          <p>{isAssessor ? "No assessable tasks available for this module." : "No units available for this module."}</p>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 };
