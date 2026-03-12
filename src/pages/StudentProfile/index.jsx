@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber } from "../../api/student";
 import Loader from "../../components/loader/loader";
 
 const formatDate = (dateStr) => {
@@ -50,6 +50,14 @@ const StudentProfile = () => {
   const [addInstallmentForm, setAddInstallmentForm] = useState({ amount1: "", amount2: "", dueDate1: "", dueDate2: "", planName: "" });
   const [addInstallmentSubmitting, setAddInstallmentSubmitting] = useState(false);
   const [addInstallmentError, setAddInstallmentError] = useState(null);
+  const [editInstallmentModal, setEditInstallmentModal] = useState(null);
+  const [editInstallmentForm, setEditInstallmentForm] = useState({ amount: "", dueDate: "" });
+  const [editInstallmentSubmitting, setEditInstallmentSubmitting] = useState(false);
+  const [editInstallmentError, setEditInstallmentError] = useState(null);
+  const [attachProofModal, setAttachProofModal] = useState(null);
+  const [attachProofFile, setAttachProofFile] = useState(null);
+  const [attachProofSubmitting, setAttachProofSubmitting] = useState(false);
+  const [attachProofError, setAttachProofError] = useState(null);
   const [customPlans, setCustomPlans] = useState([]);
   const [customPlansLoading, setCustomPlansLoading] = useState(false);
   const [addCustomModal, setAddCustomModal] = useState(false);
@@ -64,6 +72,7 @@ const StudentProfile = () => {
   const [paystackSelectedRefs, setPaystackSelectedRefs] = useState(new Set());
   const [paystackSaveLoading, setPaystackSaveLoading] = useState(false);
   const [generateLinkLoading, setGenerateLinkLoading] = useState(false);
+  const [updatePaymentStatusLoading, setUpdatePaymentStatusLoading] = useState(null);
   const [backfillCustomPlan, setBackfillCustomPlan] = useState(null);
   const [linkManatiCode, setLinkManatiCode] = useState("");
   const [linkManatiMessage, setLinkManatiMessage] = useState(null);
@@ -75,6 +84,14 @@ const StudentProfile = () => {
   const [studentNumberValue, setStudentNumberValue] = useState("");
   const [studentNumberSaving, setStudentNumberSaving] = useState(false);
   const [studentNumberMessage, setStudentNumberMessage] = useState(null);
+  const [deleteRecordModal, setDeleteRecordModal] = useState(null);
+  const [deleteRecordSubmitting, setDeleteRecordSubmitting] = useState(false);
+  const [deleteRecordError, setDeleteRecordError] = useState(null);
+  const [editPlanModal, setEditPlanModal] = useState(null);
+  const [editPlanForm, setEditPlanForm] = useState({ planName: "", manatiAgreementCode: "", newInstallments: [] });
+  const [editPlanSubmitting, setEditPlanSubmitting] = useState(false);
+  const [editPlanError, setEditPlanError] = useState(null);
+  const [editPlanPaystackLookupLoading, setEditPlanPaystackLookupLoading] = useState(null);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -307,6 +324,249 @@ const StudentProfile = () => {
       setAddInstallmentError(err?.response?.data?.message || "Failed to create plan");
     } finally {
       setAddInstallmentSubmitting(false);
+    }
+  };
+
+  const handleEditInstallmentClick = (plan, inst, planType = "2_installment") => {
+    setEditInstallmentModal({ plan, inst, planType });
+    setEditInstallmentForm({
+      amount: inst.amount != null ? (Number(inst.amount) / 100).toString() : "",
+      dueDate: inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "",
+    });
+    setEditInstallmentError(null);
+  };
+
+  const handleEditInstallmentSubmit = async (e) => {
+    e.preventDefault();
+    if (!editInstallmentModal) return;
+    setEditInstallmentError(null);
+    const amount = parseAmountString(editInstallmentForm.amount);
+    const dueDate = (editInstallmentForm.dueDate || "").trim();
+    if (!(amount > 0) && !dueDate) {
+      setEditInstallmentError("Provide amount and/or due date.");
+      return;
+    }
+    setEditInstallmentSubmitting(true);
+    try {
+      const payload = {};
+      if (amount > 0) payload.amount = amount;
+      if (dueDate) payload.due_date = dueDate.replace(/\//g, "-");
+      const planId = editInstallmentModal.plan._id?.toString?.() ?? editInstallmentModal.plan._id;
+      const isCustom = editInstallmentModal.planType === "custom";
+      const res = isCustom
+        ? await updateCustomInstallment(userId, planId, editInstallmentModal.inst.number, payload)
+        : await updateInstallment(userId, planId, editInstallmentModal.inst.number, payload);
+      if (res.success) {
+        setEditInstallmentModal(null);
+        if (isCustom) {
+          const listRes = await getCustomPlans(userId);
+          if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        } else {
+          const listRes = await getStudentInstallmentPlans(userId);
+          if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+        }
+        fetchBilling();
+      } else {
+        setEditInstallmentError(res.message || "Update failed");
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message ?? err?.response?.data?.error ?? err?.message ?? "Update failed";
+      setEditInstallmentError(msg);
+    } finally {
+      setEditInstallmentSubmitting(false);
+    }
+  };
+
+  const handleViewInstallmentPop = async (billingRecordId) => {
+    const res = await getProofByBillingRecordId(userId, billingRecordId);
+    if (res.success && res.data?.url) window.open(res.data.url, "_blank");
+    else alert(res.message || "Could not open proof");
+  };
+
+  const handleAttachProofClick = (plan, inst, planType = "2_installment") => {
+    setAttachProofModal({ plan, inst, planType });
+    setAttachProofFile(null);
+    setAttachProofError(null);
+  };
+
+  const handleAttachProofSubmit = async (e) => {
+    e.preventDefault();
+    if (!attachProofModal || !attachProofFile) {
+      setAttachProofError("Please select a file to upload.");
+      return;
+    }
+    setAttachProofError(null);
+    setAttachProofSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", attachProofFile);
+      const res = await attachProofToBillingRecord(userId, attachProofModal.inst.billingRecordId, formData);
+      if (res.success) {
+        setAttachProofModal(null);
+        setAttachProofFile(null);
+        const isCustom = attachProofModal.planType === "custom";
+        if (isCustom) {
+          const listRes = await getCustomPlans(userId);
+          if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        } else {
+          const listRes = await getStudentInstallmentPlans(userId);
+          if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+        }
+        fetchBilling();
+      } else {
+        setAttachProofError(res.message || "Failed to attach proof");
+      }
+    } catch (err) {
+      setAttachProofError(err?.response?.data?.message || "Failed to attach proof");
+    } finally {
+      setAttachProofSubmitting(false);
+    }
+  };
+
+  const handleDeleteBillingRecordClick = (plan, inst, planType = "2_installment") => {
+    setDeleteRecordModal({ plan, inst, planType });
+    setDeleteRecordError(null);
+  };
+
+  const handleDeleteBillingRecordSubmit = async () => {
+    if (!deleteRecordModal) return;
+    setDeleteRecordError(null);
+    setDeleteRecordSubmitting(true);
+    try {
+      const isCustom = deleteRecordModal.planType === "custom";
+      const hasBillingRecord = !!deleteRecordModal.inst.billingRecordId;
+      let res;
+      if (isCustom && !hasBillingRecord) {
+        res = await deleteCustomInstallment(userId, deleteRecordModal.plan._id, deleteRecordModal.inst.number);
+      } else if (hasBillingRecord) {
+        res = await deleteBillingRecord(userId, deleteRecordModal.inst.billingRecordId);
+      } else {
+        setDeleteRecordError("Nothing to delete");
+        setDeleteRecordSubmitting(false);
+        return;
+      }
+      if (res.success) {
+        setDeleteRecordModal(null);
+        if (isCustom) {
+          const listRes = await getCustomPlans(userId);
+          if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        } else {
+          const listRes = await getStudentInstallmentPlans(userId);
+          if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+        }
+        fetchBilling();
+      } else {
+        setDeleteRecordError(res.message || "Delete failed");
+      }
+    } catch (err) {
+      setDeleteRecordError(err?.response?.data?.message || "Delete failed");
+    } finally {
+      setDeleteRecordSubmitting(false);
+    }
+  };
+
+  const handleEditPlanClick = (plan) => {
+    setEditPlanModal(plan);
+    setEditPlanForm({
+      planName: plan.planName || plan.planCode || "",
+      manatiAgreementCode: plan.manatiAgreementCode || "",
+      newInstallments: [],
+    });
+    setEditPlanError(null);
+  };
+
+  const handleEditPlanPaystackLookup = async (rowIdx) => {
+    const row = editPlanForm.newInstallments[rowIdx];
+    const code = (row?.paystack_plan_code || "").trim();
+    if (!code) {
+      setEditPlanError("Enter a Paystack plan code to look up.");
+      return;
+    }
+    setEditPlanPaystackLookupLoading(rowIdx);
+    setEditPlanError(null);
+    const res = await getPaystackPlanInfo(code);
+    setEditPlanPaystackLookupLoading(null);
+    if (res.success && res.data) {
+      setEditPlanForm((f) => ({
+        ...f,
+        newInstallments: f.newInstallments.map((r, i) =>
+          i === rowIdx ? { ...r, paystackLookup: res.data } : r
+        ),
+      }));
+    } else {
+      setEditPlanError(res.message || "Plan not found. Check the plan code.");
+    }
+  };
+
+  const handleEditPlanSubmit = async (e) => {
+    e.preventDefault();
+    if (!editPlanModal) return;
+    const planName = (editPlanForm.planName || "").trim();
+    if (!planName) {
+      setEditPlanError("Plan name is required.");
+      return;
+    }
+    const newInst = (editPlanForm.newInstallments || []).filter((r) => {
+      const type = (r.type || "cash").toLowerCase();
+      if (type === "paystack") return (r.paystack_plan_code || "").trim();
+      return Number(r.amount) > 0;
+    });
+    const hasNewPaystack = newInst.some((r) => (r.type || "cash").toLowerCase() === "paystack" && (r.paystack_plan_code || "").trim());
+    const planHasPaystack = (editPlanModal.installments || []).some((i) => i.type === "paystack");
+    const needsFirstUrl = hasNewPaystack && !planHasPaystack && !editPlanModal.firstPaystackPaymentUrl;
+    const firstPaystackRow = newInst.find((r) => (r.type || "cash").toLowerCase() === "paystack" && (r.paystack_plan_code || "").trim());
+    const firstUrl = (firstPaystackRow?.paystack_payment_url || "").trim();
+    if (needsFirstUrl && !firstUrl) {
+      setEditPlanError("First Paystack payment link is required when adding Paystack installments.");
+      return;
+    }
+    const paystackWithoutDate = newInst.some((r) =>
+      (r.type || "cash").toLowerCase() === "paystack" && (r.paystack_plan_code || "").trim() && !(r.paystack_expected_first_date || "").trim()
+    );
+    if (paystackWithoutDate) {
+      setEditPlanError("For each Paystack plan code, set the expected first payment date.");
+      return;
+    }
+    setEditPlanError(null);
+    setEditPlanSubmitting(true);
+    try {
+      const payload = {
+        plan_name: planName,
+        manati_agreement_code: (editPlanForm.manatiAgreementCode || "").trim() || undefined,
+      };
+      if (newInst.length > 0) {
+        payload.installments = newInst.map((r) => {
+          const type = (r.type || "cash").toLowerCase();
+          const base = { type: type === "paystack" ? "paystack" : "cash" };
+          if (type === "paystack") {
+            return {
+              ...base,
+              paystack_plan_code: (r.paystack_plan_code || "").trim(),
+              paystack_expected_first_date: (r.paystack_expected_first_date || "").trim() || undefined,
+              paystack_payment_url: (r.paystack_payment_url || "").trim() || undefined,
+            };
+          }
+          return {
+            ...base,
+            amount: Number(r.amount),
+            due_date: (r.due_date || "").trim() || undefined,
+          };
+        });
+        if (needsFirstUrl && firstUrl) payload.first_paystack_payment_url = firstUrl;
+      }
+      const res = await updateCustomPlan(userId, editPlanModal._id, payload);
+      if (res.success) {
+        setEditPlanModal(null);
+        const listRes = await getCustomPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        fetchBilling();
+      } else {
+        setEditPlanError(res.message || "Update failed");
+      }
+    } catch (err) {
+      setEditPlanError(err?.response?.data?.message || "Update failed");
+    } finally {
+      setEditPlanSubmitting(false);
     }
   };
 
@@ -857,9 +1117,7 @@ const StudentProfile = () => {
                         setPaystackSelectedRefs(new Set());
                         setBackfillCustomPlan(null);
                         fetchBilling();
-                        if (backfillCustomPlan?.planId) {
-                          getCustomPlans(userId).then((r) => { if (r?.success && Array.isArray(r.data)) setCustomPlans(r.data); });
-                        }
+                        getCustomPlans(userId).then((r) => { if (r?.success && Array.isArray(r.data)) setCustomPlans(r.data); });
                       } else {
                         setLinkPaystackMessage({ type: "error", text: res.message || "Save failed." });
                       }
@@ -1080,6 +1338,7 @@ const StudentProfile = () => {
                     <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
                     <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Due date</th>
                     <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1092,6 +1351,42 @@ const StudentProfile = () => {
                         <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
                           {inst.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditInstallmentClick(plan, inst)}
+                          className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-800 rounded hover:bg-indigo-200"
+                        >
+                          Edit
+                        </button>
+                        {inst.status === "paid" && inst.billingRecordId && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleViewInstallmentPop(inst.billingRecordId)}
+                              className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                            >
+                              View POP
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAttachProofClick(plan, inst)}
+                              className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
+                              title="Attach proof if View POP shows no proof"
+                            >
+                              Attach proof
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBillingRecordClick(plan, inst)}
+                              className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                              title="Delete billing record and mark installment pending"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1176,6 +1471,313 @@ const StudentProfile = () => {
                   type="button"
                   onClick={() => setAddInstallmentModal(false)}
                   disabled={addInstallmentSubmitting}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit installment modal */}
+      {editInstallmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !editInstallmentSubmitting && setEditInstallmentModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Edit instalment {editInstallmentModal.inst.number}</h3>
+            <p className="text-sm text-gray-600 mb-4">Update amount (Rands) and/or due date for this instalment.</p>
+            <form onSubmit={handleEditInstallmentSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (R)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editInstallmentForm.amount}
+                  onChange={(e) => setEditInstallmentForm((f) => ({ ...f, amount: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  placeholder="e.g. 20000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
+                <input
+                  type="date"
+                  value={editInstallmentForm.dueDate}
+                  onChange={(e) => setEditInstallmentForm((f) => ({ ...f, dueDate: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              {editInstallmentError && <p className="text-sm text-red-600">{editInstallmentError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={editInstallmentSubmitting}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {editInstallmentSubmitting ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditInstallmentModal(null)}
+                  disabled={editInstallmentSubmitting}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete billing record / Remove installment modal */}
+      {deleteRecordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !deleteRecordSubmitting && setDeleteRecordModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">
+              {deleteRecordModal.inst.billingRecordId ? "Delete billing record" : "Remove installment"}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {deleteRecordModal.inst.billingRecordId
+                ? "This will permanently delete the entire billing record (undoing the finance entry). The instalment will be marked pending so the student can submit proof again. Continue?"
+                : "This will remove instalment " + deleteRecordModal.inst.number + " from the plan. It cannot be undone. Continue?"}
+            </p>
+            {deleteRecordError && <p className="text-sm text-red-600 mb-2">{deleteRecordError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteRecordModal(null)}
+                disabled={deleteRecordSubmitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteBillingRecordSubmit}
+                disabled={deleteRecordSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteRecordSubmitting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit custom plan modal */}
+      {editPlanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !editPlanSubmitting && setEditPlanModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Edit custom plan</h3>
+            <p className="text-sm text-gray-600 mb-4">Update plan name, Manati agreement code, or add new installments (Cash/EFT or Paystack). Paystack installments can be backfilled later.</p>
+            <form onSubmit={handleEditPlanSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Plan name</label>
+                <input
+                  type="text"
+                  value={editPlanForm.planName}
+                  onChange={(e) => setEditPlanForm((f) => ({ ...f, planName: e.target.value }))}
+                  placeholder="e.g. Bootcamp 2025 – custom"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Manati agreement code (optional)</label>
+                <input
+                  type="text"
+                  value={editPlanForm.manatiAgreementCode || ""}
+                  onChange={(e) => setEditPlanForm((f) => ({ ...f, manatiAgreementCode: e.target.value }))}
+                  placeholder="e.g. CS1697227222"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-0.5">Student will see Manati statement (scraped) for this agreement code.</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Add new installments</label>
+                  <button
+                    type="button"
+                    onClick={() => setEditPlanForm((f) => ({
+                      ...f,
+                      newInstallments: [...(f.newInstallments || []), { amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }],
+                    }))}
+                    className="text-xs text-indigo-600 hover:underline"
+                  >
+                    + Add row
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {(editPlanForm.newInstallments || []).map((row, idx) => {
+                    const isPaystack = (row.type || "cash").toLowerCase() === "paystack";
+                    const planHasPaystack = (editPlanModal.installments || []).some((i) => i.type === "paystack");
+                    const isFirstPaystackInForm = editPlanForm.newInstallments.findIndex((r) => (r.type || "cash").toLowerCase() === "paystack") === idx;
+                    const needsPaymentUrl = isFirstPaystackInForm && !planHasPaystack;
+                    return (
+                      <div key={idx} className="border border-gray-200 rounded p-2 bg-gray-50 space-y-1">
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <span className="text-xs font-medium text-gray-500 w-8">+{idx + 1}</span>
+                          <select
+                            value={row.type || "cash"}
+                            onChange={(e) => setEditPlanForm((f) => ({
+                              ...f,
+                              newInstallments: f.newInstallments.map((r, i) => i === idx ? { ...r, type: e.target.value, paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null } : r),
+                            }))}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm"
+                          >
+                            <option value="cash">Cash (EFT)</option>
+                            <option value="paystack">Paystack (backfillable)</option>
+                          </select>
+                          {isPaystack ? (
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Paystack plan code (e.g. PLN_xxx)"
+                                value={row.paystack_plan_code || ""}
+                                onChange={(e) => setEditPlanForm((f) => ({
+                                  ...f,
+                                  newInstallments: f.newInstallments.map((r, i) => i === idx ? { ...r, paystack_plan_code: e.target.value, paystackLookup: null } : r),
+                                }))}
+                                className="flex-1 min-w-[140px] border border-gray-300 rounded px-2 py-1 text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleEditPlanPaystackLookup(idx)}
+                                disabled={editPlanPaystackLookupLoading === idx || !(row.paystack_plan_code || "").trim()}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded hover:bg-blue-200 disabled:opacity-50 shrink-0"
+                              >
+                                {editPlanPaystackLookupLoading === idx ? "Looking up…" : "Look up"}
+                              </button>
+                              <span className="text-xs text-gray-500 shrink-0">Expected first:</span>
+                              <input
+                                type="date"
+                                value={row.paystack_expected_first_date || ""}
+                                onChange={(e) => setEditPlanForm((f) => ({
+                                  ...f,
+                                  newInstallments: f.newInstallments.map((r, i) => i === idx ? { ...r, paystack_expected_first_date: e.target.value } : r),
+                                }))}
+                                className="w-[140px] border border-gray-300 rounded px-2 py-1 text-sm shrink-0"
+                              />
+                              <div className="w-full mt-1">
+                                <label className="text-xs text-gray-600 block mb-0.5">
+                                  Payment link {needsPaymentUrl ? "(required for first Paystack)" : "(optional)"}
+                                </label>
+                                <input
+                                  type="url"
+                                  value={row.paystack_payment_url || ""}
+                                  onChange={(e) => setEditPlanForm((f) => ({
+                                    ...f,
+                                    newInstallments: f.newInstallments.map((r, i) => i === idx ? { ...r, paystack_payment_url: e.target.value } : r),
+                                  }))}
+                                  placeholder="https://… Paystack payment page URL"
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                />
+                              </div>
+                              {row.paystackLookup && (
+                                <span className="text-xs text-green-700 shrink-0">
+                                  {row.paystackLookup.invoice_limit != null ? `${row.paystackLookup.invoice_limit} payment(s)` : "Plan found"}
+                                  {row.paystackLookup.name ? ` · ${row.paystackLookup.name}` : ""}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                min="1"
+                                step="0.01"
+                                placeholder="Amount (R)"
+                                value={row.amount}
+                                onChange={(e) => setEditPlanForm((f) => ({
+                                  ...f,
+                                  newInstallments: f.newInstallments.map((r, i) => i === idx ? { ...r, amount: e.target.value } : r),
+                                }))}
+                                className="w-24 min-w-[100px] border border-gray-300 rounded px-2 py-1 text-sm shrink-0"
+                              />
+                              <input
+                                type="date"
+                                placeholder="Due"
+                                value={row.due_date || ""}
+                                onChange={(e) => setEditPlanForm((f) => ({
+                                  ...f,
+                                  newInstallments: f.newInstallments.map((r, i) => i === idx ? { ...r, due_date: e.target.value } : r),
+                                }))}
+                                className="w-[140px] border border-gray-300 rounded px-2 py-1 text-sm shrink-0"
+                              />
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setEditPlanForm((f) => ({ ...f, newInstallments: (f.newInstallments || []).filter((_, i) => i !== idx) }))}
+                            className="text-red-600 hover:underline text-xs shrink-0"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {(editPlanForm.newInstallments || []).length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">Use &quot;Backfill Paystack&quot; on the plan card after saving to link existing Paystack payments.</p>
+                )}
+              </div>
+              {editPlanError && <p className="text-sm text-red-600">{editPlanError}</p>}
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setEditPlanModal(null)}
+                  disabled={editPlanSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editPlanSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {editPlanSubmitting ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Attach proof modal */}
+      {attachProofModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !attachProofSubmitting && setAttachProofModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Attach proof of payment</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              This billing record has no proof stored. Upload the proof document to attach it. After attaching, &quot;View POP&quot; will work.
+            </p>
+            <form onSubmit={handleAttachProofSubmit} className="flex flex-col gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Proof document (PDF, image)</label>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.gif"
+                  onChange={(e) => setAttachProofFile(e.target.files?.[0] || null)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              {attachProofError && <p className="text-sm text-red-600">{attachProofError}</p>}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="submit"
+                  disabled={attachProofSubmitting || !attachProofFile}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {attachProofSubmitting ? "Uploading…" : "Attach"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAttachProofModal(null)}
+                  disabled={attachProofSubmitting}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                 >
                   Cancel
@@ -1272,7 +1874,16 @@ const StudentProfile = () => {
           {customPlans.map((plan) => (
             <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
               <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
-                <span className="font-semibold text-gray-800">{plan.planName || "Custom plan"}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-gray-800">{plan.planName || "Custom plan"}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleEditPlanClick(plan)}
+                    className="px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
+                  >
+                    Edit plan
+                  </button>
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}</span>
                   {(plan.installments || []).some((i) => i.type === "paystack" && (i.paystackPlanCode || "").trim()) && (
@@ -1317,8 +1928,42 @@ const StudentProfile = () => {
                           {inst.status}
                         </span>
                       </td>
-                      <td className="px-6 py-3">
-                        {inst.type === "cash" && inst.status === "pending" ? (
+                      <td className="px-6 py-3 flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleEditInstallmentClick(plan, inst, "custom")}
+                          className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-800 rounded hover:bg-indigo-200"
+                        >
+                          Edit
+                        </button>
+                        {inst.type === "cash" && inst.status === "paid" && inst.billingRecordId && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleViewInstallmentPop(inst.billingRecordId)}
+                              className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                            >
+                              View POP
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAttachProofClick(plan, inst, "custom")}
+                              className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
+                              title="Attach proof if View POP shows no proof"
+                            >
+                              Attach proof
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
+                              className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                              title="Delete billing record and mark installment pending"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                        {inst.type === "cash" && inst.status === "pending" && (
                           <button
                             type="button"
                             onClick={() => {
@@ -1339,8 +1984,16 @@ const StudentProfile = () => {
                           >
                             Add POP
                           </button>
-                        ) : (
-                          "—"
+                        )}
+                        {inst.status === "pending" && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
+                            className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                            title="Remove installment from plan"
+                          >
+                            Delete
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -1990,10 +2643,19 @@ const StudentProfile = () => {
                     <tbody className="divide-y divide-gray-200">
                       {paymentsModalPlan.payments.map((p, i) => {
                         const isFailed = p.status === "failed" || p.status === "rejected";
+                        const isAccepted = p.status === "accepted";
+                        const isPending = p.status === "pending";
                         const showGenerateLink = isFailed && !p.isOutstanding || (p.isOutstanding && p.expired);
                         const showPayNow = p.isOutstanding && p.paymentUrl && !p.expired;
+                        const showEditStatus = p.billingRecordId && (isFailed || isAccepted);
+                        const showDeleteBillingRecord = p.billingRecordId;
+                        const showDismiss = p.outstandingPaymentId;
+                        const showMarkAsPaid = isPending && (p.customPlanId || p.installmentPlanId);
+                        const showDeletePending = isPending && p.customPlanId && p.installmentNumber;
+                        const actionKey = p.billingRecordId || p.outstandingPaymentId || (p.customPlanId && p.installmentNumber ? `pending-${p.customPlanId}-${p.installmentNumber}` : null) || (p.installmentPlanId && p.installmentNumber ? `pending-${p.installmentPlanId}-${p.installmentNumber}` : null) || p.reference || p.paymentUrl || i;
+                        const isLoading = updatePaymentStatusLoading === actionKey;
                         return (
-                          <tr key={p.reference || p.paymentUrl || i} className={isFailed ? "bg-red-50" : ""}>
+                          <tr key={actionKey} className={isFailed ? "bg-red-50" : isPending ? "bg-amber-50" : ""}>
                             <td className="px-4 py-3 text-sm text-gray-800">{formatDate(p.paidAt)}</td>
                             <td className="px-4 py-3 text-sm text-gray-800">{formatAmount(p.amount, p.currency)}</td>
                             <td className="px-4 py-3">
@@ -2003,7 +2665,7 @@ const StudentProfile = () => {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600">{p.paymentType || "—"}</td>
                             <td className="px-4 py-3 text-sm text-gray-600 font-mono">{p.reference || "—"}</td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 flex flex-wrap items-center gap-2">
                               {showPayNow && (
                                 <a href={p.paymentUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">
                                   Pay now
@@ -2014,7 +2676,7 @@ const StudentProfile = () => {
                                   href={p.xeroInvoiceUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline text-sm ml-2"
+                                  className="text-blue-600 hover:underline text-sm"
                                 >
                                   Invoice
                                 </a>
@@ -2050,7 +2712,136 @@ const StudentProfile = () => {
                                   {generateLinkLoading ? "Generating…" : p.expired ? "Generate new link" : "Generate payment link"}
                                 </button>
                               )}
-                              {!showPayNow && !showGenerateLink && !p.xeroInvoiceUrl && "—"}
+                              {showEditStatus && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={async () => {
+                                    const newStatus = isFailed ? "accepted" : "rejected";
+                                    setUpdatePaymentStatusLoading(actionKey);
+                                    const res = await updateBillingRecordStatus(userId, p.billingRecordId, newStatus);
+                                    setUpdatePaymentStatusLoading(null);
+                                    if (res.success) {
+                                      getStudentBilling(userId).then((billingRes) => {
+                                        if (billingRes?.success && billingRes.plans) {
+                                          setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+                                          const updatedPlan = billingRes.plans.find((pl) => pl.planCode === paymentsModalPlan.planCode);
+                                          if (updatedPlan) setPaymentsModalPlan(updatedPlan);
+                                        }
+                                      });
+                                    } else {
+                                      alert(res.message || "Failed to update status");
+                                    }
+                                  }}
+                                  className="text-indigo-700 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  {isLoading ? "Updating…" : isFailed ? "Mark as accepted" : "Mark as rejected"}
+                                </button>
+                              )}
+                              {showDeleteBillingRecord && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={async () => {
+                                    if (!window.confirm("Delete this payment record? It will be permanently removed and any linked installment will be marked pending.")) return;
+                                    setUpdatePaymentStatusLoading(actionKey);
+                                    const res = await deleteBillingRecord(userId, p.billingRecordId);
+                                    setUpdatePaymentStatusLoading(null);
+                                    if (res.success) {
+                                      getStudentBilling(userId).then((billingRes) => {
+                                        if (billingRes?.success && billingRes.plans) {
+                                          setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+                                          const updatedPlan = billingRes.plans.find((pl) => pl.planCode === paymentsModalPlan.planCode);
+                                          if (updatedPlan) setPaymentsModalPlan(updatedPlan);
+                                        }
+                                      });
+                                      getCustomPlans(userId).then((r) => { if (r?.success && Array.isArray(r.data)) setCustomPlans(r.data); });
+                                    } else {
+                                      alert(res.message || "Failed to delete");
+                                    }
+                                  }}
+                                  className="text-red-700 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  {isLoading ? "Deleting…" : "Delete"}
+                                </button>
+                              )}
+                              {showDismiss && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={async () => {
+                                    setUpdatePaymentStatusLoading(actionKey);
+                                    const res = await dismissOutstandingPayment(userId, p.outstandingPaymentId);
+                                    setUpdatePaymentStatusLoading(null);
+                                    if (res.success) {
+                                      getStudentBilling(userId).then((billingRes) => {
+                                        if (billingRes?.success && billingRes.plans) {
+                                          setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+                                          const updatedPlan = billingRes.plans.find((pl) => pl.planCode === paymentsModalPlan.planCode);
+                                          if (updatedPlan) setPaymentsModalPlan(updatedPlan);
+                                        }
+                                      });
+                                    } else {
+                                      alert(res.message || "Failed to dismiss");
+                                    }
+                                  }}
+                                  className="text-red-700 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  {isLoading ? "Deleting…" : "Delete"}
+                                </button>
+                              )}
+                              {showMarkAsPaid && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={() => {
+                                    setAddEftForm({
+                                      planCode: paymentsModalPlan.planCode,
+                                      planName: paymentsModalPlan.planName || "",
+                                      installmentPlanId: p.installmentPlanId || "",
+                                      customPlanId: p.customPlanId || paymentsModalPlan.customPlanId || "",
+                                      installmentNumber: String(p.installmentNumber || ""),
+                                      paymentDate: new Date().toISOString().slice(0, 10),
+                                      amount: p.amount ? String(Number(p.amount) / 100) : "",
+                                      file: null,
+                                    });
+                                    setPaymentsModalPlan(null);
+                                    setAddEftModal(true);
+                                    setAddEftError(null);
+                                  }}
+                                  className="text-green-700 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  Mark as paid
+                                </button>
+                              )}
+                              {showDeletePending && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading}
+                                  onClick={async () => {
+                                    if (!window.confirm("Remove this installment from the plan? It cannot be undone.")) return;
+                                    setUpdatePaymentStatusLoading(actionKey);
+                                    const res = await deleteCustomInstallment(userId, p.customPlanId, p.installmentNumber);
+                                    setUpdatePaymentStatusLoading(null);
+                                    if (res.success) {
+                                      getStudentBilling(userId).then((billingRes) => {
+                                        if (billingRes?.success && billingRes.plans) {
+                                          setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+                                          const updatedPlan = billingRes.plans.find((pl) => pl.planCode === paymentsModalPlan.planCode);
+                                          if (updatedPlan) setPaymentsModalPlan(updatedPlan);
+                                        }
+                                      });
+                                      getCustomPlans(userId).then((r) => { if (r?.success && Array.isArray(r.data)) setCustomPlans(r.data); });
+                                    } else {
+                                      alert(res.message || "Failed to delete");
+                                    }
+                                  }}
+                                  className="text-red-700 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  {isLoading ? "Deleting…" : "Delete"}
+                                </button>
+                              )}
+                              {!showPayNow && !showGenerateLink && !showEditStatus && !showDeleteBillingRecord && !showDismiss && !showMarkAsPaid && !showDeletePending && !p.xeroInvoiceUrl && "—"}
                             </td>
                           </tr>
                         );

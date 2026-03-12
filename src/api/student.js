@@ -178,6 +178,68 @@ export const createStudentInstallmentPlan = (userId, payload) =>
       return { success: false, message: err?.response?.data?.message || "Create plan failed" };
     });
 
+// 2-installment EFT plan: update installment amount and/or due date
+export const updateInstallment = (userId, planId, installmentNumber, payload) =>
+  axios
+    .patch(API_URL + `/student-profile/${userId}/installment-plans/${planId}/installments/${installmentNumber}`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Update failed" };
+    });
+
+// Get proof of payment URL for a billing record (installment payment)
+export const getProofByBillingRecordId = (userId, billingRecordId) =>
+  axios
+    .get(API_URL + `/student-profile/${userId}/billing-record/${billingRecordId}/proof-url`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Could not load proof" };
+    });
+
+// Attach proof of payment to a billing record (for records missing proof)
+export const attachProofToBillingRecord = (userId, billingRecordId, formData) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/billing-record/${billingRecordId}/attach-proof`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to attach proof" };
+    });
+
+// Delete a billing record (unlinks from installments, marks them pending)
+export const deleteBillingRecord = (userId, billingRecordId) =>
+  axios
+    .delete(API_URL + `/student-profile/${userId}/billing-record/${billingRecordId}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Delete failed" };
+    });
+
+// Update billing record status (accepted | rejected) – for failed payments that should be marked paid
+export const updateBillingRecordStatus = (userId, billingRecordId, status) =>
+  axios
+    .patch(API_URL + `/student-profile/${userId}/billing-record/${billingRecordId}/status`, { status })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Update failed" };
+    });
+
+// Dismiss outstanding payment (failed recurring link) so it no longer appears
+export const dismissOutstandingPayment = (userId, outstandingPaymentId) =>
+  axios
+    .delete(API_URL + `/student-profile/${userId}/outstanding-payment/${outstandingPaymentId}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Dismiss failed" };
+    });
+
 // Custom payment plan: list plans for a student
 export const getCustomPlans = (userId) =>
   axios
@@ -186,6 +248,36 @@ export const getCustomPlans = (userId) =>
     .catch((err) => {
       console.log(err);
       return { success: false, data: [] };
+    });
+
+// Custom payment plan: update installment amount and/or due date
+export const updateCustomInstallment = (userId, planId, installmentNumber, payload) =>
+  axios
+    .patch(API_URL + `/student-profile/${userId}/custom-plans/${planId}/installments/${installmentNumber}`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Update failed" };
+    });
+
+// Custom payment plan: remove installment from plan (pending or paid)
+export const deleteCustomInstallment = (userId, planId, installmentNumber) =>
+  axios
+    .delete(API_URL + `/student-profile/${userId}/custom-plans/${planId}/installments/${installmentNumber}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Delete failed" };
+    });
+
+// Custom payment plan: update plan (plan_name, manati_agreement_code, installments, first_paystack_payment_url)
+export const updateCustomPlan = (userId, planId, payload) =>
+  axios
+    .patch(API_URL + `/student-profile/${userId}/custom-plans/${planId}`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Update plan failed" };
     });
 
 // Custom payment plan: create (plan_name, installments: [{ amount, due_date?, type, paystack_plan_code? }])
