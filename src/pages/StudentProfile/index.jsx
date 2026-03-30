@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling } from "../../api/student";
+import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
 import Loader from "../../components/loader/loader";
 
 const formatDate = (dateStr) => {
@@ -23,6 +24,74 @@ const parseAmountString = (val) => {
 const formatTotal = (num) =>
   new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
 
+function parsePaymentSlotFromRow(p) {
+  if (p?.installmentSlot != null && p.installmentSlot > 0) return p.installmentSlot;
+  const label = p.installmentLabel || "";
+  const m = String(label).match(/Payment\s+(\d+)\s+of\s+\d+/i);
+  return m ? Number(m[1]) : null;
+}
+
+/** Encode which subscription debit this EFT satisfies (for POST finance-record-paystack-eft). */
+function encodePaystackEftChoice(row) {
+  return JSON.stringify({
+    installmentSlot: row.installmentSlot != null && row.installmentSlot >= 1 ? row.installmentSlot : null,
+    outstandingPaymentId: row.outstandingPaymentId || null,
+    billingRecordId: row.billingRecordId || null,
+  });
+}
+
+/** Pending, failed Pay now links, and rejected Paystack billing rows for standalone plans; fallback to Payment 1..N when no rows yet. */
+function buildPaystackEftPaymentChoices(plan) {
+  if (!plan?.subscriptionCode || plan.partner) return [];
+  if ((plan.planCode || "").startsWith("CUSTOM-") || (plan.planCode || "").startsWith("2INST-")) return [];
+  const raw = [];
+  (plan.payments || []).forEach((p, idx) => {
+    const isPending = p.status === "pending";
+    /** Outstanding “Pay now” link (failed recurring) */
+    const isFailedOU = p.status === "failed" && p.isOutstanding;
+    /** Rejected Paystack charge stored as BillingRecord — status failed + billingRecordId, not the same as Pay now row */
+    const isFailedRejected = p.status === "failed" && p.billingRecordId && !p.isOutstanding;
+    if (!isPending && !isFailedOU && !isFailedRejected) return;
+    const slot =
+      p.installmentSlot != null && p.installmentSlot >= 1
+        ? p.installmentSlot
+        : parsePaymentSlotFromRow(p);
+    const baseLabel = p.installmentLabel || (slot ? `Payment ${slot}` : `Line ${idx + 1}`);
+    const failNote = isFailedRejected ? "rejected debit" : isFailedOU ? "Pay now" : null;
+    const label = [
+      baseLabel,
+      p.amount != null ? formatAmount(p.amount, p.currency) : "",
+      failNote,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    raw.push({
+      installmentSlot: slot,
+      outstandingPaymentId: p.outstandingPaymentId || null,
+      billingRecordId: p.billingRecordId || null,
+      label,
+      amountCents: p.amount != null ? Number(p.amount) : null,
+    });
+  });
+  if (raw.length > 0) {
+    raw.sort((a, b) => (a.installmentSlot ?? 999) - (b.installmentSlot ?? 999));
+    return raw;
+  }
+  const total = plan.totalPaymentsRequired;
+  if (total != null && total >= 1 && plan.amount != null) {
+    return Array.from({ length: total }, (_, i) => {
+      const slotNum = i + 1;
+      return {
+        installmentSlot: slotNum,
+        outstandingPaymentId: null,
+        label: `Payment ${slotNum} of ${total} · ${formatAmount(plan.amount, plan.currency)}`,
+        amountCents: Number(plan.amount),
+      };
+    });
+  }
+  return [];
+}
+
 const StudentProfile = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -31,6 +100,8 @@ const StudentProfile = () => {
   const [blockLoading, setBlockLoading] = useState(false);
   const [billing, setBilling] = useState({ plans: [], outstandingLinks: [] });
   const [billingLoading, setBillingLoading] = useState(false);
+  const [syncPaystackBillingLoading, setSyncPaystackBillingLoading] = useState(false);
+  const [syncPaystackBillingMessage, setSyncPaystackBillingMessage] = useState(null);
   const [statementModal, setStatementModal] = useState(null);
   const [statementData, setStatementData] = useState(null);
   const [statementLoading, setStatementLoading] = useState(false);
@@ -65,7 +136,7 @@ const StudentProfile = () => {
   const [paystackLookupLoading, setPaystackLookupLoading] = useState(null);
   const [addCustomSubmitting, setAddCustomSubmitting] = useState(false);
   const [addCustomError, setAddCustomError] = useState(null);
-  const [linkPaystackForm, setLinkPaystackForm] = useState({ planCode: "", payerEmail: "" });
+  const [linkPaystackForm, setLinkPaystackForm] = useState({ planCode: "", payerEmail: "", subscriptionCode: "" });
   const [linkPaystackMessage, setLinkPaystackMessage] = useState(null);
   const [paystackPreview, setPaystackPreview] = useState(null);
   const [paystackPreviewLoading, setPaystackPreviewLoading] = useState(false);
@@ -84,6 +155,8 @@ const StudentProfile = () => {
   const [studentNumberValue, setStudentNumberValue] = useState("");
   const [studentNumberSaving, setStudentNumberSaving] = useState(false);
   const [studentNumberMessage, setStudentNumberMessage] = useState(null);
+  const [financeExcludeSaving, setFinanceExcludeSaving] = useState(false);
+  const [financeExcludeMessage, setFinanceExcludeMessage] = useState(null);
   const [deleteRecordModal, setDeleteRecordModal] = useState(null);
   const [deleteRecordSubmitting, setDeleteRecordSubmitting] = useState(false);
   const [deleteRecordError, setDeleteRecordError] = useState(null);
@@ -92,6 +165,138 @@ const StudentProfile = () => {
   const [editPlanSubmitting, setEditPlanSubmitting] = useState(false);
   const [editPlanError, setEditPlanError] = useState(null);
   const [editPlanPaystackLookupLoading, setEditPlanPaystackLookupLoading] = useState(null);
+  const [changeDateModal, setChangeDateModal] = useState(null);
+  const [changeDateForm, setChangeDateForm] = useState({ dayOfMonth: "1" });
+  const [changeDateLoading, setChangeDateLoading] = useState(false);
+  const [changeDateError, setChangeDateError] = useState(null);
+  const [subscriptionCodeModal, setSubscriptionCodeModal] = useState(null);
+  const [subscriptionCodeForm, setSubscriptionCodeForm] = useState({ subscriptionCode: "" });
+  const [subscriptionCodeLoading, setSubscriptionCodeLoading] = useState(false);
+  const [subscriptionCodeError, setSubscriptionCodeError] = useState(null);
+  const [loginAsPassword, setLoginAsPassword] = useState("");
+  const [loginAsLoading, setLoginAsLoading] = useState(false);
+  const [loginAsMessage, setLoginAsMessage] = useState(null);
+
+  /** Standalone Paystack subscription: record EFT (same as POST /bootcamp/finance-record-paystack-eft) */
+  const [paystackEftModal, setPaystackEftModal] = useState(null);
+  const [paystackEftPaidAt, setPaystackEftPaidAt] = useState("");
+  const [paystackEftAmountRands, setPaystackEftAmountRands] = useState("");
+  const [paystackEftProofUrl, setPaystackEftProofUrl] = useState("");
+  const [paystackEftProofFile, setPaystackEftProofFile] = useState(null);
+  const [paystackEftSubmitting, setPaystackEftSubmitting] = useState(false);
+  const [paystackEftError, setPaystackEftError] = useState(null);
+  const [paystackEftPaymentChoice, setPaystackEftPaymentChoice] = useState("");
+
+  const openPaystackEftModal = (plan, preferredRow = null) => {
+    const choices = buildPaystackEftPaymentChoices(plan);
+    let defaultChoice = "";
+    if (preferredRow) {
+      const prSlot =
+        preferredRow.installmentSlot != null && preferredRow.installmentSlot >= 1
+          ? preferredRow.installmentSlot
+          : parsePaymentSlotFromRow(preferredRow);
+      const match = choices.find(
+        (c) =>
+          (preferredRow.outstandingPaymentId &&
+            c.outstandingPaymentId &&
+            String(c.outstandingPaymentId) === String(preferredRow.outstandingPaymentId)) ||
+          (preferredRow.billingRecordId &&
+            c.billingRecordId &&
+            String(c.billingRecordId) === String(preferredRow.billingRecordId)) ||
+          (prSlot != null &&
+            c.installmentSlot === prSlot &&
+            !preferredRow.outstandingPaymentId &&
+            !preferredRow.billingRecordId)
+      );
+      defaultChoice = encodePaystackEftChoice(
+        match || {
+          installmentSlot: prSlot,
+          outstandingPaymentId: preferredRow.outstandingPaymentId || null,
+          billingRecordId: preferredRow.billingRecordId || null,
+        }
+      );
+    } else if (choices.length >= 1) {
+      defaultChoice = encodePaystackEftChoice(choices[0]);
+    }
+    setPaystackEftModal({ plan });
+    setPaystackEftPaymentChoice(defaultChoice);
+    setPaystackEftPaidAt(new Date().toISOString().slice(0, 10));
+    const centsFromPreferred =
+      preferredRow?.amount != null ? Number(preferredRow.amount) : null;
+    const centsFromChoice = choices[0]?.amountCents;
+    const cents = centsFromPreferred ?? centsFromChoice ?? plan.amount;
+    const n = cents != null ? Number(cents) : NaN;
+    setPaystackEftAmountRands(Number.isFinite(n) ? (n / 100).toFixed(2) : "");
+    setPaystackEftProofUrl("");
+    setPaystackEftProofFile(null);
+    setPaystackEftError(null);
+  };
+
+  const submitPaystackEft = async (e) => {
+    e.preventDefault();
+    if (!paystackEftModal?.plan || !userId) return;
+    const plan = paystackEftModal.plan;
+    const totalReq = plan.totalPaymentsRequired != null ? Number(plan.totalPaymentsRequired) : null;
+    const choiceList = buildPaystackEftPaymentChoices(plan);
+    if (choiceList.length > 0 && !paystackEftPaymentChoice.trim()) {
+      setPaystackEftError("Select which payment this EFT is for.");
+      return;
+    }
+    if (choiceList.length === 0 && totalReq != null && Number.isFinite(totalReq) && totalReq >= 1) {
+      setPaystackEftError("No payment lines to attach this EFT to. Try refreshing billing.");
+      return;
+    }
+    const rands = parseFloat(String(paystackEftAmountRands).replace(",", "."));
+    if (!Number.isFinite(rands) || rands <= 0) {
+      setPaystackEftError("Enter a valid amount in rands.");
+      return;
+    }
+    const amountCents = Math.round(rands * 100);
+    setPaystackEftSubmitting(true);
+    setPaystackEftError(null);
+    const fd = new FormData();
+    fd.append("userId", userId);
+    fd.append("planCode", plan.planCode);
+    fd.append("paidAt", paystackEftPaidAt);
+    fd.append("amountCents", String(amountCents));
+    if (paystackEftPaymentChoice.trim()) {
+      try {
+        const ch = JSON.parse(paystackEftPaymentChoice);
+        if (ch.installmentSlot != null && ch.installmentSlot >= 1) {
+          fd.append("installmentSlot", String(ch.installmentSlot));
+        }
+        if (ch.outstandingPaymentId) {
+          fd.append("outstandingPaymentId", String(ch.outstandingPaymentId));
+        }
+        if (ch.billingRecordId) {
+          fd.append("billingRecordId", String(ch.billingRecordId));
+        }
+      } catch {
+        setPaystackEftError("Invalid payment selection.");
+        setPaystackEftSubmitting(false);
+        return;
+      }
+    }
+    if (paystackEftProofUrl.trim()) fd.append("proofUrl", paystackEftProofUrl.trim());
+    if (paystackEftProofFile) fd.append("proof", paystackEftProofFile);
+    const res = await postFinanceRecordPaystackEft(fd);
+    setPaystackEftSubmitting(false);
+    if (res?.success) {
+      setPaystackEftModal(null);
+      setPaystackEftPaymentChoice("");
+      const billingRes = await getStudentBilling(userId);
+      if (billingRes?.success && billingRes.plans) {
+        setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+        setPaymentsModalPlan((prev) => {
+          if (!prev) return prev;
+          const u = billingRes.plans.find((pl) => pl.planCode === prev.planCode);
+          return u || prev;
+        });
+      }
+    } else {
+      setPaystackEftError(res?.message || "Could not record payment");
+    }
+  };
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -126,6 +331,24 @@ const StudentProfile = () => {
     setBillingLoading(false);
   };
 
+  const handleSyncPaystackPaymentsToBilling = async () => {
+    if (!userId) return;
+    setSyncPaystackBillingLoading(true);
+    setSyncPaystackBillingMessage(null);
+    try {
+      const res = await syncPaystackPaymentsToBilling(userId, (student?.email || "").trim() || undefined);
+      if (res.success) {
+        setSyncPaystackBillingMessage({ type: "success", text: res.message || "Sync complete." });
+        await fetchBilling();
+      } else {
+        setSyncPaystackBillingMessage({ type: "error", text: res.message || "Sync failed." });
+      }
+    } catch (e) {
+      setSyncPaystackBillingMessage({ type: "error", text: e?.message || "Sync failed." });
+    }
+    setSyncPaystackBillingLoading(false);
+  };
+
   useEffect(() => {
     if (userId) {
       fetchProfile();
@@ -137,6 +360,7 @@ const StudentProfile = () => {
     if (userId) {
       fetchBilling();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch when userId changes only
   }, [userId]);
 
   useEffect(() => {
@@ -194,6 +418,26 @@ const StudentProfile = () => {
     setStudentNumberSaving(false);
   };
 
+  const handleFinanceExcludeToggle = async (e) => {
+    if (!userId) return;
+    const next = e.target.checked;
+    setFinanceExcludeMessage(null);
+    setFinanceExcludeSaving(true);
+    try {
+      const res = await updateStudentFinanceExclude(userId, next);
+      if (res?.success && res.student) {
+        setStudent((s) =>
+          s ? { ...s, excludeFromFinanceReports: !!res.student.excludeFromFinanceReports } : s
+        );
+      } else {
+        setFinanceExcludeMessage(res?.message || "Failed to update");
+      }
+    } catch (err) {
+      setFinanceExcludeMessage("Failed to update");
+    }
+    setFinanceExcludeSaving(false);
+  };
+
   const handleBlockToggle = async () => {
     if (!student) return;
     setBlockLoading(true);
@@ -214,6 +458,38 @@ const StudentProfile = () => {
       navigate(
         `/student/bootcamp/${bootcamp._id}/learningpath/${bootcamp.learningpathId}?user_id=${student._id}`
       );
+    }
+  };
+
+  const handleOpenLearnerAsStudent = async () => {
+    if (!userId) return;
+    setLoginAsLoading(true);
+    setLoginAsMessage(null);
+    try {
+      const res = await postStudentLoginAsToken({
+        studentUserId: userId,
+        password: loginAsPassword.trim(),
+      });
+      if (!res?.success || !res?.token) {
+        setLoginAsMessage(res?.message || "Could not start student session");
+        return;
+      }
+      const session = {
+        success: res.success,
+        message: res.message,
+        token: res.token,
+        data: res.data,
+      };
+      const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(session))));
+      const learnerBase = (process.env.REACT_APP_LEARNER_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+      const url = `${learnerBase}/impersonate-session?session=${encodeURIComponent(b64)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      setLoginAsMessage("Opened learner app in a new tab.");
+      setTimeout(() => setLoginAsMessage(null), 5000);
+    } catch (err) {
+      setLoginAsMessage(err?.message || "Failed");
+    } finally {
+      setLoginAsLoading(false);
     }
   };
 
@@ -819,6 +1095,29 @@ const StudentProfile = () => {
                 </span>
               )}
             </div>
+            <div className="mt-4 flex items-start gap-2 max-w-xl">
+              <input
+                id="finance-exclude"
+                type="checkbox"
+                checked={!!student?.excludeFromFinanceReports}
+                onChange={handleFinanceExcludeToggle}
+                disabled={financeExcludeSaving}
+                className="mt-1 rounded border-gray-300"
+              />
+              <label htmlFor="finance-exclude" className="text-sm text-gray-600 cursor-pointer">
+                <span className="font-medium text-gray-800">Test / demo account (exclude from Finance)</span>
+                <span className="block text-gray-500 mt-0.5">
+                  When checked, this student does not appear on the Finance dashboard unless &quot;Include test / excluded
+                  accounts&quot; is enabled there.
+                </span>
+                {financeExcludeSaving && (
+                  <span className="block text-gray-400 mt-1">Saving…</span>
+                )}
+                {financeExcludeMessage && (
+                  <span className="block text-red-600 mt-1">{financeExcludeMessage}</span>
+                )}
+              </label>
+            </div>
           </div>
           <div className="flex flex-col items-end gap-3">
             {/* Account Status Badge */}
@@ -843,6 +1142,33 @@ const StudentProfile = () => {
             >
               {blockLoading ? "..." : student.accBlocked ? "Unblock Student" : "Block Student"}
             </button>
+            <div className="w-full max-w-xs border border-gray-200 rounded-lg p-3 bg-gray-50 mt-2 text-left">
+              <p className="text-xs font-semibold text-gray-700 mb-1">Open learner app as this student</p>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Uses the server secret <code className="text-gray-700">COMPANY_LOGIN_AS_STUDENT_PASSWORD</code> (same value you enter below).
+              </p>
+              <input
+                type="password"
+                autoComplete="off"
+                value={loginAsPassword}
+                onChange={(e) => setLoginAsPassword(e.target.value)}
+                placeholder="Password"
+                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-2"
+              />
+              <button
+                type="button"
+                onClick={handleOpenLearnerAsStudent}
+                disabled={loginAsLoading || !loginAsPassword.trim()}
+                className="w-full px-3 py-2 rounded text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {loginAsLoading ? "Opening…" : "Open student dashboard (new tab)"}
+              </button>
+              {loginAsMessage && (
+                <p className={`text-xs mt-2 ${loginAsMessage.includes("Opened") ? "text-green-700" : "text-red-600"}`}>
+                  {loginAsMessage}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -947,7 +1273,7 @@ const StudentProfile = () => {
           </p>
         )}
         <p className="text-sm text-gray-400 mb-4">
-          Enter the <strong className="text-gray-300">plan code</strong> (required) and optional <strong className="text-gray-300">payer email</strong>. Click Fetch transactions to load successful and failed payments for that email, then select the ones to keep and save.
+          Enter the <strong className="text-gray-300">plan code</strong> (required) and optional <strong className="text-gray-300">payer email</strong>. Click Fetch transactions to load successful and failed payments for that email, then select the ones to keep and save. You can also add a <strong className="text-gray-300">subscription code</strong> (e.g. SUB_xxx) manually if the automatic lookup fails.
         </p>
 
         {!paystackPreview ? (
@@ -1003,6 +1329,16 @@ const StudentProfile = () => {
                 className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500 min-w-[220px]"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Subscription code (optional)</label>
+              <input
+                type="text"
+                value={linkPaystackForm.subscriptionCode}
+                onChange={(e) => setLinkPaystackForm((f) => ({ ...f, subscriptionCode: e.target.value }))}
+                placeholder="e.g. SUB_xxxxxxxx"
+                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500 min-w-[200px]"
+              />
+            </div>
             <button
               type="submit"
               disabled={paystackPreviewLoading || !student?.email}
@@ -1018,6 +1354,16 @@ const StudentProfile = () => {
               {" · "}
               Plan: <span className="text-gray-300">{paystackPreview.planCode || "—"}</span>
             </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-1">Subscription code (optional)</label>
+              <input
+                type="text"
+                value={linkPaystackForm.subscriptionCode}
+                onChange={(e) => setLinkPaystackForm((f) => ({ ...f, subscriptionCode: e.target.value }))}
+                placeholder="e.g. SUB_xxxxxxxx – add manually if Change payment date fails"
+                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500 min-w-[280px]"
+              />
+            </div>
             <div className="overflow-x-auto mb-4">
               <table className="min-w-full text-sm text-left text-gray-300">
                 <thead>
@@ -1105,7 +1451,8 @@ const StudentProfile = () => {
                     paystackPreview.planCode,
                     (linkPaystackForm.payerEmail || "").trim() || undefined,
                     selected,
-                    backfillCustomPlan?.planId || undefined
+                    backfillCustomPlan?.planId || undefined,
+                    (linkPaystackForm.subscriptionCode || "").trim() || undefined
                   )
                     .then((res) => {
                       if (res.success) {
@@ -1200,7 +1547,25 @@ const StudentProfile = () => {
       </div>
 
       {/* Billing (Paystack or Financing) */}
-      <h2 className="text-2xl font-bold text-white mb-4 mt-10">Billing</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-10 mb-4">
+        <h2 className="text-2xl font-bold text-white">Billing</h2>
+        <div className="flex flex-col items-start sm:items-end gap-2">
+          <button
+            type="button"
+            onClick={handleSyncPaystackPaymentsToBilling}
+            disabled={syncPaystackBillingLoading || !userId}
+            className="px-3 py-2 bg-slate-700 text-white text-sm font-medium rounded-lg hover:bg-slate-600 disabled:opacity-50 border border-slate-500"
+            title="Reads PaystackPayment (webhook log) for this learner and linked payer email, and creates any missing BillingRecord rows"
+          >
+            {syncPaystackBillingLoading ? "Syncing…" : "Sync Paystack webhooks → billing"}
+          </button>
+          {syncPaystackBillingMessage && (
+            <p className={`text-sm max-w-xl text-right ${syncPaystackBillingMessage.type === "success" ? "text-green-400" : "text-red-400"}`}>
+              {syncPaystackBillingMessage.text}
+            </p>
+          )}
+        </div>
+      </div>
       {billingLoading ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">Loading billing...</p>
@@ -1231,6 +1596,9 @@ const StudentProfile = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
                   Next payment
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -1282,6 +1650,51 @@ const StudentProfile = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {plan.nextPaymentDate ? formatDate(plan.nextPaymentDate) : "—"}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        {billingTypeLabel === "Paystack" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSubscriptionCodeModal(plan);
+                              setSubscriptionCodeForm({ subscriptionCode: plan.subscriptionCode || "" });
+                              setSubscriptionCodeError(null);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
+                          >
+                            {plan.subscriptionCode ? "Update subscription code" : "Add subscription code"}
+                          </button>
+                        )}
+                        {plan.subscriptionCode && (plan.nextPaymentDate || (plan.payments || []).some((p) => p.paymentType === "recurring")) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setChangeDateModal(plan);
+                              setChangeDateForm({ dayOfMonth: "1" });
+                              setChangeDateError(null);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
+                          >
+                            Change payment date
+                          </button>
+                        )}
+                        {billingTypeLabel === "Paystack" && plan.subscriptionCode && !plan.partner && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openPaystackEftModal(plan);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-100 rounded hover:bg-emerald-200"
+                          >
+                            Record EFT payment
+                          </button>
+                        )}
+                        {billingTypeLabel !== "Paystack" && "—"}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1917,87 +2330,124 @@ const StudentProfile = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {(plan.installments || []).map((inst) => (
-                    <tr key={inst.number}>
-                      <td className="px-6 py-3 text-sm text-gray-800">Instalment {inst.number}</td>
-                      <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(inst.amount, plan.currency)}</td>
-                      <td className="px-6 py-3 text-sm text-gray-600">{inst.dueDate ? formatDate(inst.dueDate) : "—"}</td>
-                      <td className="px-6 py-3 text-sm text-gray-600">{inst.type === "paystack" ? (inst.paystackPlanCode ? `Paystack (${inst.paystackPlanCode})` : "Paystack") : "Cash (EFT)"}</td>
-                      <td className="px-6 py-3">
-                        <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
-                          {inst.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 flex items-center gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => handleEditInstallmentClick(plan, inst, "custom")}
-                          className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-800 rounded hover:bg-indigo-200"
-                        >
-                          Edit
-                        </button>
-                        {inst.type === "cash" && inst.status === "paid" && inst.billingRecordId && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleViewInstallmentPop(inst.billingRecordId)}
-                              className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                            >
-                              View POP
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAttachProofClick(plan, inst, "custom")}
-                              className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
-                              title="Attach proof if View POP shows no proof"
-                            >
-                              Attach proof
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
-                              className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                              title="Delete billing record and mark installment pending"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
-                        {inst.type === "cash" && inst.status === "pending" && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddEftForm({
-                                planCode: plan.planCode,
-                                planName: plan.planName || "",
-                                installmentPlanId: "",
-                                customPlanId: plan._id,
-                                installmentNumber: String(inst.number),
-                                paymentDate: new Date().toISOString().slice(0, 10),
-                                amount: inst.amount ? String(Number(inst.amount) / 100) : "",
-                                file: null,
-                              });
-                              setAddEftModal(true);
-                              setAddEftError(null);
-                            }}
-                            className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200"
-                          >
-                            Add POP
-                          </button>
-                        )}
-                        {inst.status === "pending" && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
-                            className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                            title="Remove installment from plan"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const billingPlan = billing?.plans?.find((p) => p.planCode === plan.planCode);
+                    const rows = billingPlan?.payments ?? (plan.installments || []).map((inst) => ({
+                      installmentLabel: `Instalment ${inst.number}`,
+                      amount: inst.amount,
+                      dueDate: inst.dueDate,
+                      paymentType: inst.type,
+                      status: inst.status,
+                      billingRecordId: inst.billingRecordId,
+                      customPlanId: plan._id,
+                      installmentNumber: inst.number,
+                      paymentUrl: inst.type === "paystack" && plan.firstPaystackPaymentUrl ? plan.firstPaystackPaymentUrl : null,
+                      _inst: inst,
+                    }));
+                    return rows.map((row, idx) => {
+                      const inst = row._inst ?? plan.installments?.find((i) => i.number === row.installmentNumber);
+                      const paystackCode = plan.installments?.find((i) => i.type === "paystack")?.paystackPlanCode;
+                      const typeLabel = row.paymentType === "paystack" || row.paymentType === "recurring"
+                        ? (paystackCode ? `Paystack (${paystackCode})` : "Paystack")
+                        : row.paymentType === "cash" || row.paymentType === "eft" ? "Cash (EFT)" : row.paymentType || "—";
+                      const showPayNow = row.paymentUrl && (row.status === "pending" || row.isOutstanding);
+                      return (
+                        <tr key={row.installmentLabel || row.reference || idx} className={row.status === "pending" ? "bg-amber-50" : ""}>
+                          <td className="px-6 py-3 text-sm text-gray-800">{row.installmentLabel || `Row ${idx + 1}`}</td>
+                          <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(row.amount, row.currency || plan.currency)}</td>
+                          <td className="px-6 py-3 text-sm text-gray-600">{row.dueDate || row.paidAt ? formatDate(row.dueDate || row.paidAt) : "—"}</td>
+                          <td className="px-6 py-3 text-sm text-gray-600">{typeLabel}</td>
+                          <td className="px-6 py-3">
+                            <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : row.status === "failed" || row.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                              {row.expired ? "Expired" : row.status || "pending"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 flex items-center gap-2 flex-wrap">
+                            {showPayNow && (
+                              <a
+                                href={row.paymentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 text-sm font-medium text-green-700 bg-green-100 rounded hover:bg-green-200"
+                              >
+                                Pay now
+                              </a>
+                            )}
+                            {inst && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditInstallmentClick(plan, inst, "custom")}
+                                  className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-800 rounded hover:bg-indigo-200"
+                                >
+                                  Edit
+                                </button>
+                                {inst.type === "cash" && inst.status === "paid" && inst.billingRecordId && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleViewInstallmentPop(inst.billingRecordId)}
+                                      className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                                    >
+                                      View POP
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAttachProofClick(plan, inst, "custom")}
+                                      className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
+                                      title="Attach proof if View POP shows no proof"
+                                    >
+                                      Attach proof
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
+                                      className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                                      title="Delete billing record and mark installment pending"
+                                    >
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                                {inst.type === "cash" && inst.status === "pending" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAddEftForm({
+                                        planCode: plan.planCode,
+                                        planName: plan.planName || "",
+                                        installmentPlanId: "",
+                                        customPlanId: plan._id,
+                                        installmentNumber: String(inst.number),
+                                        paymentDate: new Date().toISOString().slice(0, 10),
+                                        amount: inst.amount ? String(Number(inst.amount) / 100) : "",
+                                        file: null,
+                                      });
+                                      setAddEftModal(true);
+                                      setAddEftError(null);
+                                    }}
+                                    className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200"
+                                  >
+                                    Add POP
+                                  </button>
+                                )}
+                                {(inst.status === "pending" || (row.status === "pending" && row.customPlanId && row.installmentNumber)) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
+                                    className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                                    title="Remove installment from plan"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
               {(plan.manatiAgreementCode || "").trim() && (
@@ -2616,13 +3066,42 @@ const StudentProfile = () => {
               <h3 className="text-xl font-bold text-gray-800">
                 Payments – {paymentsModalPlan.planName || paymentsModalPlan.planCode} ({paymentsModalPlan.agreementCode || paymentsModalPlan.planCode || "—"})
               </h3>
-              <button
-                type="button"
-                onClick={() => setPaymentsModalPlan(null)}
-                className="text-gray-500 hover:text-gray-800 text-2xl leading-none"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2">
+                {!paymentsModalPlan.partner && !(paymentsModalPlan.planCode || "").startsWith("CUSTOM-") && !(paymentsModalPlan.planCode || "").startsWith("2INST-") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubscriptionCodeModal(paymentsModalPlan);
+                      setSubscriptionCodeForm({ subscriptionCode: paymentsModalPlan.subscriptionCode || "" });
+                      setSubscriptionCodeError(null);
+                      setPaymentsModalPlan(null);
+                    }}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300"
+                  >
+                    {paymentsModalPlan.subscriptionCode ? "Update subscription code" : "Add subscription code"}
+                  </button>
+                )}
+                {paymentsModalPlan.subscriptionCode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChangeDateModal(paymentsModalPlan);
+                      setChangeDateForm({ dayOfMonth: "1" });
+                      setChangeDateError(null);
+                    }}
+                    className="px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
+                  >
+                    Change payment date
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setPaymentsModalPlan(null)}
+                  className="text-gray-500 hover:text-gray-800 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               {!paymentsModalPlan.payments?.length ? (
@@ -2645,12 +3124,20 @@ const StudentProfile = () => {
                         const isFailed = p.status === "failed" || p.status === "rejected";
                         const isAccepted = p.status === "accepted";
                         const isPending = p.status === "pending";
-                        const showGenerateLink = isFailed && !p.isOutstanding || (p.isOutstanding && p.expired);
+                        const showGenerateLink =
+                          (isFailed && !p.isOutstanding) || (p.isOutstanding && p.expired);
                         const showPayNow = p.isOutstanding && p.paymentUrl && !p.expired;
                         const showEditStatus = p.billingRecordId && (isFailed || isAccepted);
                         const showDeleteBillingRecord = p.billingRecordId;
                         const showDismiss = p.outstandingPaymentId;
                         const showMarkAsPaid = isPending && (p.customPlanId || p.installmentPlanId);
+                        const isStandalonePaystackPlan =
+                          paymentsModalPlan.subscriptionCode &&
+                          !(paymentsModalPlan.planCode || "").startsWith("CUSTOM-") &&
+                          !(paymentsModalPlan.planCode || "").startsWith("2INST-") &&
+                          !paymentsModalPlan.partner;
+                        const showMarkPaystackEft =
+                          isPending && isStandalonePaystackPlan && !p.customPlanId && !p.installmentPlanId;
                         const showDeletePending = isPending && p.customPlanId && p.installmentNumber;
                         const actionKey = p.billingRecordId || p.outstandingPaymentId || (p.customPlanId && p.installmentNumber ? `pending-${p.customPlanId}-${p.installmentNumber}` : null) || (p.installmentPlanId && p.installmentNumber ? `pending-${p.installmentPlanId}-${p.installmentNumber}` : null) || p.reference || p.paymentUrl || i;
                         const isLoading = updatePaymentStatusLoading === actionKey;
@@ -2663,7 +3150,7 @@ const StudentProfile = () => {
                                 {p.expired ? "Expired" : p.status || "—"}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{p.paymentType || "—"}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{p.installmentLabel || p.paymentType || "—"}</td>
                             <td className="px-4 py-3 text-sm text-gray-600 font-mono">{p.reference || "—"}</td>
                             <td className="px-4 py-3 flex flex-wrap items-center gap-2">
                               {showPayNow && (
@@ -2687,11 +3174,13 @@ const StudentProfile = () => {
                                   disabled={generateLinkLoading}
                                   onClick={async () => {
                                     setGenerateLinkLoading(true);
+                                    const paymentSlot = parsePaymentSlotFromRow(p);
                                     const res = await generatePaymentLink(userId, {
                                       planCode: paymentsModalPlan.planCode,
                                       amount: p.amount ?? paymentsModalPlan.amount,
                                       currency: p.currency || paymentsModalPlan.currency,
                                       subscriptionCode: paymentsModalPlan.subscriptionCode || undefined,
+                                      ...(paymentSlot != null ? { paymentSlot } : {}),
                                     });
                                     setGenerateLinkLoading(false);
                                     if (res.success && res.data?.paymentUrl) {
@@ -2814,6 +3303,18 @@ const StudentProfile = () => {
                                   Mark as paid
                                 </button>
                               )}
+                              {showMarkPaystackEft && (
+                                <button
+                                  type="button"
+                                  disabled={isLoading || paystackEftSubmitting}
+                                  onClick={() => {
+                                    openPaystackEftModal(paymentsModalPlan, p);
+                                  }}
+                                  className="text-emerald-700 hover:underline text-sm font-medium disabled:opacity-50"
+                                >
+                                  Mark paid (EFT)
+                                </button>
+                              )}
                               {showDeletePending && (
                                 <button
                                   type="button"
@@ -2841,7 +3342,7 @@ const StudentProfile = () => {
                                   {isLoading ? "Deleting…" : "Delete"}
                                 </button>
                               )}
-                              {!showPayNow && !showGenerateLink && !showEditStatus && !showDeleteBillingRecord && !showDismiss && !showMarkAsPaid && !showDeletePending && !p.xeroInvoiceUrl && "—"}
+                              {!showPayNow && !showGenerateLink && !showEditStatus && !showDeleteBillingRecord && !showDismiss && !showMarkAsPaid && !showMarkPaystackEft && !showDeletePending && !p.xeroInvoiceUrl && "—"}
                             </td>
                           </tr>
                         );
@@ -2851,6 +3352,327 @@ const StudentProfile = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Standalone Paystack subscription: record EFT (admin when student paid by bank transfer) */}
+      {paystackEftModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !paystackEftSubmitting && setPaystackEftModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Mark Paystack payment paid (EFT)</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Creates an accepted EFT billing record for this standalone subscription (same as a successful debit). Clears
+                  pending &quot;Pay now&quot; links for this plan when applicable.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={paystackEftSubmitting}
+                onClick={() => setPaystackEftModal(null)}
+                className="text-gray-500 hover:text-gray-800 text-2xl leading-none disabled:opacity-40"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={submitPaystackEft} className="px-6 py-4 space-y-4">
+              <div className="text-sm text-gray-700 space-y-1">
+                <p>
+                  <span className="text-gray-500">Plan:</span>{" "}
+                  {paystackEftModal.plan?.planName || paystackEftModal.plan?.planCode || "—"}
+                </p>
+                <p className="text-xs text-gray-500 font-mono">{paystackEftModal.plan?.planCode}</p>
+              </div>
+              {(() => {
+                const choices = buildPaystackEftPaymentChoices(paystackEftModal.plan);
+                const tr =
+                  paystackEftModal.plan?.totalPaymentsRequired != null
+                    ? Number(paystackEftModal.plan.totalPaymentsRequired)
+                    : null;
+                if (choices.length === 0) {
+                  if (tr != null && Number.isFinite(tr) && tr >= 1) {
+                    return (
+                      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        No pending payment lines were found for this plan. Sync billing or check the plan setup, then try again.
+                      </p>
+                    );
+                  }
+                  return null;
+                }
+                return (
+                  <label className="block">
+                    <span className="block text-sm font-medium text-gray-700 mb-1">Which payment is this for?</span>
+                    <select
+                      required
+                      value={paystackEftPaymentChoice}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setPaystackEftPaymentChoice(v);
+                        try {
+                          const parsed = JSON.parse(v);
+                          const match = choices.find((c) => {
+                            if (parsed.outstandingPaymentId && c.outstandingPaymentId) {
+                              return String(c.outstandingPaymentId) === String(parsed.outstandingPaymentId);
+                            }
+                            if (parsed.billingRecordId && c.billingRecordId) {
+                              return String(c.billingRecordId) === String(parsed.billingRecordId);
+                            }
+                            return (
+                              c.installmentSlot === parsed.installmentSlot &&
+                              !parsed.outstandingPaymentId &&
+                              !parsed.billingRecordId
+                            );
+                          });
+                          if (match?.amountCents != null && Number.isFinite(match.amountCents)) {
+                            setPaystackEftAmountRands((match.amountCents / 100).toFixed(2));
+                          }
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-gray-900 bg-white"
+                    >
+                      {choices.map((c, idx) => (
+                        <option key={idx} value={encodePaystackEftChoice(c)}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Includes pending instalments, Pay now links, and <strong className="text-gray-700">rejected</strong> Paystack
+                      debits (failed card charges) so you can record the bank payment against the right month.
+                    </p>
+                  </label>
+                );
+              })()}
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 mb-1">Payment date</span>
+                <input
+                  type="date"
+                  required
+                  value={paystackEftPaidAt}
+                  onChange={(e) => setPaystackEftPaidAt(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 mb-1">Amount (ZAR)</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  required
+                  value={paystackEftAmountRands}
+                  onChange={(e) => setPaystackEftAmountRands(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="0.00"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 mb-1">Proof URL (optional)</span>
+                <input
+                  type="url"
+                  value={paystackEftProofUrl}
+                  onChange={(e) => setPaystackEftProofUrl(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="https://…"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-sm font-medium text-gray-700 mb-1">Proof file (optional)</span>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  onChange={(e) => setPaystackEftProofFile(e.target.files?.[0] || null)}
+                  className="w-full text-sm text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-100 file:text-gray-800"
+                />
+              </label>
+              {paystackEftError && <p className="text-sm text-red-600">{paystackEftError}</p>}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={paystackEftSubmitting}
+                  onClick={() => setPaystackEftModal(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={paystackEftSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {paystackEftSubmitting ? "Saving…" : "Record payment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Update subscription code modal */}
+      {subscriptionCodeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !subscriptionCodeLoading && setSubscriptionCodeModal(null)}>
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-4">
+              {subscriptionCodeModal.subscriptionCode ? "Update" : "Add"} subscription code – {subscriptionCodeModal.planName || subscriptionCodeModal.planCode}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Enter the Paystack subscription code (e.g. SUB_xxx). You can find this in the Paystack dashboard under Subscriptions.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const code = (subscriptionCodeForm.subscriptionCode || "").trim();
+                if (!code) {
+                  setSubscriptionCodeError("Subscription code is required.");
+                  return;
+                }
+                setSubscriptionCodeError(null);
+                setSubscriptionCodeLoading(true);
+                const res = await updateSubscriptionCode(userId, {
+                  planCode: subscriptionCodeModal.planCode,
+                  subscriptionCode: code,
+                });
+                setSubscriptionCodeLoading(false);
+                if (res.success) {
+                  setSubscriptionCodeModal(null);
+                  setSubscriptionCodeForm({ subscriptionCode: "" });
+                  fetchBilling();
+                } else {
+                  setSubscriptionCodeError(res.message || "Failed to update.");
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Subscription code</label>
+                <input
+                  type="text"
+                  value={subscriptionCodeForm.subscriptionCode}
+                  onChange={(e) => setSubscriptionCodeForm({ subscriptionCode: e.target.value })}
+                  placeholder="e.g. SUB_xxxxxxxx"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  disabled={subscriptionCodeLoading}
+                />
+              </div>
+              {subscriptionCodeError && (
+                <p className="text-sm text-red-600">{subscriptionCodeError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => !subscriptionCodeLoading && setSubscriptionCodeModal(null)}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                  disabled={subscriptionCodeLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={subscriptionCodeLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {subscriptionCodeLoading ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change payment date modal */}
+      {changeDateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !changeDateLoading && setChangeDateModal(null)}>
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-4">
+              Change payment date – {changeDateModal.planName || changeDateModal.planCode}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Select the day of the month (1–28) for future payments. Paystack uses the 28th for days 29–31.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setChangeDateError(null);
+                setChangeDateLoading(true);
+                const day = Number(changeDateForm.dayOfMonth);
+                if (day < 1 || day > 28) {
+                  setChangeDateError("Please select a day between 1 and 28.");
+                  setChangeDateLoading(false);
+                  return;
+                }
+                const res = await changePaystackPaymentDate(userId, {
+                  subscriptionCode: changeDateModal.subscriptionCode,
+                  newPaymentDate: day,
+                });
+                setChangeDateLoading(false);
+                if (res.success) {
+                  setChangeDateModal(null);
+                  fetchBilling();
+                  getCustomPlans(userId).then((r) => { if (r?.success && Array.isArray(r.data)) setCustomPlans(r.data); });
+                  if (paymentsModalPlan && paymentsModalPlan.planCode === changeDateModal.planCode) {
+                    getStudentBilling(userId).then((billingRes) => {
+                      if (billingRes?.success && billingRes.plans) {
+                        const updatedPlan = billingRes.plans.find((pl) => pl.planCode === changeDateModal.planCode);
+                        if (updatedPlan) setPaymentsModalPlan(updatedPlan);
+                      }
+                    });
+                  }
+                } else {
+                  setChangeDateError(res.message || "Failed to change payment date");
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Day of month</label>
+                <select
+                  value={changeDateForm.dayOfMonth}
+                  onChange={(e) => setChangeDateForm({ ...changeDateForm, dayOfMonth: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  disabled={changeDateLoading}
+                >
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={String(d)}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              {changeDateError && (
+                <p className="text-sm text-red-600">{changeDateError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => !changeDateLoading && setChangeDateModal(null)}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                  disabled={changeDateLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={changeDateLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {changeDateLoading ? "Changing…" : "Change date"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

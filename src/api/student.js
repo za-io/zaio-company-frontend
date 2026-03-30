@@ -45,6 +45,18 @@ export const updateStudentNumber = (userId, studentNumber) =>
       return { success: false, message: err?.response?.data?.message || "Failed to update student number" };
     });
 
+/** Exclude this student from Finance dashboard (test / demo accounts) */
+export const updateStudentFinanceExclude = (userId, excludeFromFinanceReports) =>
+  axios
+    .put(API_URL + `/student-profile/${userId}/finance-exclude`, {
+      excludeFromFinanceReports,
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to update" };
+    });
+
 // Get billing for a student (Paystack + Financing/Manati)
 export const getStudentBilling = (userId) =>
   axios
@@ -56,18 +68,45 @@ export const getStudentBilling = (userId) =>
     });
 
 // Generate one-time Paystack payment link for failed or expired payment
-export const generatePaymentLink = (userId, { planCode, amount, currency, subscriptionCode }) =>
+export const generatePaymentLink = (userId, { planCode, amount, currency, subscriptionCode, paymentSlot }) =>
   axios
     .post(API_URL + `/student-profile/${userId}/generate-payment-link`, {
       plan_code: planCode,
       ...(amount != null ? { amount } : {}),
       ...(currency ? { currency } : {}),
       ...(subscriptionCode ? { subscription_code: subscriptionCode } : {}),
+      ...(paymentSlot != null && paymentSlot > 0 ? { payment_slot: paymentSlot } : {}),
     })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
       return { success: false, message: err?.response?.data?.message || "Failed to generate link" };
+    });
+
+// Add or update subscription code for an existing Paystack plan
+export const updateSubscriptionCode = (userId, { planCode, subscriptionCode }) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/update-subscription-code`, {
+      plan_code: (planCode || "").trim(),
+      subscription_code: (subscriptionCode || "").trim(),
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to update subscription code" };
+    });
+
+// Change Paystack subscription payment date (day 1-28 or ISO date)
+export const changePaystackPaymentDate = (userId, { subscriptionCode, newPaymentDate }) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/change-payment-date`, {
+      subscription_code: subscriptionCode,
+      new_payment_date: newPaymentDate,
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to change payment date" };
     });
 
 // Get full Manati statement for a student (for company app – when clicking a Manati plan)
@@ -325,14 +364,15 @@ export const setupPaystackPlanPreview = (userId, planCode, payerEmail) =>
       return { success: false, message: err?.response?.data?.message || "Fetch failed" };
     });
 
-// Set up Paystack plan: plan_code (required), payer_email (optional), transactions (optional), custom_plan_id (optional – link backfilled payments to this custom plan).
-export const setupPaystackPlan = (userId, planCode, payerEmail, transactions, customPlanId) =>
+// Set up Paystack plan: plan_code (required), payer_email (optional), transactions (optional), custom_plan_id (optional), subscription_code (optional – add manually if auto-lookup fails).
+export const setupPaystackPlan = (userId, planCode, payerEmail, transactions, customPlanId, subscriptionCode) =>
   axios
     .post(API_URL + `/student-profile/${userId}/setup-paystack-plan`, {
       plan_code: (planCode || "").trim() || undefined,
       payer_email: (payerEmail || "").trim() || undefined,
       ...(Array.isArray(transactions) && transactions.length > 0 ? { transactions } : {}),
       ...(customPlanId ? { custom_plan_id: customPlanId } : {}),
+      ...((subscriptionCode || "").trim() ? { subscription_code: (subscriptionCode || "").trim() } : {}),
     })
     .then((res) => res.data)
     .catch((err) => {
@@ -368,6 +408,18 @@ export const backfillPaystackBilling = (userId, email, planCode, subscriptionCod
     .catch((err) => {
       console.log(err);
       return { success: false, message: err?.response?.data?.message || "Backfill failed" };
+    });
+
+/** Create missing BillingRecord rows from Mongo PaystackPayment (webhook log) for this learner's email(s). */
+export const syncPaystackPaymentsToBilling = (userId, doneBy) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/sync-paystack-payments-to-billing`, {
+      ...(doneBy ? { done_by: doneBy } : {}),
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Sync failed" };
     });
 
 export const getUserBootcampAnalytics = (user_id, bootcamp_id) =>

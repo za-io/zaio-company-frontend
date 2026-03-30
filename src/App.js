@@ -44,6 +44,11 @@ import CreateOCCohort from "./pages/CreateOCCohort";
 import ViewOCPrograms from "./pages/ViewOCPrograms";
 import OCStudentDetails from "./pages/OCStudentDetails";
 import OCModuleDetails from "./pages/OCModuleDetails";
+import Finance from "./pages/Finance";
+import FinancePasswordGate from "./components/FinancePasswordGate";
+import RosterPaymentCheck from "./pages/RosterPaymentCheck";
+import RosterTasksList from "./pages/RosterTasksList";
+import RosterTaskDetail from "./pages/RosterTaskDetail";
 
 const AppHelper = () => {
   return (
@@ -358,6 +363,37 @@ const AppHelper = () => {
               path="/support-sessions"
               component={<SupportSessions />}
             />
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <ProtectedRoute
+              path="/finance"
+              component={
+                <FinancePasswordGate>
+                  <Finance />
+                </FinancePasswordGate>
+              }
+            />
+          }
+        />
+        <Route
+          path="/roster-payment-check"
+          element={
+            <ProtectedRoute path="/roster-payment-check" component={<RosterPaymentCheck />} />
+          }
+        />
+        <Route
+          path="/roster-tasks"
+          element={
+            <ProtectedRoute path="/roster-tasks" component={<RosterTasksList />} />
+          }
+        />
+        <Route
+          path="/roster-tasks/:taskId"
+          element={
+            <ProtectedRoute path="/roster-tasks/:taskId" component={<RosterTaskDetail />} />
           }
         />
       </Routes>{" "}

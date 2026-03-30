@@ -31,6 +31,8 @@ const Navbar = () => {
   const canManagePrograms = ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user?.role);
   const canViewOC = ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN", "ASSESSOR", "MODERATOR", "TUTOR"].includes(user?.role);
   const isSuperAdmin = ["SUPER_ADMIN"].includes(user?.role);
+  const financeNavRoles = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN"];
+  const showFinanceNav = user?.email && financeNavRoles.includes(user?.role);
 
   const menuItems = [
     // Program Management
@@ -169,6 +171,45 @@ const Navbar = () => {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Finance & roster (company admins) */}
+            {showFinanceNav && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate("/finance")}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    location.pathname === "/finance"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-gray-800 text-gray-300 hover:bg-emerald-600/20 hover:text-emerald-400"
+                  }`}
+                >
+                  Finance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/roster-payment-check")}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    location.pathname === "/roster-payment-check"
+                      ? "bg-violet-600 text-white"
+                      : "bg-gray-800 text-gray-300 hover:bg-violet-600/20 hover:text-violet-400"
+                  }`}
+                >
+                  Roster
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/roster-tasks")}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                    location.pathname.startsWith("/roster-tasks")
+                      ? "bg-amber-600 text-white"
+                      : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
+                  }`}
+                >
+                  Tasks
+                </button>
+              </>
             )}
 
             {/* Tutor bookings (SUPER_STUDENT_ADMIN) */}

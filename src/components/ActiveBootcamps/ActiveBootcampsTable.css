@@ -831,3 +831,91 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Auto Enrollment modal */
+.auto-enrollment-modal .edit-modal-body {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.auto-enrollment-desc {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.auto-enrollment-field {
+  margin-bottom: 16px;
+}
+
+.auto-enrollment-field label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.auto-enrollment-value-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.auto-enrollment-code {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  color: #93c5fd;
+  word-break: break-all;
+}
+
+.auto-enrollment-code.api-key-code {
+  font-size: 0.75rem;
+}
+
+.copy-btn {
+  padding: 8px 16px;
+  background: rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  border-radius: 8px;
+  color: #93c5fd;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover {
+  background: rgba(59, 130, 246, 0.4);
+  color: #fff;
+}
+
+.auto-enrollment-note {
+  margin: 16px 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+}
+
+.auto-enrollment-note code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.auto-enrollment-unavailable {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+}

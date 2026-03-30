@@ -666,3 +666,167 @@ export const linkClassroomUserManually = (zaioUserId, googleClassroomUserId, boo
       success: false,
       message: err?.response?.data?.message || "Failed to link",
     }));
+
+/** Students with 2+ rejected billing records (failed payments). Params: includeExcluded */
+export const getFinanceAttentionRejected = (params = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const search = new URLSearchParams();
+  if (params.includeExcluded) {
+    search.set("includeExcluded", "true");
+  }
+  const q = search.toString();
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-attention-rejected${q ? `?${q}` : ""}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to load attention list",
+    }));
+};
+
+/** Finance dashboard: installments due in period (Paystack + EFT). Params: { year, month } or { start, end } ISO dates; includeExcluded to show test-marked accounts */
+export const getFinanceSummary = (params = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const search = new URLSearchParams();
+  if (params.year != null && params.month != null) {
+    search.set("year", String(params.year));
+    search.set("month", String(params.month));
+  } else if (params.start && params.end) {
+    search.set("start", params.start);
+    search.set("end", params.end);
+  }
+  if (params.includeExcluded) {
+    search.set("includeExcluded", "true");
+  }
+  const q = search.toString();
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-summary${q ? `?${q}` : ""}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to load finance data",
+    }));
+};
+
+/** Upload roster CSV/XLSX; returns rows with inSystem, hasPaymentPlan, userId for profile links */
+export const postRosterPaymentCheck = (file) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const formData = new FormData();
+  formData.append("file", file);
+  return axios
+    .post(`${BASE_URL}/bootcamp/roster-payment-check`, formData, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to process roster",
+    }));
+};
+
+const rosterTaskHeaders = () => {
+  const token = localStorage.getItem("TOKEN");
+  return token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+};
+
+/** Save analyzed roster as a persisted reconciliation task */
+export const createRosterTask = (payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/roster-tasks`, payload, { headers: rosterTaskHeaders() })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to save task",
+    }));
+
+export const getRosterTasks = () =>
+  axios
+    .get(`${BASE_URL}/bootcamp/roster-tasks`, { headers: rosterTaskHeaders() })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to load tasks",
+    }));
+
+export const getRosterTask = (taskId) =>
+  axios
+    .get(`${BASE_URL}/bootcamp/roster-tasks/${taskId}`, { headers: rosterTaskHeaders() })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to load task",
+    }));
+
+export const patchRosterTaskRow = (taskId, rowId, workflow) =>
+  axios
+    .patch(`${BASE_URL}/bootcamp/roster-tasks/${taskId}/rows/${rowId}`, { workflow }, { headers: rosterTaskHeaders() })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to update row",
+    }));
+
+export const refreshRosterTask = (taskId) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/roster-tasks/${taskId}/refresh`, {}, { headers: rosterTaskHeaders() })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to refresh",
+    }));
+
+export const deleteRosterTask = (taskId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .delete(`${BASE_URL}/bootcamp/roster-tasks/${taskId}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to delete task",
+    }));
+};
+
+/** Issue learner JWT for a student (company admin auth + COMPANY_LOGIN_AS_STUDENT_PASSWORD). */
+export const postStudentLoginAsToken = (payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return axios
+    .post(`${BASE_URL}/bootcamp/student-login-as-token`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to open student session",
+    }));
+};
+
+/** Pull failed Paystack transactions for the period and add BillingRecords (rejected). Params align with Finance month/range; limit defaults to 20. */
+export const postFinanceSyncFailedPaystack = (payload = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return axios
+    .post(`${BASE_URL}/bootcamp/finance-sync-failed-paystack`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to sync failed Paystack charges",
+    }));
+};
+
+/**
+ * Record EFT for a standalone Paystack subscription line (multipart FormData: userId, planCode, paidAt, amountCents optional, proofUrl optional, proof file optional).
+ */
+export const postFinanceRecordPaystackEft = (formData) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/finance-record-paystack-eft`, formData, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to record EFT payment",
+    }));
+};

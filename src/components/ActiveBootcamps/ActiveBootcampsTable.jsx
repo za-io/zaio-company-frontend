@@ -898,7 +898,11 @@ function ActiveBootcampsTable() {
   const [liveClassesModalOpen, setLiveClassesModalOpen] = useState(false);
   const [liveClassesBootcampId, setLiveClassesBootcampId] = useState(null);
   const [liveClassesBootcampName, setLiveClassesBootcampName] = useState("");
+  const [autoEnrollmentModalOpen, setAutoEnrollmentModalOpen] = useState(false);
+  const [autoEnrollmentBootcamp, setAutoEnrollmentBootcamp] = useState(null);
   const dropdownRef = useRef(null);
+
+  const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
 
   const fetchBootcamps = (pageNum = page) => {
     setLoading(true);
@@ -955,6 +959,13 @@ function ActiveBootcampsTable() {
     setLinkingBootcampId(bootcampId);
     setLinkingBootcampName(bootcampName || "Bootcamp");
     setLinkClassroomModalOpen(true);
+    setOpenDropdown(null);
+  };
+
+  const handleAutoEnrollment = (e, bootcamp) => {
+    e.stopPropagation();
+    setAutoEnrollmentBootcamp(bootcamp);
+    setAutoEnrollmentModalOpen(true);
     setOpenDropdown(null);
   };
 
@@ -1143,6 +1154,12 @@ function ActiveBootcampsTable() {
                           </button>
                           <button
                             className="dropdown-item edit-btn"
+                            onClick={(e) => handleAutoEnrollment(e, b)}
+                          >
+                            Auto Enrollment
+                          </button>
+                          <button
+                            className="dropdown-item edit-btn"
                             onClick={(e) => handleLiveClasses(e, b._id, b.bootcampName || b.learningpath?.learningpathname)}
                           >
                             Live Classes
@@ -1221,6 +1238,64 @@ function ActiveBootcampsTable() {
         bootcampName={liveClassesBootcampName}
         onSave={() => {}}
       />
+
+      {/* Auto Enrollment details modal */}
+      {autoEnrollmentModalOpen && autoEnrollmentBootcamp && (
+        <div className="edit-modal-overlay" onClick={() => setAutoEnrollmentModalOpen(false)}>
+          <div className="edit-modal-content auto-enrollment-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="edit-modal-header">
+              <h2>Auto Enrollment – {autoEnrollmentBootcamp.bootcampName || "Bootcamp"}</h2>
+              <button type="button" className="edit-modal-close" onClick={() => setAutoEnrollmentModalOpen(false)}>×</button>
+            </div>
+            <div className="edit-modal-body">
+              {autoEnrollmentBootcamp.bootcampType === "auto" && autoEnrollmentBootcamp.apiKey ? (
+                <>
+                  <p className="auto-enrollment-desc">Use these details to integrate auto-enrollment with your payment or signup flow. Send a POST request with the API key in the header.</p>
+                  <div className="auto-enrollment-field">
+                    <label>Endpoint URL</label>
+                    <div className="auto-enrollment-value-row">
+                      <code className="auto-enrollment-code">
+                        {baseUrl}/bootcamp/auto-enroll/{autoEnrollmentBootcamp._id}
+                      </code>
+                      <button
+                        type="button"
+                        className="copy-btn"
+                        onClick={() => navigator.clipboard?.writeText(`${baseUrl}/bootcamp/auto-enroll/${autoEnrollmentBootcamp._id}`)}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <div className="auto-enrollment-field">
+                    <label>API Key (x-api-key header)</label>
+                    <div className="auto-enrollment-value-row">
+                      <code className="auto-enrollment-code api-key-code">{autoEnrollmentBootcamp.apiKey}</code>
+                      <button
+                        type="button"
+                        className="copy-btn"
+                        onClick={() => navigator.clipboard?.writeText(autoEnrollmentBootcamp.apiKey)}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <div className="auto-enrollment-field">
+                    <label>Method</label>
+                    <code className="auto-enrollment-code">POST</code>
+                  </div>
+                  <p className="auto-enrollment-note">
+                    Required body: <code>student_email</code>, <code>payer_email</code>, <code>payment_type</code>, and payment-type-specific fields. See the API documentation for full details.
+                  </p>
+                </>
+              ) : (
+                <p className="auto-enrollment-unavailable">
+                  This bootcamp does not support auto-enrollment. Set bootcamp type to &quot;auto&quot; when creating the program to enable it. Auto-enrollment bootcamps receive an API key and endpoint for integrating with your payment or signup flow.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
