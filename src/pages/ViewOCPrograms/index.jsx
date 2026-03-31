@@ -18,6 +18,7 @@ import {
   createLiveClass,
   updateLiveClass,
   deleteLiveClass,
+  downloadPoeIdCopiesZip,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
@@ -68,6 +69,7 @@ const ViewOCPrograms = () => {
   });
   const [liveClassSubmitting, setLiveClassSubmitting] = useState(false);
   const [liveClassMessage, setLiveClassMessage] = useState(null);
+  const [idCopyZipLoading, setIdCopyZipLoading] = useState(null);
 
   const DEFAULT_LIVE_CLASS_THUMBNAIL =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120'%3E%3Crect fill='%23212a34' width='200' height='120'/%3E%3Ctext x='100' y='65' fill='%236b7280' font-size='14' text-anchor='middle' font-family='system-ui'%3ELive Class%3C/text%3E%3C/svg%3E";
@@ -215,6 +217,62 @@ const ViewOCPrograms = () => {
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
       console.error("Copy failed:", err);
+    }
+  };
+
+  const getFilenameFromContentDisposition = (header) => {
+    if (!header || typeof header !== "string") return null;
+    const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8) {
+      try {
+        return decodeURIComponent(utf8[1].replace(/["']/g, "").trim());
+      } catch {
+        return null;
+      }
+    }
+    const m = header.match(/filename="([^"]+)"/i) || header.match(/filename=([^;\s]+)/i);
+    return m ? m[1].trim() : null;
+  };
+
+  const handleDownloadIdCopiesZip = async (program) => {
+    if (!program?._id) return;
+    setIdCopyZipLoading(program._id);
+    try {
+      const res = await downloadPoeIdCopiesZip(program._id);
+      const blob = res.data;
+      const ct = res.headers["content-type"] || "";
+      if (ct.includes("application/json") || (blob && blob.type && blob.type.includes("application/json"))) {
+        const text = await blob.text();
+        const j = JSON.parse(text);
+        alert(j.message || "Download failed.");
+        return;
+      }
+      const fromHeader = getFilenameFromContentDisposition(res.headers["content-disposition"]);
+      const safe = (program.cohortName || "cohort").replace(/[<>:"/\\|?*]/g, "").trim() || "cohort";
+      const filename = fromHeader || `${safe}-id-copies.zip`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      const data = err.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const j = JSON.parse(text);
+          alert(j.message || "Download failed.");
+        } catch {
+          alert("Download failed.");
+        }
+      } else {
+        alert(err?.response?.data?.message || err?.message || "Download failed.");
+      }
+    } finally {
+      setIdCopyZipLoading(null);
     }
   };
 
@@ -655,6 +713,38 @@ const ViewOCPrograms = () => {
               )}
               <button
                 type="button"
+                title="View POE documents (ID, CV, qualifications) for all learners in this cohort"
+                onClick={() =>
+                  selectedProgram?._id &&
+                  navigate(`/oc-programs/${selectedProgram._id}/documents`)
+                }
+                className="inline-flex items-center gap-2 bg-cyan-600/90 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Learner POE documents
+              </button>
+              <button
+                type="button"
+                title="Download all learners’ certified ID copies from POE (one folder per learner)"
+                disabled={idCopyZipLoading === selectedProgram?._id}
+                onClick={() => handleDownloadIdCopiesZip(selectedProgram)}
+                className="inline-flex items-center gap-2 bg-amber-500/90 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
+              >
+                {idCopyZipLoading === selectedProgram?._id ? (
+                  <>Preparing zip…</>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download ID copies (ZIP)
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setShowStudentsTable(false);
                   setSelectedProgram(null);
@@ -1008,6 +1098,31 @@ const ViewOCPrograms = () => {
                           }}
                         >
                           View
+                        </button>
+                        <button
+                          type="button"
+                          title="View POE documents learners have uploaded (ID, CV, qualifications)"
+                          className="bg-cyan-600/85 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate(`/oc-programs/${program._id}/documents`);
+                          }}
+                        >
+                          POE docs
+                        </button>
+                        <button
+                          type="button"
+                          title="Download all learners’ certified ID copies from POE (one folder per learner)"
+                          disabled={idCopyZipLoading === program._id}
+                          className="bg-amber-500/85 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDownloadIdCopiesZip(program);
+                          }}
+                        >
+                          {idCopyZipLoading === program._id ? "…" : "ID copies (ZIP)"}
                         </button>
                       </div>
                     </td>

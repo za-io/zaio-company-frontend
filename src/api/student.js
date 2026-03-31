@@ -96,6 +96,18 @@ export const updateSubscriptionCode = (userId, { planCode, subscriptionCode }) =
       return { success: false, message: err?.response?.data?.message || "Failed to update subscription code" };
     });
 
+/** Remove standalone Paystack plan (e.g. 12-month PLN_) from student profile — not custom / 2-installment / Manati */
+export const removeStandalonePaystackPlan = (userId, planCode) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/remove-standalone-paystack-plan`, {
+      plan_code: (planCode || "").trim(),
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to remove plan" };
+    });
+
 // Change Paystack subscription payment date (day 1-28 or ISO date)
 export const changePaystackPaymentDate = (userId, { subscriptionCode, newPaymentDate }) =>
   axios
@@ -217,6 +229,16 @@ export const createStudentInstallmentPlan = (userId, payload) =>
       return { success: false, message: err?.response?.data?.message || "Create plan failed" };
     });
 
+// 2-installment EFT plan: remove entire plan (and StudentPlan row)
+export const deleteStudentInstallmentPlan = (userId, planId) =>
+  axios
+    .delete(API_URL + `/student-profile/${userId}/installment-plans/${planId}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Remove plan failed" };
+    });
+
 // 2-installment EFT plan: update installment amount and/or due date
 export const updateInstallment = (userId, planId, installmentNumber, payload) =>
   axios
@@ -317,6 +339,16 @@ export const updateCustomPlan = (userId, planId, payload) =>
     .catch((err) => {
       console.log(err);
       return { success: false, message: err?.response?.data?.message || "Update plan failed" };
+    });
+
+// Custom payment plan: remove entire plan (and StudentPlan row)
+export const deleteCustomPaymentPlan = (userId, planId) =>
+  axios
+    .delete(API_URL + `/student-profile/${userId}/custom-plans/${planId}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Remove plan failed" };
     });
 
 // Custom payment plan: create (plan_name, installments: [{ amount, due_date?, type, paystack_plan_code? }])

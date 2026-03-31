@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
-import { blockUser, unblockUser } from "../../api/student";
+import { blockUser, unblockUser, updateTutor } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
 import { WarningModal } from "./WarningModal";
@@ -40,6 +40,11 @@ const AnalyticsTable = ({
     useState(null);
   const [studentPingModalConfig, setStudentPingModalConfig] = useState(null);
   const [tutors, setTutors] = useState([]);
+  /** user ids (strings) selected for bulk tutor assignment — bootcamp view only */
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [bulkTutorId, setBulkTutorId] = useState("");
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const selectAllCheckboxRef = useRef(null);
 
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
@@ -87,6 +92,111 @@ const AnalyticsTable = ({
   useEffect(() => {
     fetchTutors();
   }, []);
+
+  const filteredSortedAnalytics = useMemo(() => {
+    const raw = data?.analytics || [];
+    const filtered = raw.filter(
+      (ba) =>
+        ba?.userid?.username?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
+        ba?.userid?.email?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
+        (ba?.userid?.studentNumber || "")?.toLowerCase()?.includes(searchQuery?.toLowerCase())
+    );
+    return [...filtered].sort((a, b) => {
+      const aTotalProgress = a?.isbootCampPassed ? 100 : (a?.completedPercentage || 0);
+      const bTotalProgress = b?.isbootCampPassed ? 100 : (b?.completedPercentage || 0);
+
+      if (sortBy === SORTING.PROGRESS_DESC) {
+        return bTotalProgress - aTotalProgress;
+      }
+      if (sortBy === SORTING.PROGRESS_ASC) {
+        return aTotalProgress - bTotalProgress;
+      }
+      if (sortBy === SORTING.DEFERRED_ASC) {
+        return Boolean(b?.deferredDetails?.studentDeferred) - Boolean(a?.deferredDetails?.studentDeferred);
+      }
+      if (sortBy === SORTING.DEFERRED_DESC) {
+        return Boolean(a?.deferredDetails?.studentDeferred) - Boolean(b?.deferredDetails?.studentDeferred);
+      }
+      return 0;
+    });
+  }, [data?.analytics, searchQuery, sortBy]);
+
+  const showBulkTutorTools = searchType === "bootcamp" && !["TUTOR"]?.includes(user?.role);
+  const visibleUserIdStrings = useMemo(
+    () =>
+      filteredSortedAnalytics.map((ba) => (ba?.userid?._id != null ? String(ba.userid._id) : null)).filter(Boolean),
+    [filteredSortedAnalytics]
+  );
+
+  useEffect(() => {
+    setSelectedUserIds([]);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const el = selectAllCheckboxRef.current;
+    if (!el || !showBulkTutorTools) return;
+    const n = visibleUserIdStrings.length;
+    const sel = visibleUserIdStrings.filter((id) => selectedUserIds.includes(id)).length;
+    el.indeterminate = sel > 0 && sel < n;
+  }, [selectedUserIds, visibleUserIdStrings, showBulkTutorTools]);
+
+  const allVisibleSelected =
+    visibleUserIdStrings.length > 0 && visibleUserIdStrings.every((id) => selectedUserIds.includes(id));
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds([...visibleUserIdStrings]);
+    }
+  };
+
+  const toggleRowSelected = (userId) => {
+    if (!userId) return;
+    const id = String(userId);
+    setSelectedUserIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleBulkAssignTutor = async () => {
+    const bootcampId = data?.bootcampDetails?._id;
+    if (!bulkTutorId || !bootcampId || selectedUserIds.length === 0) return;
+    const tutorLabel =
+      tutors?.find((t) => String(t._id) === String(bulkTutorId))?.company_username ||
+      tutors?.find((t) => String(t._id) === String(bulkTutorId))?.email ||
+      "this tutor";
+    if (
+      !window.confirm(
+        `Assign ${selectedUserIds.length} student(s) to ${tutorLabel}? Existing tutor assignments will be replaced.`
+      )
+    ) {
+      return;
+    }
+    setBulkAssigning(true);
+    let ok = 0;
+    let failed = 0;
+    for (const uid of selectedUserIds) {
+      try {
+        const res = await updateTutor({
+          userid: uid,
+          bootcampid: bootcampId,
+          newAssignedTutor: bulkTutorId,
+        });
+        if (res?.success) ok++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setBulkAssigning(false);
+    setSelectedUserIds([]);
+    setBulkTutorId("");
+    if (failed > 0) {
+      window.alert(`Updated ${ok} student(s). ${failed} failed (check enrollment).`);
+    } else {
+      window.alert(`Assigned tutor to ${ok} student(s).`);
+    }
+    getAnalytics();
+  };
 
   if (loading) return <></>;
 
@@ -201,6 +311,48 @@ const AnalyticsTable = ({
                 </select>
               </div>
             </div>
+
+            {showBulkTutorTools && filteredSortedAnalytics.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-800 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+                  <input
+                    ref={selectAllCheckboxRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    className="rounded border-gray-600 bg-[#0D1117] text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>
+                    Select all <span className="text-gray-500">({filteredSortedAnalytics.length} visible)</span>
+                  </span>
+                </label>
+                <span className="text-gray-600">|</span>
+                <span className="text-sm text-gray-400">
+                  {selectedUserIds.length} selected
+                </span>
+                <select
+                  value={bulkTutorId}
+                  onChange={(e) => setBulkTutorId(e.target.value)}
+                  disabled={bulkAssigning}
+                  className="px-3 py-2 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[200px]"
+                >
+                  <option value="">Choose tutor to assign…</option>
+                  {(tutors || []).map((tutor) => (
+                    <option key={tutor._id} value={tutor._id}>
+                      {tutor.company_username || tutor.email}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={bulkAssigning || !bulkTutorId || selectedUserIds.length === 0}
+                  onClick={handleBulkAssignTutor}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {bulkAssigning ? "Assigning…" : "Assign tutor to selected"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Table */}
@@ -208,6 +360,11 @@ const AnalyticsTable = ({
             <table className="w-full">
               <thead className="bg-[#0D1117]">
                 <tr>
+                  {showBulkTutorTools && (
+                    <th className="w-10 px-2 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      <span className="sr-only">Select</span>
+                    </th>
+                  )}
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Student
                   </th>
@@ -249,44 +406,14 @@ const AnalyticsTable = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {data.analytics
-                  ?.filter(
-                    (ba) =>
-                      ba?.userid?.username
-                        ?.toLowerCase()
-                        ?.includes(searchQuery?.toLowerCase()) ||
-                      ba?.userid?.email
-                        ?.toLowerCase()
-                        ?.includes(searchQuery?.toLowerCase()) ||
-                      (ba?.userid?.studentNumber || "")
-                        ?.toLowerCase()
-                        ?.includes(searchQuery?.toLowerCase())
-                  )
-                  ?.sort((a, b) => {
-                    const aTotalProgress = a?.isbootCampPassed ? 100 : (a?.completedPercentage || 0);
-                    const bTotalProgress = b?.isbootCampPassed ? 100 : (b?.completedPercentage || 0);
-
-                    if (sortBy === SORTING.PROGRESS_DESC) {
-                      return bTotalProgress - aTotalProgress;
-                    } else if (sortBy === SORTING.PROGRESS_ASC) {
-                      return aTotalProgress - bTotalProgress;
-                    } else if (sortBy === SORTING.DEFERRED_ASC) {
-                      return (
-                        Boolean(b?.deferredDetails?.studentDeferred) -
-                        Boolean(a?.deferredDetails?.studentDeferred)
-                      );
-                    } else if (sortBy === SORTING.DEFERRED_DESC) {
-                      return (
-                        Boolean(a?.deferredDetails?.studentDeferred) -
-                        Boolean(b?.deferredDetails?.studentDeferred)
-                      );
-                    }
-                  })
-                  ?.map((ba) => {
+                {filteredSortedAnalytics.map((ba) => {
                     const totalProgress = ba?.isbootCampPassed ? 100 : (ba?.completedPercentage || 0);
                     const isCompleted = ba?.completedPercentage === 100 || ba?.isbootCampPassed;
                     const isDeferred = ba?.deferredDetails?.studentDeferred;
                     const isBlocked = ba?.userid?.accBlocked;
+
+                    const rowUserId = ba?.userid?._id != null ? String(ba.userid._id) : "";
+                    const rowSelected = rowUserId && selectedUserIds.includes(rowUserId);
 
                     return (
                       <tr
@@ -305,6 +432,20 @@ const AnalyticsTable = ({
                             handleLearningpath(data._id);
                         }}
                       >
+                        {showBulkTutorTools && (
+                          <td
+                            className="w-10 px-2 py-4 align-middle text-center"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={rowSelected}
+                              onChange={() => toggleRowSelected(ba?.userid?._id)}
+                              className="rounded border-gray-600 bg-[#0D1117] text-blue-600 focus:ring-blue-500"
+                              aria-label={`Select ${ba?.userid?.username || "student"}`}
+                            />
+                          </td>
+                        )}
                         {/* Student Info */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">

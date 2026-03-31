@@ -249,6 +249,29 @@ export const getCohortStudents = (cohortId) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Requires company auth-token. Returns axios response with responseType blob (application/zip). */
+export const downloadPoeIdCopiesZip = (cohortId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios.get(`${BASE_URL}/oc-cohort/${cohortId}/download-poe-id-copies-zip`, {
+    headers,
+    responseType: "blob",
+  });
+};
+
+/** POE documents per learner (signed URLs). Requires auth-token. */
+export const getCohortLearnerPoeDocuments = (cohortId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/learner-poe-documents`, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
 /** Add students to an existing OC cohort (comma-separated emails). Call createAccountsForEmails first if you want to create accounts and email new users. */
 export const addStudentsToOCCohort = (cohortId, payload) =>
   axios
@@ -682,6 +705,25 @@ export const getFinanceAttentionRejected = (params = {}) => {
     .catch((err) => ({
       success: false,
       message: err?.response?.data?.message || "Failed to load attention list",
+    }));
+};
+
+/** EFT proof uploads awaiting approval (same auth as Finance). Params: includeExcluded */
+export const getFinancePendingEftSubmissions = (params = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const search = new URLSearchParams();
+  if (params.includeExcluded) {
+    search.set("includeExcluded", "true");
+  }
+  const q = search.toString();
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-pending-eft-submissions${q ? `?${q}` : ""}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to load pending EFT list",
+      submissions: [],
     }));
 };
 

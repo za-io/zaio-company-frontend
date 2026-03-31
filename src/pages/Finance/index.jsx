@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { getFinanceSummary, getFinanceAttentionRejected } from "../../api/company";
-import { updateStudentFinanceExclude, blockUser, unblockUser } from "../../api/student";
+import { getFinanceSummary, getFinanceAttentionRejected, getFinancePendingEftSubmissions } from "../../api/company";
+import {
+  updateStudentFinanceExclude,
+  blockUser,
+  unblockUser,
+  getEftSubmissionProofUrl,
+  approveEftSubmission,
+  rejectEftSubmission,
+} from "../../api/student";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
 import CopyableEmailCell from "../../components/CopyableEmailCell";
@@ -266,6 +273,9 @@ const Finance = () => {
   const [attentionLoading, setAttentionLoading] = useState(false);
   const [attentionStudents, setAttentionStudents] = useState([]);
   const [attentionError, setAttentionError] = useState(null);
+  /** EFT proof submissions pending approval (loaded with Finance summary) */
+  const [eftPending, setEftPending] = useState([]);
+  const [eftActionKey, setEftActionKey] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -295,12 +305,20 @@ const Finance = () => {
       params = { start: rangeStart, end: rangeEnd };
     }
     if (includeExcluded) params.includeExcluded = true;
-    const res = await getFinanceSummary(params);
-    if (!res?.success) {
-      setError(res?.message || "Failed to load");
+    const [summaryRes, eftRes] = await Promise.all([
+      getFinanceSummary(params),
+      getFinancePendingEftSubmissions({ includeExcluded }),
+    ]);
+    if (!summaryRes?.success) {
+      setError(summaryRes?.message || "Failed to load");
       setData(null);
     } else {
-      setData(res);
+      setData(summaryRes);
+    }
+    if (eftRes?.success && Array.isArray(eftRes.submissions)) {
+      setEftPending(eftRes.submissions);
+    } else {
+      setEftPending([]);
     }
     setLoading(false);
   }, [mode, monthValue, rangeStart, rangeEnd, includeExcluded]);
@@ -351,6 +369,32 @@ const Finance = () => {
     } finally {
       setBlockLoadingUserId(null);
     }
+  };
+
+  const handleEftViewProof = async (userId, submissionId) => {
+    setEftActionKey(`proof-${submissionId}`);
+    const res = await getEftSubmissionProofUrl(userId, submissionId);
+    setEftActionKey(null);
+    if (res.success && res.data?.url) window.open(res.data.url, "_blank", "noopener,noreferrer");
+    else alert(res.message || "Could not open proof");
+  };
+
+  const handleEftApprove = async (userId, submissionId) => {
+    setEftActionKey(`app-${submissionId}`);
+    const res = await approveEftSubmission(userId, submissionId);
+    setEftActionKey(null);
+    if (res.success) await load();
+    else alert(res.message || "Approve failed");
+  };
+
+  const handleEftReject = async (userId, submissionId) => {
+    const reason = window.prompt("Rejection reason (optional):", "");
+    if (reason === null) return;
+    setEftActionKey(`rej-${submissionId}`);
+    const res = await rejectEftSubmission(userId, submissionId, reason);
+    setEftActionKey(null);
+    if (res.success) await load();
+    else alert(res.message || "Reject failed");
   };
 
   const openAttentionModal = async () => {
@@ -538,6 +582,107 @@ const Finance = () => {
       )}
 
       {loading && <Loader />}
+
+      {!loading && (
+        <div className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-950/20 overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-white/10 bg-white/[0.03]">
+            <h2 className="text-sm font-semibold text-white">
+              EFT proof — pending approval
+              {eftPending.length > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 rounded-full bg-fuchsia-600/40 text-fuchsia-100 text-xs font-bold">
+                  {eftPending.length}
+                </span>
+              )}
+            </h2>
+            <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+              Student-uploaded bank transfer proofs (custom / 2-installment EFT plans). Approve to record payment on billing, or
+              reject with a reason. Same &quot;Include test…&quot; filter as above applies.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs text-left">
+              <thead>
+                <tr className="text-gray-400 border-b border-white/10">
+                  <th className="px-3 py-2 font-medium">Student</th>
+                  <th className="px-3 py-2 font-medium">Email</th>
+                  <th className="px-3 py-2 font-medium">Student #</th>
+                  <th className="px-3 py-2 font-medium">Plan</th>
+                  <th className="px-3 py-2 font-medium">Inst.</th>
+                  <th className="px-3 py-2 font-medium">Amount</th>
+                  <th className="px-3 py-2 font-medium">Payment date</th>
+                  <th className="px-3 py-2 font-medium">Submitted</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-200">
+                {eftPending.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-3 py-6 text-center text-gray-500">
+                      No EFT submissions waiting for approval.
+                    </td>
+                  </tr>
+                ) : (
+                  eftPending.map((row) => {
+                    const key = row.submissionId;
+                    return (
+                      <tr key={key} className="border-b border-white/5 hover:bg-white/[0.04]">
+                        <td className="px-3 py-2 whitespace-nowrap">{row.username || "—"}</td>
+                        <td className="px-3 py-2 max-w-[200px]">
+                          <CopyableEmailCell email={row.email} textClassName="text-xs" />
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.studentNumber || "—"}</td>
+                        <td className="px-3 py-2 max-w-[160px] truncate" title={row.planName}>
+                          {row.planName || row.planCode}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">{row.installmentNumber != null ? row.installmentNumber : "—"}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{centsToZAR(row.amount)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-400">{formatDate(row.paymentDate)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-gray-400">{formatDate(row.createdAt)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleEftViewProof(row.userId, row.submissionId)}
+                              disabled={!!eftActionKey}
+                              className="text-cyan-400 hover:text-cyan-300 disabled:opacity-40"
+                            >
+                              {eftActionKey === `proof-${row.submissionId}` ? "…" : "Proof"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEftApprove(row.userId, row.submissionId)}
+                              disabled={!!eftActionKey}
+                              className="text-emerald-400 hover:text-emerald-300 disabled:opacity-40"
+                            >
+                              {eftActionKey === `app-${row.submissionId}` ? "…" : "Approve"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEftReject(row.userId, row.submissionId)}
+                              disabled={!!eftActionKey}
+                              className="text-rose-400 hover:text-rose-300 disabled:opacity-40"
+                            >
+                              {eftActionKey === `rej-${row.submissionId}` ? "…" : "Reject"}
+                            </button>
+                            <Link
+                              to={`/student-profile/${row.userId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-400 hover:text-blue-300"
+                            >
+                              Profile
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {!loading && stats && (
         <>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling } from "../../api/student";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
 import Loader from "../../components/loader/loader";
 
@@ -107,6 +107,7 @@ const StudentProfile = () => {
   const [statementLoading, setStatementLoading] = useState(false);
   const [statementRefreshing, setStatementRefreshing] = useState(false);
   const [paymentsModalPlan, setPaymentsModalPlan] = useState(null);
+  const [paymentsModalRemoving, setPaymentsModalRemoving] = useState(false);
   const [eftSubmissions, setEftSubmissions] = useState([]);
   const [eftLoading, setEftLoading] = useState(false);
   const [eftActionId, setEftActionId] = useState(null);
@@ -160,13 +161,14 @@ const StudentProfile = () => {
   const [deleteRecordModal, setDeleteRecordModal] = useState(null);
   const [deleteRecordSubmitting, setDeleteRecordSubmitting] = useState(false);
   const [deleteRecordError, setDeleteRecordError] = useState(null);
+  const [removeWholePlanLoading, setRemoveWholePlanLoading] = useState(null);
   const [editPlanModal, setEditPlanModal] = useState(null);
   const [editPlanForm, setEditPlanForm] = useState({ planName: "", manatiAgreementCode: "", newInstallments: [] });
   const [editPlanSubmitting, setEditPlanSubmitting] = useState(false);
   const [editPlanError, setEditPlanError] = useState(null);
   const [editPlanPaystackLookupLoading, setEditPlanPaystackLookupLoading] = useState(null);
   const [changeDateModal, setChangeDateModal] = useState(null);
-  const [changeDateForm, setChangeDateForm] = useState({ dayOfMonth: "1" });
+  const [changeDateForm, setChangeDateForm] = useState({ mode: "day", dayOfMonth: "1", specificDate: "" });
   const [changeDateLoading, setChangeDateLoading] = useState(false);
   const [changeDateError, setChangeDateError] = useState(null);
   const [subscriptionCodeModal, setSubscriptionCodeModal] = useState(null);
@@ -738,6 +740,107 @@ const StudentProfile = () => {
       setDeleteRecordError(err?.response?.data?.message || "Delete failed");
     } finally {
       setDeleteRecordSubmitting(false);
+    }
+  };
+
+  const handleRemoveTwoInstallmentPlan = async (plan) => {
+    if (
+      !window.confirm(
+        `Remove this 2-installment plan (${plan.planCode || plan.planName})? Existing billing records stay on the student; the plan will disappear from this page.`
+      )
+    ) {
+      return;
+    }
+    setRemoveWholePlanLoading(`2inst-${plan._id}`);
+    try {
+      const res = await deleteStudentInstallmentPlan(userId, plan._id);
+      if (res.success) {
+        const listRes = await getStudentInstallmentPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+        fetchBilling();
+      } else {
+        alert(res.message || "Failed to remove plan");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
+    } finally {
+      setRemoveWholePlanLoading(null);
+    }
+  };
+
+  const handleRemoveCustomPlan = async (plan) => {
+    if (
+      !window.confirm(
+        `Remove this custom plan (${plan.planCode || plan.planName})? Existing billing records stay on the student; the plan will disappear from this page.`
+      )
+    ) {
+      return;
+    }
+    setRemoveWholePlanLoading(`custom-${plan._id}`);
+    try {
+      const res = await deleteCustomPaymentPlan(userId, plan._id);
+      if (res.success) {
+        const listRes = await getCustomPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        fetchBilling();
+      } else {
+        alert(res.message || "Failed to remove plan");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
+    } finally {
+      setRemoveWholePlanLoading(null);
+    }
+  };
+
+  const handleRemoveStandalonePlanFromPaymentsModal = async () => {
+    const planCode = (paymentsModalPlan?.planCode || "").trim();
+    if (!planCode || !userId) return;
+    if (
+      !window.confirm(
+        `Remove this Paystack plan (${paymentsModalPlan.planName || planCode}) and delete all billing records and outstanding payment links for it? If a subscription is linked, it will be disabled in Paystack. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setPaymentsModalRemoving(true);
+    try {
+      const res = await removeStandalonePaystackPlan(userId, planCode);
+      if (res.success) {
+        setPaymentsModalPlan(null);
+        fetchBilling();
+      } else {
+        alert(res.message || "Failed to remove plan");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
+    } finally {
+      setPaymentsModalRemoving(false);
+    }
+  };
+
+  const handleRemoveStandalonePlanFromBillingRow = async (plan) => {
+    const planCode = (plan?.planCode || "").trim();
+    if (!planCode || !userId) return;
+    if (
+      !window.confirm(
+        `Remove this Paystack plan (${plan.planName || planCode}) and delete all billing records and outstanding payment links for it? The linked Paystack subscription will be disabled if present. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setRemoveWholePlanLoading(`standalone-${planCode}`);
+    try {
+      const res = await removeStandalonePaystackPlan(userId, planCode);
+      if (res.success) {
+        fetchBilling();
+      } else {
+        alert(res.message || "Failed to remove plan");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
+    } finally {
+      setRemoveWholePlanLoading(null);
     }
   };
 
@@ -1672,8 +1775,18 @@ const StudentProfile = () => {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              let specificDate = "";
+                              const nextPd = plan.nextPaymentDate;
+                              if (nextPd) {
+                                try {
+                                  const d = typeof nextPd === "string" ? new Date(nextPd) : new Date(nextPd);
+                                  if (!Number.isNaN(d.getTime())) specificDate = d.toISOString().slice(0, 10);
+                                } catch (_) {
+                                  /* ignore */
+                                }
+                              }
+                              setChangeDateForm({ mode: "day", dayOfMonth: "1", specificDate });
                               setChangeDateModal(plan);
-                              setChangeDateForm({ dayOfMonth: "1" });
                               setChangeDateError(null);
                             }}
                             className="px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
@@ -1691,6 +1804,19 @@ const StudentProfile = () => {
                             className="px-3 py-1.5 text-xs font-medium text-emerald-800 bg-emerald-100 rounded hover:bg-emerald-200"
                           >
                             Record EFT payment
+                          </button>
+                        )}
+                        {billingTypeLabel === "Paystack" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveStandalonePlanFromBillingRow(plan);
+                            }}
+                            disabled={removeWholePlanLoading === `standalone-${plan.planCode || ""}`}
+                            className="px-3 py-1.5 text-xs font-medium text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:opacity-50"
+                          >
+                            {removeWholePlanLoading === `standalone-${plan.planCode || ""}` ? "Removing…" : "Remove plan"}
                           </button>
                         )}
                         {billingTypeLabel !== "Paystack" && "—"}
@@ -1740,9 +1866,19 @@ const StudentProfile = () => {
         <div className="space-y-4">
           {installmentPlans.map((plan) => (
             <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
-              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                 <span className="font-semibold text-gray-800">{plan.planName || "2-installment EFT"}</span>
-                <span className="text-sm text-gray-600">Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}</span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-gray-600">Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}</span>
+                  <button
+                    type="button"
+                    disabled={removeWholePlanLoading === `2inst-${plan._id}`}
+                    onClick={() => handleRemoveTwoInstallmentPlan(plan)}
+                    className="px-3 py-1.5 text-xs font-medium text-red-800 bg-red-100 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                  >
+                    {removeWholePlanLoading === `2inst-${plan._id}` ? "Removing…" : "Remove plan"}
+                  </button>
+                </div>
               </div>
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -2287,7 +2423,7 @@ const StudentProfile = () => {
           {customPlans.map((plan) => (
             <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
               <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-gray-800">{plan.planName || "Custom plan"}</span>
                   <button
                     type="button"
@@ -2295,6 +2431,14 @@ const StudentProfile = () => {
                     className="px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
                   >
                     Edit plan
+                  </button>
+                  <button
+                    type="button"
+                    disabled={removeWholePlanLoading === `custom-${plan._id}`}
+                    onClick={() => handleRemoveCustomPlan(plan)}
+                    className="px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:opacity-50"
+                  >
+                    {removeWholePlanLoading === `custom-${plan._id}` ? "Removing…" : "Remove plan"}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -3085,8 +3229,19 @@ const StudentProfile = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setChangeDateModal(paymentsModalPlan);
-                      setChangeDateForm({ dayOfMonth: "1" });
+                      const plan = paymentsModalPlan;
+                      let specificDate = "";
+                      const next = plan?.nextPaymentDate;
+                      if (next) {
+                        try {
+                          const d = typeof next === "string" ? new Date(next) : new Date(next);
+                          if (!Number.isNaN(d.getTime())) specificDate = d.toISOString().slice(0, 10);
+                        } catch (_) {
+                          /* ignore */
+                        }
+                      }
+                      setChangeDateModal(plan);
+                      setChangeDateForm({ mode: "day", dayOfMonth: "1", specificDate });
                       setChangeDateError(null);
                     }}
                     className="px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
@@ -3094,6 +3249,19 @@ const StudentProfile = () => {
                     Change payment date
                   </button>
                 )}
+                {!paymentsModalPlan.partner &&
+                  !(paymentsModalPlan.planCode || "").startsWith("CUSTOM-") &&
+                  !(paymentsModalPlan.planCode || "").startsWith("2INST-") && (
+                    <button
+                      type="button"
+                      disabled={paymentsModalRemoving}
+                      onClick={handleRemoveStandalonePlanFromPaymentsModal}
+                      className="px-3 py-1.5 text-sm font-medium text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:opacity-50"
+                      title="Remove this Paystack plan from the student (disables subscription if linked)"
+                    >
+                      {paymentsModalRemoving ? "Removing…" : "Remove plan"}
+                    </button>
+                  )}
                 <button
                   type="button"
                   onClick={() => setPaymentsModalPlan(null)}
@@ -3596,29 +3764,41 @@ const StudentProfile = () => {
       {changeDateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !changeDateLoading && setChangeDateModal(null)}>
           <div
-            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-bold text-gray-800 mb-4">
               Change payment date – {changeDateModal.planName || changeDateModal.planCode}
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              Select the day of the month (1–28) for future payments. Paystack uses the 28th for days 29–31.
+              Choose how the next subscription run should be scheduled. The old Paystack subscription is disabled and a new one is created with your chosen <strong>start</strong>. Use <strong>day of month</strong> for a recurring calendar day (1–28), or a <strong>specific date</strong> for an exact first charge (same as Create subscription). Days 29–31 map to 28 on Paystack.
             </p>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 setChangeDateError(null);
                 setChangeDateLoading(true);
-                const day = Number(changeDateForm.dayOfMonth);
-                if (day < 1 || day > 28) {
-                  setChangeDateError("Please select a day between 1 and 28.");
-                  setChangeDateLoading(false);
-                  return;
+                let newPaymentDate;
+                if (changeDateForm.mode === "date") {
+                  const s = (changeDateForm.specificDate || "").trim();
+                  if (!s) {
+                    setChangeDateError("Please choose a first charge date.");
+                    setChangeDateLoading(false);
+                    return;
+                  }
+                  newPaymentDate = s;
+                } else {
+                  const day = Number(changeDateForm.dayOfMonth);
+                  if (day < 1 || day > 28) {
+                    setChangeDateError("Please select a day between 1 and 28.");
+                    setChangeDateLoading(false);
+                    return;
+                  }
+                  newPaymentDate = day;
                 }
                 const res = await changePaystackPaymentDate(userId, {
                   subscriptionCode: changeDateModal.subscriptionCode,
-                  newPaymentDate: day,
+                  newPaymentDate,
                 });
                 setChangeDateLoading(false);
                 if (res.success) {
@@ -3639,19 +3819,63 @@ const StudentProfile = () => {
               }}
               className="space-y-4"
             >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Day of month</label>
-                <select
-                  value={changeDateForm.dayOfMonth}
-                  onChange={(e) => setChangeDateForm({ ...changeDateForm, dayOfMonth: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  disabled={changeDateLoading}
-                >
-                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                    <option key={d} value={String(d)}>{d}</option>
-                  ))}
-                </select>
-              </div>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-gray-700 mb-2">Schedule type</legend>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="changeDateMode"
+                    className="mt-1"
+                    checked={changeDateForm.mode === "day"}
+                    onChange={() => setChangeDateForm((f) => ({ ...f, mode: "day" }))}
+                    disabled={changeDateLoading}
+                  />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-medium">Day of month (1–28)</span>
+                    <span className="block text-gray-500">Same day each month (next occurrence is computed automatically).</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="changeDateMode"
+                    className="mt-1"
+                    checked={changeDateForm.mode === "date"}
+                    onChange={() => setChangeDateForm((f) => ({ ...f, mode: "date" }))}
+                    disabled={changeDateLoading}
+                  />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-medium">Specific first charge date</span>
+                    <span className="block text-gray-500">Exact calendar date for the new subscription&apos;s first debit (YYYY-MM-DD).</span>
+                  </span>
+                </label>
+              </fieldset>
+              {changeDateForm.mode === "day" ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Day of month</label>
+                  <select
+                    value={changeDateForm.dayOfMonth}
+                    onChange={(e) => setChangeDateForm((f) => ({ ...f, dayOfMonth: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    disabled={changeDateLoading}
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={String(d)}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First charge date</label>
+                  <input
+                    type="date"
+                    value={changeDateForm.specificDate}
+                    onChange={(e) => setChangeDateForm((f) => ({ ...f, specificDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    disabled={changeDateLoading}
+                  />
+                </div>
+              )}
               {changeDateError && (
                 <p className="text-sm text-red-600">{changeDateError}</p>
               )}

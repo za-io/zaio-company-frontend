@@ -42,6 +42,7 @@ import TutorBookingsAdmin from "./pages/TutorBookingsAdmin";
 import TutorSettings from "./pages/TutorSettings";
 import CreateOCCohort from "./pages/CreateOCCohort";
 import ViewOCPrograms from "./pages/ViewOCPrograms";
+import OCLearnerDocuments from "./pages/OCLearnerDocuments";
 import OCStudentDetails from "./pages/OCStudentDetails";
 import OCModuleDetails from "./pages/OCModuleDetails";
 import Finance from "./pages/Finance";
@@ -241,6 +242,15 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/oc-programs"
               component={<ViewOCPrograms />}
+            />
+          }
+        />
+        <Route
+          path="/oc-programs/:cohortId/documents"
+          element={
+            <ProtectedRoute
+              path="/oc-programs/:cohortId/documents"
+              component={<OCLearnerDocuments />}
             />
           }
         />

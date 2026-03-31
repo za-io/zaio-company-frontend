@@ -337,7 +337,9 @@ const Navbar = () => {
             <button
               onClick={() => navigate("/oc-programs")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  location.pathname === "/oc-programs"
+                  location.pathname === "/oc-programs" ||
+                  (location.pathname.startsWith("/oc-programs/") &&
+                    !location.pathname.startsWith("/oc-programs/student/"))
                     ? "bg-emerald-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-emerald-600/20 hover:text-emerald-400"
                 }`}
