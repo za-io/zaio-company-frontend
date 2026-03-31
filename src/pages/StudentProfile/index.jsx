@@ -31,6 +31,22 @@ function parsePaymentSlotFromRow(p) {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * zaio-frontend base URL for “Open student dashboard” (impersonate). Baked in at build time.
+ * Defaults to production learner; override with REACT_APP_LEARNER_APP_URL (e.g. http://localhost:3000 for local dev).
+ */
+function getLearnerAppBaseUrl() {
+  const fromEnv = (
+    process.env.REACT_APP_LEARNER_APP_URL ||
+    process.env.REACT_APP_STUDENT_APP_URL ||
+    ""
+  )
+    .trim()
+    .replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  return "https://www.zaio.io";
+}
+
 /** Encode which subscription debit this EFT satisfies (for POST finance-record-paystack-eft). */
 function encodePaystackEftChoice(row) {
   return JSON.stringify({
@@ -483,7 +499,7 @@ const StudentProfile = () => {
         data: res.data,
       };
       const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(session))));
-      const learnerBase = (process.env.REACT_APP_LEARNER_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+      const learnerBase = getLearnerAppBaseUrl();
       const url = `${learnerBase}/impersonate-session?session=${encodeURIComponent(b64)}`;
       window.open(url, "_blank", "noopener,noreferrer");
       setLoginAsMessage("Opened learner app in a new tab.");
