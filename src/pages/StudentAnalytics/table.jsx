@@ -121,7 +121,8 @@ const AnalyticsTable = ({
     });
   }, [data?.analytics, searchQuery, sortBy]);
 
-  const showBulkTutorTools = searchType === "bootcamp" && !["TUTOR"]?.includes(user?.role);
+  const showBulkTutorTools =
+    searchType === "bootcamp" && !["TUTOR", "COMPANY_ADMIN"]?.includes(user?.role);
   const visibleUserIdStrings = useMemo(
     () =>
       filteredSortedAnalytics.map((ba) => (ba?.userid?._id != null ? String(ba.userid._id) : null)).filter(Boolean),

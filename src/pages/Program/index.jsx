@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams, Navigate } from "react-router-dom";
 import { getBootcampDetails } from "../../api/company";
 import { Pie } from "react-chartjs-2";
 import { MoreDetailsModal } from "./MoreDetailsModal";
+import { useUserStore } from "../../store/UserProvider";
+
+/** Same roles as Manage Bootcamps — use Student Analytics (new) instead of legacy progress table */
+const PROGRAM_ANALYTICS_ROLES = ["COMPANY_ADMIN", "SUPER_ADMIN", "SUPER_STUDENT_ADMIN"];
 
 export const StylesConfig = {
   completed: {
@@ -42,6 +46,8 @@ const groupBy = (items, key) =>
   );
 
 const Program = () => {
+  const { id: bootcampRouteId } = useParams();
+  const { user } = useUserStore();
   const [bootcampDetails, setBootcampDetails] = useState(null);
   const [loading, setLoading] = useState(false);
   const location = useLocation();
@@ -54,8 +60,9 @@ const Program = () => {
 
   const init = () => {
     setLoading(true);
-    console.log(program?._id);
-    getBootcampDetails(program?._id)
+    const bcId = program?._id || bootcampRouteId;
+    console.log(bcId);
+    getBootcampDetails(bcId)
       .then((res) => {
         console.log(res?.bootcampDetails);
         if (res?.status === 200) {
@@ -92,11 +99,21 @@ const Program = () => {
   };
 
   useEffect(() => {
-    if (!program) {
+    if (!program && !bootcampRouteId) {
       navigate("/");
     }
     // eslint-disable-next-line
   }, []);
+
+  const analyticsBootcampId = bootcampRouteId || program?._id;
+  if (user?.role && PROGRAM_ANALYTICS_ROLES.includes(user.role) && analyticsBootcampId) {
+    return (
+      <Navigate
+        to={`/student/analytics?bootcamp=${encodeURIComponent(String(analyticsBootcampId))}`}
+        replace
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -115,7 +132,7 @@ const Program = () => {
           init={init}
         />
         <h1 className="text-4xl font-bold text-gray-100">
-          Program: {program?.bootcampName}
+          Program: {program?.bootcampName || bootcampDetails?.bootcampName || "Bootcamp"}
         </h1>
         <div>
           <button

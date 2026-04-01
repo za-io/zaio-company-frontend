@@ -31,6 +31,62 @@ function parsePaymentSlotFromRow(p) {
   return m ? Number(m[1]) : null;
 }
 
+/** Map merged billing row → CustomPaymentPlan installment when `_inst` is missing (GET /billing rows omit installmentNumber). */
+function resolveCustomPlanRowInst(plan, row) {
+  if (!row || !plan?.installments?.length) return null;
+  if (row._inst) return row._inst;
+  const installments = plan.installments;
+  const paystackInsts = installments.filter((i) => i.type === "paystack");
+
+  if (row.installmentNumber != null) {
+    const found = installments.find((i) => i.number === row.installmentNumber);
+    if (found) return found;
+  }
+  const instLabel = String(row.installmentLabel || "").match(/Instalment\s+(\d+)/i);
+  if (instLabel) {
+    const n = Number(instLabel[1]);
+    const found = installments.find((i) => i.number === n);
+    if (found) return found;
+  }
+  if (row.installmentSlot != null) {
+    const found = installments.find((i) => i.number === row.installmentSlot);
+    if (found) return found;
+  }
+  const slotFromPayment = parsePaymentSlotFromRow(row);
+  if (slotFromPayment != null) {
+    const found = installments.find((i) => i.number === slotFromPayment);
+    if (found) return found;
+  }
+  if (row.billingRecordId != null) {
+    const bid = String(row.billingRecordId);
+    const found = installments.find((i) => i.billingRecordId && String(i.billingRecordId) === bid);
+    if (found) return found;
+  }
+
+  /** Overdue “Pay now” row: same URL as plan’s first Paystack link, no Instalment label (billing.controller overdueRow). */
+  const fpUrl = (plan.firstPaystackPaymentUrl || "").trim();
+  if (fpUrl && row.paymentUrl && String(row.paymentUrl).trim() === fpUrl) {
+    const firstPay = paystackInsts[0];
+    if (firstPay) return firstPay;
+  }
+
+  /**
+   * Outstanding Pay now / failed recurring row: often no label or slot; if the plan has a single Paystack line, that row maps to it.
+   */
+  if (
+    paystackInsts.length === 1 &&
+    row.isOutstanding &&
+    (row.paymentType === "recurring" || row.paymentType === "paystack") &&
+    row.installmentSlot == null &&
+    row.installmentNumber == null &&
+    !instLabel
+  ) {
+    return paystackInsts[0];
+  }
+
+  return null;
+}
+
 /**
  * zaio-frontend base URL for “Open student dashboard” (impersonate). Baked in at build time.
  * Defaults to production learner; override with REACT_APP_LEARNER_APP_URL (e.g. http://localhost:3000 for local dev).
@@ -194,6 +250,8 @@ const StudentProfile = () => {
   const [loginAsPassword, setLoginAsPassword] = useState("");
   const [loginAsLoading, setLoginAsLoading] = useState(false);
   const [loginAsMessage, setLoginAsMessage] = useState(null);
+  /** Custom plan table: inline due date save — key `${planId}-${installmentNumber}` */
+  const [inlineCustomDueSaving, setInlineCustomDueSaving] = useState(null);
 
   /** Standalone Paystack subscription: record EFT (same as POST /bootcamp/finance-record-paystack-eft) */
   const [paystackEftModal, setPaystackEftModal] = useState(null);
@@ -628,6 +686,34 @@ const StudentProfile = () => {
       dueDate: inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "",
     });
     setEditInstallmentError(null);
+  };
+
+  const handleInlineCustomDueDateBlur = async (plan, inst, newValueRaw) => {
+    const prev = inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "";
+    const newValue = (newValueRaw || "").trim();
+    if (newValue === prev) return;
+    if (!newValue) {
+      return;
+    }
+    const planId = plan._id?.toString?.() ?? plan._id;
+    const key = `${planId}-${inst.number}`;
+    setInlineCustomDueSaving(key);
+    try {
+      const res = await updateCustomInstallment(userId, planId, inst.number, {
+        due_date: newValue.replace(/\//g, "-"),
+      });
+      if (res.success) {
+        const listRes = await getCustomPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+        fetchBilling();
+      } else {
+        alert(res.message || "Could not update due date");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message ?? err?.message ?? "Could not update due date");
+    } finally {
+      setInlineCustomDueSaving(null);
+    }
   };
 
   const handleEditInstallmentSubmit = async (e) => {
@@ -2505,7 +2591,7 @@ const StudentProfile = () => {
                       _inst: inst,
                     }));
                     return rows.map((row, idx) => {
-                      const inst = row._inst ?? plan.installments?.find((i) => i.number === row.installmentNumber);
+                      const inst = resolveCustomPlanRowInst(plan, row);
                       const paystackCode = plan.installments?.find((i) => i.type === "paystack")?.paystackPlanCode;
                       const typeLabel = row.paymentType === "paystack" || row.paymentType === "recurring"
                         ? (paystackCode ? `Paystack (${paystackCode})` : "Paystack")
@@ -2515,7 +2601,34 @@ const StudentProfile = () => {
                         <tr key={row.installmentLabel || row.reference || idx} className={row.status === "pending" ? "bg-amber-50" : ""}>
                           <td className="px-6 py-3 text-sm text-gray-800">{row.installmentLabel || `Row ${idx + 1}`}</td>
                           <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(row.amount, row.currency || plan.currency)}</td>
-                          <td className="px-6 py-3 text-sm text-gray-600">{row.dueDate || row.paidAt ? formatDate(row.dueDate || row.paidAt) : "—"}</td>
+                          <td className="px-6 py-3 text-sm text-gray-600 align-middle">
+                            {inst ? (
+                              <div className="flex flex-wrap items-center gap-1">
+                                <input
+                                  type="date"
+                                  disabled={inlineCustomDueSaving === `${plan._id}-${inst.number}`}
+                                  className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 max-w-[11rem]"
+                                  key={`due-${plan._id}-${inst.number}-${inst.dueDate ? new Date(inst.dueDate).getTime() : "none"}`}
+                                  defaultValue={
+                                    inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : ""
+                                  }
+                                  onBlur={(e) => handleInlineCustomDueDateBlur(plan, inst, e.target.value)}
+                                  title={
+                                    inst.type === "paystack"
+                                      ? "Due date shown for this Paystack instalment (updating does not change Paystack’s subscription schedule)"
+                                      : "Scheduled due date for this instalment"
+                                  }
+                                />
+                                {inlineCustomDueSaving === `${plan._id}-${inst.number}` && (
+                                  <span className="text-xs text-gray-500">Saving…</span>
+                                )}
+                              </div>
+                            ) : row.dueDate || row.paidAt ? (
+                              formatDate(row.dueDate || row.paidAt)
+                            ) : (
+                              "—"
+                            )}
+                          </td>
                           <td className="px-6 py-3 text-sm text-gray-600">{typeLabel}</td>
                           <td className="px-6 py-3">
                             <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : row.status === "failed" || row.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>

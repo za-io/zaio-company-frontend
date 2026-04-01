@@ -458,7 +458,14 @@ const Dashboard = () => {
       return;
     }
     
-    if (user?.role === "SUPER_STUDENT_ADMIN" || (bootcamps && !ocCohorts) || (!bootcamps && ocCohorts) || !user?._id) return;
+    if (
+      ["SUPER_STUDENT_ADMIN", "COMPANY_ADMIN", "SUPER_ADMIN"].includes(user?.role) ||
+      (bootcamps && !ocCohorts) ||
+      (!bootcamps && ocCohorts) ||
+      !user?._id
+    ) {
+      return;
+    }
     if (user?.role === CompanyAppRoles.STUDENT_SUCCESS_MANAGER) {
       navigate("/ssm/tutor/all");
     }
@@ -473,43 +480,45 @@ const Dashboard = () => {
         <ActiveBootcampsTable />
       )}
 
-      {user?.role === "SUPER_STUDENT_ADMIN" && (
+      {["SUPER_STUDENT_ADMIN", "COMPANY_ADMIN", "SUPER_ADMIN"].includes(user?.role) && (
         <div className="space-y-8">
           {/* Welcome Header */}
           <div className="mb-2 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-white mb-1">Student Management</h1>
-              <p className="text-gray-400">Search and manage student profiles, view bootcamp progress</p>
+              <p className="text-gray-400">Search and manage student profiles, open a bootcamp for full analytics</p>
             </div>
-            <div className="flex flex-wrap gap-2 shrink-0">
-              <Link
-                to="/finance"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Finance
-              </Link>
-              <Link
-                to="/roster-payment-check"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600/80 to-indigo-600/80 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Roster vs plans
-              </Link>
-              <Link
-                to="/roster-tasks"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600/70 to-orange-600/70 hover:from-amber-500 hover:to-orange-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                Roster tasks
-              </Link>
-            </div>
+            {user?.role !== "COMPANY_ADMIN" && (
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Link
+                  to="/finance"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Finance
+                </Link>
+                <Link
+                  to="/roster-payment-check"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600/80 to-indigo-600/80 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Roster vs plans
+                </Link>
+                <Link
+                  to="/roster-tasks"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600/70 to-orange-600/70 hover:from-amber-500 hover:to-orange-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  Roster tasks
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Student Search Card - relative z-20 so dropdown stacks above table below */}
@@ -546,7 +555,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {!["SUPER_STUDENT_ADMIN", "TUTOR"]?.includes(user?.role) && (
+      {!["SUPER_STUDENT_ADMIN", "COMPANY_ADMIN", "SUPER_ADMIN", "TUTOR"]?.includes(user?.role) && (
         <>
           <h1 className="text-4xl font-bold text-gray-100">
             {["ASSESSOR", "MODERATOR"]?.includes(user?.role) ? "My OC Programs" : "My Programs"}

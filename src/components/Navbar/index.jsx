@@ -29,9 +29,10 @@ const Navbar = () => {
   };
 
   const canManagePrograms = ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user?.role);
+  const isCompanyAdmin = user?.role === "COMPANY_ADMIN";
   const canViewOC = ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN", "ASSESSOR", "MODERATOR", "TUTOR"].includes(user?.role);
   const isSuperAdmin = ["SUPER_ADMIN"].includes(user?.role);
-  const financeNavRoles = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN"];
+  const financeNavRoles = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN"];
   const showFinanceNav = user?.email && financeNavRoles.includes(user?.role);
 
   const menuItems = [
@@ -123,7 +124,7 @@ const Navbar = () => {
           {/* Right: Actions */}
           <div className="flex items-center gap-2">
             {/* Management Dropdown */}
-            {user?.email && canManagePrograms && menuItems.length > 0 && (
+            {user?.email && canManagePrograms && !isCompanyAdmin && menuItems.length > 0 && (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setShowDropdown(!showDropdown)}
@@ -173,7 +174,7 @@ const Navbar = () => {
               </div>
             )}
 
-            {/* Finance & roster (company admins) */}
+            {/* Finance & roster (not shown for COMPANY_ADMIN — Zaio staff / SSM only) */}
             {showFinanceNav && (
               <>
                 <button
@@ -230,7 +231,7 @@ const Navbar = () => {
             )}
 
             {/* OC Cohort Button */}
-            {user?.email && canManagePrograms && (
+            {user?.email && canManagePrograms && !isCompanyAdmin && (
               <button
                 onClick={() => navigate("/oc-cohort/create")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -333,7 +334,7 @@ const Navbar = () => {
           )}
           
             {/* View OC Programs */}
-            {user?.email && canViewOC && (
+            {user?.email && canViewOC && !isCompanyAdmin && (
             <button
               onClick={() => navigate("/oc-programs")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${

@@ -38,6 +38,13 @@ export const getAllcompanies = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Company admin accounts (Bootcamp.companyid refs CompanyAdmin) — for Manage Bootcamps link dropdown */
+export const getAllCompanyAdmins = () =>
+  axios
+    .get(BASE_URL + "/company/all-company-admins")
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
 export const getAllLPs = (qctoOnly = false) =>
   axios
     .get(API_URL + `/all/learningpaths`, qctoOnly ? { params: { qctoOnly: "true" } } : {})

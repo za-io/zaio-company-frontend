@@ -41,7 +41,6 @@ const StudentAnalytics = () => {
   const [bootcampId, setBootcampId] = useState(bootcampid || null);
   const [learningpathId, setLearningpathId] = useState(learningpathid || null);
   const [courseId, setCourseId] = useState(courseid || null);
-  const [userId] = useState("636d6613a75d3600222f1875");
   const [searchType, setSearchType] = useState(
     calcSearchType(bootcampid, learningpathid, courseid)
   );
@@ -86,11 +85,15 @@ const StudentAnalytics = () => {
     console.log(searchType);
 
     if (searchType === "bootcamp") {
+      if (!user?._id || !bootcampId) {
+        setLoading(false);
+        return;
+      }
       setLoading("Please wait fetching bootcamp data");
 
       setParams("bootcamp", bootcampId, ["learningpath", "course"]);
 
-      getUserBootcampAnalytics(userId, bootcampId)
+      getUserBootcampAnalytics(user._id, bootcampId)
         .then((res) => {
           setBootcamp(res);
         })
@@ -125,15 +128,22 @@ const StudentAnalytics = () => {
   };
 
   useEffect(() => {
+    if (!searchType) {
+      setLoading(false);
+      return;
+    }
+    if (searchType === "bootcamp" && (!user?._id || !bootcampId)) {
+      return;
+    }
     fetchDropdownData();
-    // eslint-disable-next-line
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, searchType, bootcampId, learningpathId, courseId]);
   return (
     <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8">
       {/* Page Header */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white">Student Analytics</h1>
-        {searchType === "bootcamp" && bootcampId && !["TUTOR"]?.includes(user?.role) && (
+        {searchType === "bootcamp" && bootcampId && !["TUTOR", "COMPANY_ADMIN"]?.includes(user?.role) && (
           <div className="flex gap-2">
             <button
               type="button"
@@ -163,7 +173,7 @@ const StudentAnalytics = () => {
       </div>
 
       {/* Add students modal */}
-      {addStudentsOpen && (
+      {addStudentsOpen && user?.role !== "COMPANY_ADMIN" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-[#161B22] rounded-xl border border-gray-700 max-w-lg w-full p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-white mb-4">Add students to bootcamp</h2>
@@ -276,7 +286,7 @@ const StudentAnalytics = () => {
       )}
 
       {/* Add Single student modal */}
-      {addSingleStudentOpen && (
+      {addSingleStudentOpen && user?.role !== "COMPANY_ADMIN" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-[#161B22] rounded-xl border border-gray-700 max-w-lg w-full p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-white mb-4">Add Single student to bootcamp</h2>
