@@ -423,6 +423,11 @@ const ViewOCPrograms = () => {
     });
   };
 
+  const handleViewStudentProfile = (student) => {
+    if (!student?.id) return;
+    navigate(`/student-profile/${student.id}`);
+  };
+
   const handleAssignTutor = (student) => {
     if (!canAssignRoles) return;
     if (!student.enrollmentId) {
@@ -879,6 +884,17 @@ const ViewOCPrograms = () => {
                             {student.tutor ? "Change Tutor" : "Assign Tutor"}
                           </button>
                         )}
+                        <button
+                          type="button"
+                          className="bg-indigo-500/80 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleViewStudentProfile(student);
+                          }}
+                        >
+                          View Profile
+                        </button>
                         <button
                           type="button"
                           className="bg-blue-500/80 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer"

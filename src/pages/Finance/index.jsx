@@ -98,6 +98,9 @@ const InstallmentTable = ({
             <th className="px-3 py-2 font-medium min-w-[200px]">Email</th>
             <th className="px-3 py-2 font-medium">Student #</th>
             <th className="px-3 py-2 font-medium">Plan</th>
+            <th className="px-3 py-2 font-medium max-w-[140px]" title="Operational cohort (OC)">
+              OC
+            </th>
             <th className="px-3 py-2 font-medium">Inst.</th>
             <th className="px-3 py-2 font-medium">Due</th>
             <th className="px-3 py-2 font-medium">Method</th>
@@ -118,7 +121,7 @@ const InstallmentTable = ({
         <tbody className="text-gray-200">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={showAccountActions ? 13 : 12} className="px-3 py-6 text-center text-gray-500">
+              <td colSpan={showAccountActions ? 14 : 13} className="px-3 py-6 text-center text-gray-500">
                 {emptyMessage}
               </td>
             </tr>
@@ -132,6 +135,9 @@ const InstallmentTable = ({
                 <td className="px-3 py-2 whitespace-nowrap">{row.studentNumber || "—"}</td>
                 <td className="px-3 py-2 max-w-[160px] truncate" title={row.planName}>
                   {row.planName || row.planCode}
+                </td>
+                <td className="px-3 py-2 max-w-[140px] text-gray-400 truncate" title={row.ocCohortNames || ""}>
+                  {row.ocCohortNames || "—"}
                 </td>
                 <td className="px-3 py-2">{row.installmentNumber}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{formatDate(row.dueDate)}</td>
@@ -203,7 +209,7 @@ const InstallmentTable = ({
         {rows.length > 0 && (
           <tfoot>
             <tr className="border-t border-white/20 bg-white/[0.06]">
-              <td colSpan={7} className="px-3 py-2 text-right font-medium text-gray-400">
+              <td colSpan={8} className="px-3 py-2 text-right font-medium text-gray-400">
                 Total (this view)
               </td>
               <td className="px-3 py-2 whitespace-nowrap font-semibold text-emerald-300/95 tabular-nums">
@@ -230,6 +236,7 @@ function flattenUsers(users) {
         username: u.username,
         email: u.email,
         studentNumber: u.studentNumber,
+        ocCohortNames: u.ocCohortNames || "",
         excludeFromFinanceReports: !!u.excludeFromFinanceReports,
         accBlocked: !!u.accBlocked,
         planCode: inst.planCode,

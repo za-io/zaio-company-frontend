@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling } from "../../api/student";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
@@ -174,6 +174,7 @@ const StudentProfile = () => {
   const [billingLoading, setBillingLoading] = useState(false);
   const [syncPaystackBillingLoading, setSyncPaystackBillingLoading] = useState(false);
   const [syncPaystackBillingMessage, setSyncPaystackBillingMessage] = useState(null);
+  const [dismissingOutstandingId, setDismissingOutstandingId] = useState(null);
   const [statementModal, setStatementModal] = useState(null);
   const [statementData, setStatementData] = useState(null);
   const [statementLoading, setStatementLoading] = useState(false);
@@ -1235,6 +1236,24 @@ const StudentProfile = () => {
     }
   };
 
+  const outstandingPaymentRows = useMemo(
+    () => (billing.outstandingLinks || []).filter((o) => o?.outstandingPaymentId),
+    [billing.outstandingLinks]
+  );
+
+  const handleDismissOutstandingRow = async (outstandingPaymentId) => {
+    if (!userId || !outstandingPaymentId) return;
+    if (!window.confirm("Remove this outstanding Pay now link? The student will no longer see it on billing; this does not refund Paystack.")) return;
+    setDismissingOutstandingId(outstandingPaymentId);
+    try {
+      const res = await dismissOutstandingPayment(userId, outstandingPaymentId);
+      if (res.success) await fetchBilling();
+      else alert(res.message || "Could not remove");
+    } finally {
+      setDismissingOutstandingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="px-36 py-12">
@@ -1458,6 +1477,74 @@ const StudentProfile = () => {
                     {bootcamp.enrolledAt
                       ? new Date(bootcamp.enrolledAt).toLocaleDateString()
                       : "N/A"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* OC (Operational Cohort) enrollments */}
+      <h2 className="text-2xl font-bold text-white mb-4 mt-10">OC cohort</h2>
+      {!student.ocCohortEnrollments?.length ? (
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">Not enrolled in an operational cohort</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Cohort
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Learning path (OC)
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Additional path
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Learner status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Enrolled
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {student.ocCohortEnrollments.map((oc, idx) => (
+                <tr key={oc.enrollmentId || idx}>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-800">
+                    {oc.cohortName}
+                    {oc.skillsProgramName ? (
+                      <span className="block text-xs font-normal text-gray-500 mt-0.5">
+                        {oc.skillsProgramName}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{oc.learningPathName}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {oc.nonQctoLearningPathName || "—"}
+                  </td>
+                  <td className="px-6 py-4">
+                    {oc.status === "completed" ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full capitalize">
+                        {oc.status}
+                      </span>
+                    ) : oc.status === "deferred" ? (
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full capitalize">
+                        {oc.status}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full capitalize">
+                        {oc.status || "active"}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {oc.enrolledAt ? formatDate(oc.enrolledAt) : "—"}
                   </td>
                 </tr>
               ))}
@@ -1771,15 +1858,67 @@ const StudentProfile = () => {
           )}
         </div>
       </div>
+
+      {!billingLoading && outstandingPaymentRows.length > 0 && (
+        <div className="mb-6 rounded-lg border border-amber-500/40 bg-amber-950/20 overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-500/25 bg-amber-950/30">
+            <h3 className="text-sm font-semibold text-amber-100">Outstanding Pay now links</h3>
+            <p className="text-xs text-amber-200/80 mt-1">
+              Failed recurring debits with a one-time Paystack checkout link (<code className="text-amber-50/90">OutstandingPayment</code>). Delete a row to remove it from billing and Finance; it does not cancel Paystack charges already taken.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-amber-200/90 border-b border-amber-500/20">
+                  <th className="px-4 py-2 font-medium">Plan</th>
+                  <th className="px-4 py-2 font-medium">Amount</th>
+                  <th className="px-4 py-2 font-medium">Reference</th>
+                  <th className="px-4 py-2 font-medium">Subscription</th>
+                  <th className="px-4 py-2 font-medium">Created</th>
+                  <th className="px-4 py-2 font-medium">Expires</th>
+                  <th className="px-4 py-2 font-medium w-[100px]">Action</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-200">
+                {outstandingPaymentRows.map((row) => (
+                  <tr key={row.outstandingPaymentId} className="border-b border-white/5 hover:bg-white/[0.04]">
+                    <td className="px-4 py-2.5">
+                      <span className="text-white font-medium">{row.planName || row.planCode || "—"}</span>
+                      <span className="block text-xs text-gray-500">{row.planCode}</span>
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums">{formatAmount(row.amount, row.currency)}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs break-all max-w-[140px]">{row.reference || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-gray-400 break-all max-w-[120px]">{row.subscriptionCode || "—"}</td>
+                    <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{row.createdAt ? formatDate(row.createdAt) : "—"}</td>
+                    <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{row.expiresAt ? formatDate(row.expiresAt) : "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <button
+                        type="button"
+                        disabled={dismissingOutstandingId === row.outstandingPaymentId}
+                        onClick={() => handleDismissOutstandingRow(row.outstandingPaymentId)}
+                        className="text-xs font-medium text-red-400 hover:text-red-300 disabled:opacity-50"
+                      >
+                        {dismissingOutstandingId === row.outstandingPaymentId ? "…" : "Delete"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {billingLoading ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">Loading billing...</p>
         </div>
-      ) : !billing.plans?.length ? (
+      ) : !billing.plans?.length && outstandingPaymentRows.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">No billing records</p>
         </div>
-      ) : (
+      ) : billing.plans?.length > 0 ? (
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -1930,7 +2069,7 @@ const StudentProfile = () => {
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
 
       {/* Upfront plan */}
       <div className="flex items-center justify-between mb-4 mt-10">
