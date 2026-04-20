@@ -8,7 +8,7 @@ import { WarningModal } from "./WarningModal";
 import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
-import { getAllTutors, getEditTilesToken } from "../../api/company";
+import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors } from "../../api/company";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
 import { RxCheckCircled } from "react-icons/rx";
 import { HiOutlineClipboardDocument } from "react-icons/hi2";
@@ -39,7 +39,10 @@ const AnalyticsTable = ({
   const [studentDeferredModalConfig, setStudentDeferredModalConfig] =
     useState(null);
   const [studentPingModalConfig, setStudentPingModalConfig] = useState(null);
-  const [tutors, setTutors] = useState([]);
+  /** Full tutor directory (for “Add to bootcamp” picker only). */
+  const [allTutorsCatalog, setAllTutorsCatalog] = useState([]);
+  const [allocateSaving, setAllocateSaving] = useState(false);
+  const [addTutorPick, setAddTutorPick] = useState("");
   /** user ids (strings) selected for bulk tutor assignment — bootcamp view only */
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [bulkTutorId, setBulkTutorId] = useState("");
@@ -85,13 +88,66 @@ const AnalyticsTable = ({
   };
 
   const fetchTutors = async () => {
-    const tutors = await getAllTutors();
-    setTutors(tutors?.data);
+    const res = await getAllTutors();
+    setAllTutorsCatalog(res?.data || []);
   };
 
   useEffect(() => {
     fetchTutors();
   }, []);
+
+  const tutorsForAssignment = useMemo(
+    () => (Array.isArray(data?.bootcampDetails?.tutors) ? data.bootcampDetails.tutors : []),
+    [data?.bootcampDetails?.tutors]
+  );
+
+  const showBootcampTutorManage =
+    searchType === "bootcamp" && user?.role !== "TUTOR" && Boolean(data?.bootcampDetails?._id);
+
+  const tutorsAvailableToAdd = useMemo(() => {
+    const alloc = new Set(tutorsForAssignment.map((t) => String(t._id)));
+    return (allTutorsCatalog || []).filter((t) => t?._id && !alloc.has(String(t._id)));
+  }, [allTutorsCatalog, tutorsForAssignment]);
+
+  const persistAllocatedTutorIds = async (ids) => {
+    const bootcampId = data?.bootcampDetails?._id;
+    if (!bootcampId) return;
+    setAllocateSaving(true);
+    try {
+      const res = await updateBootcampAllocatedTutors({
+        bootcampId,
+        tutorIds: ids,
+      });
+      if (res?.success) {
+        setAddTutorPick("");
+        getAnalytics();
+      } else {
+        window.alert(res?.message || "Could not update bootcamp tutors");
+      }
+    } catch (e) {
+      window.alert(e?.response?.data?.message || e?.message || "Request failed");
+    } finally {
+      setAllocateSaving(false);
+    }
+  };
+
+  const removeAllocatedTutor = (tutorId) => {
+    if (
+      !window.confirm(
+        "Remove this tutor from the bootcamp list? They will disappear from assign dropdowns; students already assigned keep their tutor until you change it."
+      )
+    ) {
+      return;
+    }
+    const next = tutorsForAssignment.filter((t) => String(t._id) !== String(tutorId)).map((t) => String(t._id));
+    persistAllocatedTutorIds(next);
+  };
+
+  const addSelectedTutorToBootcamp = () => {
+    if (!addTutorPick) return;
+    const next = [...tutorsForAssignment.map((t) => String(t._id)), addTutorPick];
+    persistAllocatedTutorIds(next);
+  };
 
   const filteredSortedAnalytics = useMemo(() => {
     const raw = data?.analytics || [];
@@ -162,8 +218,8 @@ const AnalyticsTable = ({
     const bootcampId = data?.bootcampDetails?._id;
     if (!bulkTutorId || !bootcampId || selectedUserIds.length === 0) return;
     const tutorLabel =
-      tutors?.find((t) => String(t._id) === String(bulkTutorId))?.company_username ||
-      tutors?.find((t) => String(t._id) === String(bulkTutorId))?.email ||
+      tutorsForAssignment?.find((t) => String(t._id) === String(bulkTutorId))?.company_username ||
+      tutorsForAssignment?.find((t) => String(t._id) === String(bulkTutorId))?.email ||
       "this tutor";
     if (
       !window.confirm(
@@ -218,7 +274,7 @@ const AnalyticsTable = ({
         bootcampId={data?.bootcampDetails?._id}
         showModal={showMoreActionsModal}
         setShowModal={setShowMoreActionsModal}
-        tutors={tutors}
+        tutorsForAssignment={tutorsForAssignment}
         getAnalytics={getAnalytics}
       />
 
@@ -253,6 +309,87 @@ const AnalyticsTable = ({
                     </span>
                   )}
                 </p>
+                {searchType === "bootcamp" && (
+                  <div className="mt-3">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                      Tutors on this bootcamp
+                    </p>
+                    <p className="text-[11px] text-gray-500 mb-2 leading-relaxed max-w-xl">
+                      Only tutors listed here appear when you assign a tutor to a student (bulk or Actions).{" "}
+                      {showBootcampTutorManage ? "Add or remove tutors below." : ""}
+                    </p>
+                    {tutorsForAssignment.length === 0 && (
+                      <p className="text-xs text-gray-500 mb-2">
+                        No tutors allocated yet.
+                        {showBootcampTutorManage && " Add at least one tutor to enable assignments."}
+                      </p>
+                    )}
+                    <ul className="flex flex-wrap gap-2">
+                      {tutorsForAssignment.map((t) => {
+                        const id = t?._id != null ? String(t._id) : "";
+                        const label =
+                          (t?.company_username && String(t.company_username).trim()) ||
+                          (t?.email && String(t.email).trim()) ||
+                          id ||
+                          "Tutor";
+                        const sub = t?.email && t?.company_username ? t.email : null;
+                        return (
+                          <li
+                            key={id || label}
+                            className="inline-flex flex-col px-2.5 py-1.5 rounded-lg bg-[#21262d] border border-gray-700 text-left max-w-[220px] relative pr-7"
+                          >
+                            {showBootcampTutorManage && id && (
+                              <button
+                                type="button"
+                                className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded text-gray-500 hover:text-red-400 hover:bg-white/5 text-lg leading-none"
+                                title="Remove from bootcamp list"
+                                disabled={allocateSaving}
+                                onClick={() => removeAllocatedTutor(id)}
+                              >
+                                ×
+                              </button>
+                            )}
+                            <span className="text-sm text-white font-medium truncate" title={label}>
+                              {label}
+                            </span>
+                            {sub && (
+                              <span className="text-[11px] text-gray-400 truncate" title={sub}>
+                                {sub}
+                              </span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {showBootcampTutorManage && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <select
+                          value={addTutorPick}
+                          onChange={(e) => setAddTutorPick(e.target.value)}
+                          disabled={allocateSaving || tutorsAvailableToAdd.length === 0}
+                          className="px-3 py-2 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                        >
+                          <option value="">
+                            {tutorsAvailableToAdd.length === 0 ? "No more tutors to add" : "Add a tutor…"}
+                          </option>
+                          {tutorsAvailableToAdd.map((t) => (
+                            <option key={String(t._id)} value={String(t._id)}>
+                              {t.company_username || t.email || String(t._id)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!addTutorPick || allocateSaving}
+                          onClick={addSelectedTutorToBootcamp}
+                          className="px-3 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {allocateSaving ? "Saving…" : "Add to bootcamp"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Search and Sort Controls */}
@@ -337,9 +474,13 @@ const AnalyticsTable = ({
                   disabled={bulkAssigning}
                   className="px-3 py-2 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[200px]"
                 >
-                  <option value="">Choose tutor to assign…</option>
-                  {(tutors || []).map((tutor) => (
-                    <option key={tutor._id} value={tutor._id}>
+                  <option value="">
+                    {tutorsForAssignment.length === 0
+                      ? "Add tutors to this bootcamp first…"
+                      : "Choose tutor to assign…"}
+                  </option>
+                  {(tutorsForAssignment || []).map((tutor) => (
+                    <option key={String(tutor._id)} value={String(tutor._id)}>
                       {tutor.company_username || tutor.email}
                     </option>
                   ))}

@@ -1,6 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { getFinanceSummary, getFinanceAttentionRejected, getFinancePendingEftSubmissions } from "../../api/company";
+import {
+  getFinanceSummaryWithPolling,
+  getFinanceAttentionRejected,
+  getFinancePendingEftSubmissions,
+} from "../../api/company";
 import {
   updateStudentFinanceExclude,
   blockUser,
@@ -126,8 +130,43 @@ const InstallmentTable = ({
               </td>
             </tr>
           ) : (
-            rows.map((row, idx) => (
-              <tr key={`${row.userId}-${row.keySuffix}-${idx}`} className="border-b border-white/5 hover:bg-white/[0.04]">
+            rows.map((row, idx) => {
+              const atRiskDeregistration = Number(row.rejectedBillingCount) > 2;
+              const paymentStress =
+                Number(row.pendingInstallmentCount) > 2 ||
+                Number(row.globalUnpaidInstallmentCount) > 2 ||
+                Number(row.rejectedBillingCount) > 2;
+              const accountPaymentDelinquent =
+                showAccountActions &&
+                Number(row.bootcampMaxCompletedPct) >= 90 &&
+                paymentStress;
+              const rowTitleParts = [];
+              if (atRiskDeregistration) {
+                rowTitleParts.push(
+                  `At risk of de-registration (${row.rejectedBillingCount} failed payments)`
+                );
+              }
+              if (accountPaymentDelinquent) {
+                rowTitleParts.push(
+                  `Bootcamp ~${row.bootcampMaxCompletedPct}% complete — payment stress: ${row.globalUnpaidInstallmentCount ?? 0} unpaid on plan(s), ${row.pendingInstallmentCount ?? 0} unpaid in this period, ${row.rejectedBillingCount ?? 0} rejected billing rows.`
+                );
+              }
+              return (
+              <tr
+                key={`${row.userId}-${row.keySuffix}-${idx}`}
+                title={rowTitleParts.length ? rowTitleParts.join(" · ") : undefined}
+                className={`border-b border-white/5 ${
+                  accountPaymentDelinquent
+                    ? `animate-pulse ring-2 ring-inset ring-amber-400/55 ${
+                        atRiskDeregistration
+                          ? "bg-red-500/10 hover:bg-red-500/[0.14]"
+                          : "bg-amber-500/12 hover:bg-amber-500/[0.16]"
+                      }`
+                    : atRiskDeregistration
+                      ? "bg-red-500/10 hover:bg-red-500/[0.14]"
+                      : "hover:bg-white/[0.04]"
+                }`}
+              >
                 <td className="px-3 py-2 whitespace-nowrap">{row.username || "—"}</td>
                 <td className="px-3 py-2 max-w-[220px]">
                   <CopyableEmailCell email={row.email} textClassName="text-xs" />
@@ -203,7 +242,8 @@ const InstallmentTable = ({
                   </Link>
                 </td>
               </tr>
-            ))
+              );
+            })
           )}
         </tbody>
         {rows.length > 0 && (
@@ -237,6 +277,10 @@ function flattenUsers(users) {
         email: u.email,
         studentNumber: u.studentNumber,
         ocCohortNames: u.ocCohortNames || "",
+        rejectedBillingCount: Number(u.rejectedBillingCount) || 0,
+        bootcampMaxCompletedPct: Number(u.bootcampMaxCompletedPct) || 0,
+        pendingInstallmentCount: Number(u.pendingInstallmentCount) || 0,
+        globalUnpaidInstallmentCount: Number(u.globalUnpaidInstallmentCount) || 0,
         excludeFromFinanceReports: !!u.excludeFromFinanceReports,
         accBlocked: !!u.accBlocked,
         planCode: inst.planCode,
@@ -270,6 +314,8 @@ const Finance = () => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  /** Shown under spinner while async finance job is building (Heroku-safe polling). */
+  const [financeLoadHint, setFinanceLoadHint] = useState("");
   /** When true, include students marked as test / excluded from Finance */
   const [includeExcluded, setIncludeExcluded] = useState(false);
   const [savingUserId, setSavingUserId] = useState(null);
@@ -287,6 +333,7 @@ const Finance = () => {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setFinanceLoadHint("");
     let params = {};
     if (mode === "month") {
       const [y, m] = monthValue.split("-").map((x) => parseInt(x, 10));
@@ -312,8 +359,18 @@ const Finance = () => {
       params = { start: rangeStart, end: rangeEnd };
     }
     if (includeExcluded) params.includeExcluded = true;
+    let pollHintSet = false;
     const [summaryRes, eftRes] = await Promise.all([
-      getFinanceSummary(params),
+      getFinanceSummaryWithPolling(params, {
+        onPoll: () => {
+          if (!pollHintSet) {
+            pollHintSet = true;
+            setFinanceLoadHint(
+              "Building the finance report… This can take a few minutes on Heroku (short requests avoid gateway timeouts)."
+            );
+          }
+        },
+      }),
       getFinancePendingEftSubmissions({ includeExcluded }),
     ]);
     if (!summaryRes?.success) {
@@ -327,6 +384,7 @@ const Finance = () => {
     } else {
       setEftPending([]);
     }
+    setFinanceLoadHint("");
     setLoading(false);
   }, [mode, monthValue, rangeStart, rangeEnd, includeExcluded]);
 
@@ -448,6 +506,11 @@ const Finance = () => {
   const pendingSliceOutstanding = sumPendingRowAmountsCents(unpaidRows);
   const pendingSliceUpcoming = sumPendingRowAmountsCents(upcomingRows);
   const pendingFromTabsSum = pendingSlicePaidTab + pendingSliceOutstanding + pendingSliceUpcoming;
+
+  const scheduledInPeriodCents = stats?.amounts?.scheduledInPeriodCents ?? 0;
+  const collectedForRateCents = stats?.amounts?.collectedCents ?? 0;
+  const collectionRatePercent =
+    scheduledInPeriodCents > 0 ? (collectedForRateCents / scheduledInPeriodCents) * 100 : null;
 
   return (
     <div className="px-6 lg:px-12 py-8 max-w-[1600px] mx-auto text-sm">
@@ -588,7 +651,14 @@ const Finance = () => {
         </div>
       )}
 
-      {loading && <Loader />}
+      {loading && (
+        <div className="flex flex-col items-center gap-3 py-10">
+          <Loader />
+          {financeLoadHint && (
+            <p className="text-xs text-gray-400 max-w-lg text-center leading-relaxed">{financeLoadHint}</p>
+          )}
+        </div>
+      )}
 
       {!loading && (
         <div className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-950/20 overflow-hidden mb-6">
@@ -698,9 +768,10 @@ const Finance = () => {
               <p className="text-xs font-medium text-white mb-0.5">Money for this period</p>
               <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
                 Sums all installments whose <strong className="text-gray-300">due date</strong> falls in the range above
-                (same rows as the tables). Collected = marked paid; still to collect = pending.
+                (same rows as the tables). Collected = marked paid; still to collect = pending.{" "}
+                <strong className="text-gray-300">Collection rate</strong> is collected ÷ total scheduled for this period.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div className="rounded-xl bg-black/20 p-3 border border-emerald-500/20">
                   <p className="text-[11px] text-gray-400">Collected</p>
                   <p className="text-2xl font-bold text-emerald-400 mt-0.5">{centsToZAR(stats.amounts.collectedCents)}</p>
@@ -773,6 +844,29 @@ const Finance = () => {
                   <p className="text-2xl font-bold text-white mt-0.5">{centsToZAR(stats.amounts.scheduledInPeriodCents)}</p>
                   <p className="text-[11px] text-gray-500 mt-1">
                     Collected + still to collect
+                  </p>
+                </div>
+                <div className="rounded-xl bg-black/20 p-3 border border-sky-500/25">
+                  <p className="text-[11px] text-gray-400">Collection rate</p>
+                  <p className="text-2xl font-bold text-sky-300 mt-0.5 tabular-nums">
+                    {collectionRatePercent != null
+                      ? `${collectionRatePercent.toLocaleString("en-ZA", {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                        })}%`
+                      : "—"}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    {scheduledInPeriodCents > 0 ? (
+                      <>
+                        <span className="text-emerald-400/90 tabular-nums">{centsToZAR(collectedForRateCents)}</span>
+                        {" collected of "}
+                        <span className="text-white/90 tabular-nums">{centsToZAR(scheduledInPeriodCents)}</span>
+                        {" due in range"}
+                      </>
+                    ) : (
+                      "No scheduled installment amounts in this range."
+                    )}
                   </p>
                 </div>
               </div>

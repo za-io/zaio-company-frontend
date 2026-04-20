@@ -68,7 +68,7 @@ export const getStudentBilling = (userId) =>
     });
 
 // Generate one-time Paystack payment link for failed or expired payment
-export const generatePaymentLink = (userId, { planCode, amount, currency, subscriptionCode, paymentSlot }) =>
+export const generatePaymentLink = (userId, { planCode, amount, currency, subscriptionCode, paymentSlot, failedChargeReference }) =>
   axios
     .post(API_URL + `/student-profile/${userId}/generate-payment-link`, {
       plan_code: planCode,
@@ -76,6 +76,7 @@ export const generatePaymentLink = (userId, { planCode, amount, currency, subscr
       ...(currency ? { currency } : {}),
       ...(subscriptionCode ? { subscription_code: subscriptionCode } : {}),
       ...(paymentSlot != null && paymentSlot > 0 ? { payment_slot: paymentSlot } : {}),
+      ...(failedChargeReference ? { failed_charge_reference: failedChargeReference } : {}),
     })
     .then((res) => res.data)
     .catch((err) => {

@@ -156,6 +156,123 @@
   margin: 0;
 }
 
+/* QCTO row: clickable title + inline submission panel */
+.itemStack {
+  margin-bottom: 0.5rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  overflow: hidden;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.itemRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.itemRow:hover .itemName {
+  text-decoration: underline;
+}
+
+.qctoPanelInner {
+  padding: 0.75rem 0.85rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.qctoMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.qctoLabel {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 0.15rem;
+}
+
+.qctoValue {
+  font-size: 0.8rem;
+  color: #e2e8f0;
+  line-height: 1.35;
+}
+
+.qctoMuted {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.qctoWarn {
+  font-size: 0.8rem;
+  color: #fbbf24;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.qctoDetails {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.qctoSummary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #7dd3fc;
+  list-style: none;
+}
+
+.qctoSummary::-webkit-details-marker {
+  display: none;
+}
+
+.qctoPre {
+  margin: 0.5rem 0 0;
+  padding: 0.65rem 0.75rem;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.qctoOpenBtn {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.25rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f8fafc;
+  background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.qctoOpenBtn:hover {
+  opacity: 0.92;
+}
+
 .item {
   display: flex;
   align-items: center;

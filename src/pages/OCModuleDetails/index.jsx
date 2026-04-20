@@ -4,7 +4,26 @@ import { getOCModuleDetails } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { useUserStore } from "../../store/UserProvider";
 import { FaPlay, FaFileAlt, FaBook, FaTools } from "react-icons/fa";
+import QctoSubmissionSummary from "./QctoSubmissionSummary";
 import styles from "./OCModuleDetails.module.css";
+
+/** Resolve QCTOSA / PMT / Learner Workbook id for API + assessor links */
+function getQctoTaskSpec(item) {
+  if (!item || typeof item !== "object") return null;
+  if (item.type === "qctosa" || item.isQCTOAssessment || item.qctosummativeid) {
+    const id = item.qctosummativeid || item.id;
+    return id ? { kind: "qctosa", id: String(id) } : null;
+  }
+  if (item.type === "qctopmt" || item.isQCTOPMT || item.qctopmtid) {
+    const id = item.qctopmtid || item.id;
+    return id ? { kind: "qctopmt", id: String(id) } : null;
+  }
+  if (item.type === "qctolw" || item.isQCTOLW || item.qctolwid) {
+    const id = item.qctolwid || item.id;
+    return id ? { kind: "qctolw", id: String(id) } : null;
+  }
+  return null;
+}
 
 const OCModuleDetails = () => {
   const { studentId, moduleId } = useParams();
@@ -18,6 +37,11 @@ const OCModuleDetails = () => {
   const [completedItems, setCompletedItems] = useState({}); // Track completed lectures, assignments, quizzes
   const isReadOnly = user?.role === "TUTOR"; // Tutors have read-only access
   const isAssessor = user?.role === "ASSESSOR" || user?.role === "MODERATOR"; // Assessors see only tasks, not videos
+  const canViewQctoSubmissionDetails =
+    user?.role === "ASSESSOR" ||
+    user?.role === "MODERATOR" ||
+    user?.role === "TUTOR" ||
+    user?.role === "SUPER_STUDENT_ADMIN";
 
   useEffect(() => {
     const fetchModuleData = async () => {
@@ -148,7 +172,8 @@ const OCModuleDetails = () => {
       // Get the user token from localStorage to pass as auth
       const token = localStorage.getItem("TOKEN");
       const readOnlyParam = isReadOnly ? '&readOnly=true' : '';
-      const assessorUrl = `${baseUrl}/assessor/qcto-assessment/${lecture.qctosummativeid || lecture.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}`;
+      const lectureIdParam = lecture.id ? `&lectureId=${encodeURIComponent(lecture.id)}` : '';
+      const assessorUrl = `${baseUrl}/assessor/qcto-assessment/${lecture.qctosummativeid || lecture.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}${lectureIdParam}`;
       window.open(assessorUrl, '_blank');
       return;
     }
@@ -158,7 +183,8 @@ const OCModuleDetails = () => {
       // Get the user token from localStorage to pass as auth
       const token = localStorage.getItem("TOKEN");
       const readOnlyParam = isReadOnly ? '&readOnly=true' : '';
-      const assessorUrl = `${baseUrl}/assessor/qcto-pmt/${lecture.qctopmtid || lecture.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}`;
+      const lectureIdParam = lecture.id ? `&lectureId=${encodeURIComponent(lecture.id)}` : '';
+      const assessorUrl = `${baseUrl}/assessor/qcto-pmt/${lecture.qctopmtid || lecture.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}${lectureIdParam}`;
       window.open(assessorUrl, '_blank');
       return;
     }
@@ -168,7 +194,8 @@ const OCModuleDetails = () => {
       // Get the user token from localStorage to pass as auth
       const token = localStorage.getItem("TOKEN");
       const readOnlyParam = isReadOnly ? '&readOnly=true' : '';
-      const assessorUrl = `${baseUrl}/assessor/qctolw/${lecture.qctolwid || lecture.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}`;
+      const lectureIdParam = lecture.id ? `&lectureId=${encodeURIComponent(lecture.id)}` : '';
+      const assessorUrl = `${baseUrl}/assessor/qctolw/${lecture.qctolwid || lecture.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}${lectureIdParam}`;
       window.open(assessorUrl, '_blank');
       return;
     }
@@ -191,7 +218,8 @@ const OCModuleDetails = () => {
     if (assignment && typeof assignment === 'object' && assignment.isQCTOAssessment) {
       // Open in zaio-frontend for assessor to view submissions
       const readOnlyParam = isReadOnly ? '&readOnly=true' : '';
-      const assessorUrl = `${baseUrl}/assessor/qcto-assessment/${assignment.qctosummativeid || assignment.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}`;
+      const lectureIdParam = assignment.id ? `&lectureId=${encodeURIComponent(assignment.id)}` : '';
+      const assessorUrl = `${baseUrl}/assessor/qcto-assessment/${assignment.qctosummativeid || assignment.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}${lectureIdParam}`;
       window.open(assessorUrl, '_blank');
       return;
     }
@@ -199,7 +227,8 @@ const OCModuleDetails = () => {
     // Check if it's a QCTO PM
     if (assignment && typeof assignment === 'object' && (assignment.type === "qctopmt" || assignment.isQCTOPMT)) {
       const readOnlyParam = isReadOnly ? '&readOnly=true' : '';
-      const assessorUrl = `${baseUrl}/assessor/qcto-pmt/${assignment.qctopmtid || assignment.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}`;
+      const lectureIdParam = assignment.id ? `&lectureId=${encodeURIComponent(assignment.id)}` : '';
+      const assessorUrl = `${baseUrl}/assessor/qcto-pmt/${assignment.qctopmtid || assignment.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}${lectureIdParam}`;
       window.open(assessorUrl, '_blank');
       return;
     }
@@ -207,7 +236,8 @@ const OCModuleDetails = () => {
     // Check if it's a QCTO Learner Workbook
     if (assignment && typeof assignment === 'object' && (assignment.type === "qctolw" || assignment.isQCTOLW)) {
       const readOnlyParam = isReadOnly ? '&readOnly=true' : '';
-      const assessorUrl = `${baseUrl}/assessor/qctolw/${assignment.qctolwid || assignment.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}`;
+      const lectureIdParam = assignment.id ? `&lectureId=${encodeURIComponent(assignment.id)}` : '';
+      const assessorUrl = `${baseUrl}/assessor/qctolw/${assignment.qctolwid || assignment.id}?studentId=${studentId}&token=${token || ''}${readOnlyParam}${lectureIdParam}`;
       window.open(assessorUrl, '_blank');
       return;
     }
@@ -344,6 +374,44 @@ const OCModuleDetails = () => {
                             const isCompleted = isItemCompleted(lecture, "lecture");
                             const lectureName = getItemName(lecture);
                             const isClickable = lecture && typeof lecture === "object" && lecture.id;
+                            const qctoSpec = getQctoTaskSpec(lecture);
+                            const useQctoStack = qctoSpec && canViewQctoSubmissionDetails;
+                            const row = (
+                              <>
+                                {getItemIcon(lecture)}
+                                {isCompleted && (
+                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                                <span className={styles.itemName}>{lectureName}</span>
+                              </>
+                            );
+                            if (useQctoStack) {
+                              return (
+                                <li key={lecture.id || idx} className={styles.itemStack}>
+                                  <div
+                                    className={styles.itemRow}
+                                    onClick={() => isClickable && handleLectureClick(lecture, unit)}
+                                    onKeyDown={(e) =>
+                                      isClickable &&
+                                      (e.key === "Enter" || e.key === " ") &&
+                                      handleLectureClick(lecture, unit)
+                                    }
+                                    role={isClickable ? "button" : null}
+                                    tabIndex={isClickable ? 0 : undefined}
+                                  >
+                                    {row}
+                                  </div>
+                                  <QctoSubmissionSummary
+                                    kind={qctoSpec.kind}
+                                    resourceId={qctoSpec.id}
+                                    studentId={studentId}
+                                    onOpenFullView={() => handleLectureClick(lecture, unit)}
+                                  />
+                                </li>
+                              );
+                            }
                             return (
                               <li
                                 key={lecture.id || idx}
@@ -353,13 +421,7 @@ const OCModuleDetails = () => {
                                 role={isClickable ? "button" : null}
                                 tabIndex={isClickable ? 0 : undefined}
                               >
-                                {getItemIcon(lecture)}
-                                {isCompleted && (
-                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                  </svg>
-                                )}
-                                <span className={styles.itemName}>{lectureName}</span>
+                                {row}
                               </li>
                             );
                           })}
@@ -375,6 +437,42 @@ const OCModuleDetails = () => {
                           {unit.assignments.map((assignment, idx) => {
                             const isCompleted = isItemCompleted(assignment, "assignment");
                             const assignmentName = getItemName(assignment);
+                            const qctoSpec = getQctoTaskSpec(assignment);
+                            const useQctoStack = qctoSpec && canViewQctoSubmissionDetails;
+                            const row = (
+                              <>
+                                {getItemIcon(assignment)}
+                                {isCompleted && (
+                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                                <span className={styles.itemName}>{assignmentName}</span>
+                              </>
+                            );
+                            if (useQctoStack) {
+                              return (
+                                <li key={assignment.id || idx} className={styles.itemStack}>
+                                  <div
+                                    className={styles.itemRow}
+                                    onClick={() => handleAssignmentClick(assignment)}
+                                    onKeyDown={(e) =>
+                                      (e.key === "Enter" || e.key === " ") && handleAssignmentClick(assignment)
+                                    }
+                                    role="button"
+                                    tabIndex={0}
+                                  >
+                                    {row}
+                                  </div>
+                                  <QctoSubmissionSummary
+                                    kind={qctoSpec.kind}
+                                    resourceId={qctoSpec.id}
+                                    studentId={studentId}
+                                    onOpenFullView={() => handleAssignmentClick(assignment)}
+                                  />
+                                </li>
+                              );
+                            }
                             return (
                               <li
                                 key={assignment.id || idx}
@@ -384,13 +482,7 @@ const OCModuleDetails = () => {
                                 role="button"
                                 tabIndex={0}
                               >
-                                {getItemIcon(assignment)}
-                                {isCompleted && (
-                                  <svg className={styles.checkIcon} fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                  </svg>
-                                )}
-                                <span className={styles.itemName}>{assignmentName}</span>
+                                {row}
                               </li>
                             );
                           })}

@@ -87,6 +87,199 @@ function resolveCustomPlanRowInst(plan, row) {
   return null;
 }
 
+/** Resolve which plan installment number a billing row belongs to (prefer explicit ids over heuristics). */
+function resolveRowToInstNumber(plan, row) {
+  if (row == null) return null;
+  if (row.installmentNumber != null && Number(row.installmentNumber) > 0) {
+    return Math.floor(Number(row.installmentNumber));
+  }
+  if (row.installmentSlot != null && Number(row.installmentSlot) > 0) {
+    return Math.floor(Number(row.installmentSlot));
+  }
+  const m = String(row.installmentLabel || "").match(/Instalment\s+(\d+)/i);
+  if (m) return Number(m[1]);
+  const payN = parsePaymentSlotFromRow(row);
+  if (payN != null && payN > 0) return payN;
+  const inst = resolveCustomPlanRowInst(plan, row);
+  if (inst?.number != null) return inst.number;
+  return null;
+}
+
+function rowMatchesInstallment(inst, plan, row) {
+  const n = resolveRowToInstNumber(plan, row);
+  if (n == null || n !== inst.number) return false;
+  const pt = row.paymentType;
+  if (inst.type === "cash") {
+    return pt === "cash" || pt === "eft";
+  }
+  if (inst.type === "paystack") {
+    return pt === "paystack" || pt === "recurring" || pt === "initial";
+  }
+  return true;
+}
+
+function mergeCustomPlanInstallmentWithPayments(plan, inst, matches) {
+  if (!matches.length) {
+    return {
+      installmentLabel: `Instalment ${inst.number}`,
+      amount: inst.amount,
+      dueDate: inst.dueDate,
+      paymentType: inst.type,
+      status: inst.status === "paid" ? "accepted" : "pending",
+      billingRecordId: inst.billingRecordId,
+      customPlanId: plan._id,
+      installmentNumber: inst.number,
+      paymentUrl:
+        inst.type === "paystack" && plan.firstPaystackPaymentUrl ? plan.firstPaystackPaymentUrl : null,
+      _inst: inst,
+    };
+  }
+
+  const failed = matches.filter((m) => m.status === "failed" || m.status === "rejected");
+  const accepted = matches.filter((m) => m.status === "accepted" || m.status === "paid");
+  const pending = matches.filter((m) => m.status === "pending");
+
+  let status = "pending";
+  if (inst.status === "paid") status = "accepted";
+  else if (accepted.length > 0) status = "accepted";
+  else if (failed.length > 0) status = "failed";
+  else if (pending.length > 0) status = "pending";
+
+  const pickOutstanding = matches.find((m) => m.isOutstanding && m.paymentUrl);
+  const pickFailed =
+    failed.length === 0
+      ? null
+      : failed.reduce((a, b) => {
+          const ta = a.paidAt ? new Date(a.paidAt).getTime() : 0;
+          const tb = b.paidAt ? new Date(b.paidAt).getTime() : 0;
+          return tb >= ta ? b : a;
+        });
+  const pickAccepted = accepted[0];
+
+  const paymentUrl =
+    pickOutstanding?.paymentUrl ||
+    (inst.type === "paystack" && plan.firstPaystackPaymentUrl && (status === "pending" || status === "failed")
+      ? plan.firstPaystackPaymentUrl
+      : null) ||
+    null;
+
+  return {
+    installmentLabel: `Instalment ${inst.number}`,
+    amount: inst.amount,
+    dueDate: inst.dueDate,
+    paidAt: pickAccepted?.paidAt ?? (inst.status === "paid" ? inst.paidAt : null),
+    paymentType: inst.type === "paystack" ? "paystack" : inst.type === "cash" ? "cash" : matches[0]?.paymentType,
+    status,
+    billingRecordId: pickAccepted?.billingRecordId ?? inst.billingRecordId ?? pickFailed?.billingRecordId,
+    customPlanId: plan._id,
+    installmentNumber: inst.number,
+    reference: pickFailed?.reference ?? pickAccepted?.reference ?? matches.find((m) => m.reference)?.reference,
+    /** Paystack / billing timestamp for the failed debit (shown in Due date column). */
+    failedAttemptAt: pickFailed?.paidAt ?? null,
+    paymentUrl,
+    isOutstanding: matches.some((m) => m.isOutstanding),
+    expired: matches.some((m) => m.expired),
+    outstandingPaymentId: matches.find((m) => m.outstandingPaymentId)?.outstandingPaymentId,
+    failedChargeReference: matches.find((m) => m.failedChargeReference)?.failedChargeReference,
+    xeroInvoiceUrl: matches.find((m) => m.xeroInvoiceUrl)?.xeroInvoiceUrl,
+    _inst: inst,
+  };
+}
+
+/**
+ * Failed Paystack subscription rows often omit installmentSlot → they become “orphans”.
+ * Attach each to the first Paystack installment (by number) that is not yet satisfied, only if
+ * every earlier Paystack installment is already complete (paid / accepted). That way a failed
+ * “next” debit lands on instalment 3 when 1–2 are done, not on a spare row at the end.
+ */
+function findPaystackInstIndexForOrphanFailure(base, matchesByInst) {
+  const ordered = base
+    .map((inst, j) => ({ inst, j }))
+    .filter(({ inst }) => inst.type === "paystack")
+    .sort((a, b) => a.inst.number - b.inst.number);
+
+  const isPaystackInstComplete = (inst, j) => {
+    if (inst.status === "paid") return true;
+    const m = matchesByInst[j];
+    return m.some((x) => x.status === "accepted" || x.status === "paid");
+  };
+
+  for (let k = 0; k < ordered.length; k++) {
+    const { inst, j } = ordered[k];
+    const predecessorsDone = ordered.slice(0, k).every((o) => isPaystackInstComplete(o.inst, o.j));
+    if (!predecessorsDone) continue;
+
+    if (inst.status === "paid") continue;
+    const matches = matchesByInst[j];
+    const hasFailed = matches.some((m) => m.status === "failed" || m.status === "rejected");
+    const hasAccepted = matches.some((m) => m.status === "accepted" || m.status === "paid");
+    if (hasAccepted) continue;
+    if (hasFailed) continue;
+    return j;
+  }
+  return null;
+}
+
+function buildCustomPlanTableRows(plan, billingPlan) {
+  const base = [...(plan.installments || [])].sort((a, b) => a.number - b.number);
+  if (!billingPlan?.payments?.length) {
+    return base.map((inst) =>
+      mergeCustomPlanInstallmentWithPayments(plan, inst, [])
+    );
+  }
+
+  const payments = billingPlan.payments;
+  const used = new Set();
+  const matchesByInst = base.map(() => []);
+
+  payments.forEach((row, i) => {
+    if (used.has(i)) return;
+    for (let j = 0; j < base.length; j++) {
+      if (rowMatchesInstallment(base[j], plan, row)) {
+        matchesByInst[j].push(row);
+        used.add(i);
+        break;
+      }
+    }
+  });
+
+  /** Slot orphan failed debits to the next open Paystack installment (e.g. 3rd Paystack month → instalment 3). */
+  payments.forEach((row, i) => {
+    if (used.has(i)) return;
+    if (row.status !== "failed" && row.status !== "rejected") return;
+    const pt = String(row.paymentType || "");
+    if (!["paystack", "recurring", "initial"].includes(pt)) return;
+    const j = findPaystackInstIndexForOrphanFailure(base, matchesByInst);
+    if (j != null) {
+      matchesByInst[j].push(row);
+      used.add(i);
+    }
+  });
+
+  const canonical = base.map((inst, j) =>
+    mergeCustomPlanInstallmentWithPayments(plan, inst, matchesByInst[j])
+  );
+
+  const orphans = [];
+  payments.forEach((row, i) => {
+    if (used.has(i)) return;
+    orphans.push({
+      ...row,
+      _inst: resolveCustomPlanRowInst(plan, row),
+      _orphan: true,
+    });
+  });
+
+  return [...canonical, ...orphans];
+}
+
+/** Lowest-numbered Paystack instalment on a custom plan (the “initial” Paystack payment for learner messaging). */
+function getFirstPaystackInstallment(plan) {
+  const paystack = (plan?.installments || []).filter((i) => i.type === "paystack");
+  if (!paystack.length) return null;
+  return [...paystack].sort((a, b) => a.number - b.number)[0];
+}
+
 /**
  * zaio-frontend base URL for “Open student dashboard” (impersonate). Baked in at build time.
  * Defaults to production learner; override with REACT_APP_LEARNER_APP_URL (e.g. http://localhost:3000 for local dev).
@@ -186,7 +379,17 @@ const StudentProfile = () => {
   const [eftActionId, setEftActionId] = useState(null);
   const [rejectModal, setRejectModal] = useState(null);
   const [addEftModal, setAddEftModal] = useState(false);
-  const [addEftForm, setAddEftForm] = useState({ planCode: "", paymentDate: "", amount: "", file: null, installmentPlanId: "", installmentNumber: "", customPlanId: "" });
+  const [addEftForm, setAddEftForm] = useState({
+    planCode: "",
+    paymentDate: "",
+    amount: "",
+    file: null,
+    installmentPlanId: "",
+    installmentNumber: "",
+    customPlanId: "",
+    replaceBillingRecordId: "",
+  });
+  const [addEftPaystackInitialDisclaimer, setAddEftPaystackInitialDisclaimer] = useState(false);
   const [addEftSubmitting, setAddEftSubmitting] = useState(false);
   const [addEftError, setAddEftError] = useState(null);
   const [installmentPlans, setInstallmentPlans] = useState([]);
@@ -1147,7 +1350,7 @@ const StudentProfile = () => {
   const handleAddEftSubmit = async (e) => {
     e.preventDefault();
     setAddEftError(null);
-    const { planCode, paymentDate, amount, file, installmentPlanId, installmentNumber, customPlanId } = addEftForm;
+    const { planCode, paymentDate, amount, file, installmentPlanId, installmentNumber, customPlanId, replaceBillingRecordId } = addEftForm;
     if (!planCode || !paymentDate || !amount || !file) {
       setAddEftError("Please fill plan, payment date, amount and upload proof.");
       return;
@@ -1177,10 +1380,21 @@ const StudentProfile = () => {
       if (installmentPlanId) formData.append("installment_plan_id", installmentPlanId);
       if (installmentNumber) formData.append("installment_number", installmentNumber);
       if (customPlanId) formData.append("custom_plan_id", customPlanId);
+      if (replaceBillingRecordId) formData.append("replace_billing_record_id", replaceBillingRecordId);
       const res = await addEftPaymentAdmin(userId, formData);
       if (res.success) {
         setAddEftModal(false);
-        setAddEftForm({ planCode: "", paymentDate: "", amount: "", file: null, installmentPlanId: "", installmentNumber: "", customPlanId: "" });
+        setAddEftPaystackInitialDisclaimer(false);
+        setAddEftForm({
+          planCode: "",
+          paymentDate: "",
+          amount: "",
+          file: null,
+          installmentPlanId: "",
+          installmentNumber: "",
+          customPlanId: "",
+          replaceBillingRecordId: "",
+        });
         fetchBilling();
         const listRes = await getStudentInstallmentPlans(userId);
         if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
@@ -2717,28 +2931,39 @@ const StudentProfile = () => {
                 <tbody className="divide-y divide-gray-200">
                   {(() => {
                     const billingPlan = billing?.plans?.find((p) => p.planCode === plan.planCode);
-                    const rows = billingPlan?.payments ?? (plan.installments || []).map((inst) => ({
-                      installmentLabel: `Instalment ${inst.number}`,
-                      amount: inst.amount,
-                      dueDate: inst.dueDate,
-                      paymentType: inst.type,
-                      status: inst.status,
-                      billingRecordId: inst.billingRecordId,
-                      customPlanId: plan._id,
-                      installmentNumber: inst.number,
-                      paymentUrl: inst.type === "paystack" && plan.firstPaystackPaymentUrl ? plan.firstPaystackPaymentUrl : null,
-                      _inst: inst,
-                    }));
+                    const rows = buildCustomPlanTableRows(plan, billingPlan);
                     return rows.map((row, idx) => {
-                      const inst = resolveCustomPlanRowInst(plan, row);
+                      const inst = row._inst ?? resolveCustomPlanRowInst(plan, row);
+                      const slotFromLabel = parsePaymentSlotFromRow(row);
+                      const instalmentTitle =
+                        row.installmentLabel ||
+                        (inst?.number != null ? `Instalment ${inst.number}` : null) ||
+                        (row.installmentNumber != null ? `Instalment ${row.installmentNumber}` : null) ||
+                        (row.installmentSlot != null ? `Instalment ${row.installmentSlot}` : null) ||
+                        (slotFromLabel != null ? `Instalment ${slotFromLabel}` : null) ||
+                        `Instalment ${idx + 1}`;
                       const paystackCode = plan.installments?.find((i) => i.type === "paystack")?.paystackPlanCode;
-                      const typeLabel = row.paymentType === "paystack" || row.paymentType === "recurring"
-                        ? (paystackCode ? `Paystack (${paystackCode})` : "Paystack")
-                        : row.paymentType === "cash" || row.paymentType === "eft" ? "Cash (EFT)" : row.paymentType || "—";
+                      const typeLabel =
+                        inst?.type === "paystack" || row.paymentType === "paystack" || row.paymentType === "recurring"
+                          ? paystackCode
+                            ? `Paystack (${paystackCode})`
+                            : "Paystack"
+                          : inst?.type === "cash" || row.paymentType === "cash" || row.paymentType === "eft"
+                            ? "Cash (EFT)"
+                            : row.paymentType || "—";
                       const showPayNow = row.paymentUrl && (row.status === "pending" || row.isOutstanding);
+                      const rowKey = row._orphan
+                        ? `orphan-${plan._id}-${row.reference || row.outstandingPaymentId || idx}`
+                        : `inst-${plan._id}-${row.installmentNumber ?? inst?.number ?? idx}`;
+                      const rowBg =
+                        row.status === "failed" || row.status === "rejected"
+                          ? "bg-red-50"
+                          : row.status === "pending"
+                            ? "bg-amber-50"
+                            : "";
                       return (
-                        <tr key={row.installmentLabel || row.reference || idx} className={row.status === "pending" ? "bg-amber-50" : ""}>
-                          <td className="px-6 py-3 text-sm text-gray-800">{row.installmentLabel || `Row ${idx + 1}`}</td>
+                        <tr key={rowKey} className={rowBg}>
+                          <td className="px-6 py-3 text-sm text-gray-800">{instalmentTitle}</td>
                           <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(row.amount, row.currency || plan.currency)}</td>
                           <td className="px-6 py-3 text-sm text-gray-600 align-middle">
                             {inst ? (
@@ -2747,15 +2972,23 @@ const StudentProfile = () => {
                                   type="date"
                                   disabled={inlineCustomDueSaving === `${plan._id}-${inst.number}`}
                                   className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 max-w-[11rem]"
-                                  key={`due-${plan._id}-${inst.number}-${inst.dueDate ? new Date(inst.dueDate).getTime() : "none"}`}
+                                  key={`due-${plan._id}-${inst.number}-${inst.dueDate ? new Date(inst.dueDate).getTime() : "none"}-${row.failedAttemptAt ? new Date(row.failedAttemptAt).getTime() : ""}-${row.status || ""}`}
                                   defaultValue={
-                                    inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : ""
+                                    (row.status === "failed" || row.status === "rejected") && row.failedAttemptAt
+                                      ? new Date(row.failedAttemptAt).toISOString().slice(0, 10)
+                                      : inst.dueDate
+                                        ? new Date(inst.dueDate).toISOString().slice(0, 10)
+                                        : ""
                                   }
                                   onBlur={(e) => handleInlineCustomDueDateBlur(plan, inst, e.target.value)}
                                   title={
-                                    inst.type === "paystack"
-                                      ? "Due date shown for this Paystack instalment (updating does not change Paystack’s subscription schedule)"
-                                      : "Scheduled due date for this instalment"
+                                    row.status === "failed" || row.status === "rejected"
+                                      ? row.failedAttemptAt
+                                        ? "Date the debit failed (from Paystack / billing). You can still change the scheduled instalment date below after updating the plan."
+                                        : "Scheduled due date for this instalment"
+                                      : inst.type === "paystack"
+                                        ? "Due date shown for this Paystack instalment (updating does not change Paystack’s subscription schedule)"
+                                        : "Scheduled due date for this instalment"
                                   }
                                 />
                                 {inlineCustomDueSaving === `${plan._id}-${inst.number}` && (
@@ -2834,7 +3067,9 @@ const StudentProfile = () => {
                                         paymentDate: new Date().toISOString().slice(0, 10),
                                         amount: inst.amount ? String(Number(inst.amount) / 100) : "",
                                         file: null,
+                                        replaceBillingRecordId: "",
                                       });
+                                      setAddEftPaystackInitialDisclaimer(false);
                                       setAddEftModal(true);
                                       setAddEftError(null);
                                     }}
@@ -2843,6 +3078,41 @@ const StudentProfile = () => {
                                     Add POP
                                   </button>
                                 )}
+                                {inst.type === "paystack" &&
+                                  inst.status !== "paid" &&
+                                  (row.status === "failed" ||
+                                    row.status === "rejected" ||
+                                    row.status === "pending") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const firstPs = getFirstPaystackInstallment(plan);
+                                        const isInitialPaystack = !!(firstPs && inst.number === firstPs.number);
+                                        setAddEftForm({
+                                          planCode: plan.planCode,
+                                          planName: plan.planName || "",
+                                          installmentPlanId: "",
+                                          customPlanId: plan._id,
+                                          installmentNumber: String(inst.number),
+                                          paymentDate: new Date().toISOString().slice(0, 10),
+                                          amount: inst.amount ? String(Number(inst.amount) / 100) : "",
+                                          file: null,
+                                          replaceBillingRecordId:
+                                            row.billingRecordId &&
+                                            (row.status === "failed" || row.status === "rejected")
+                                              ? String(row.billingRecordId)
+                                              : "",
+                                        });
+                                        setAddEftPaystackInitialDisclaimer(isInitialPaystack);
+                                        setAddEftModal(true);
+                                        setAddEftError(null);
+                                      }}
+                                      className="px-2 py-1 text-xs font-medium text-teal-800 bg-teal-100 rounded hover:bg-teal-200"
+                                      title="Learner paid this Paystack instalment by bank transfer — record proof here"
+                                    >
+                                      Record EFT payment
+                                    </button>
+                                  )}
                                 {(inst.status === "pending" || (row.status === "pending" && row.customPlanId && row.installmentNumber)) && (
                                   <button
                                     type="button"
@@ -3062,7 +3332,11 @@ const StudentProfile = () => {
         <h2 className="text-2xl font-bold text-white">EFT / Cash proof of payment</h2>
         <button
           type="button"
-          onClick={() => { setAddEftModal(true); setAddEftError(null); }}
+          onClick={() => {
+            setAddEftPaystackInitialDisclaimer(false);
+            setAddEftModal(true);
+            setAddEftError(null);
+          }}
           className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
         >
           Add EFT payment
@@ -3141,10 +3415,31 @@ const StudentProfile = () => {
 
       {/* Add EFT payment modal (admin) */}
       {addEftModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !addEftSubmitting && setAddEftModal(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => {
+            if (!addEftSubmitting) {
+              setAddEftModal(false);
+              setAddEftPaystackInitialDisclaimer(false);
+            }
+          }}
+        >
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-gray-800 mb-2">Add EFT payment (proof of payment)</h3>
             <p className="text-sm text-gray-600 mb-4">This will be added to the student&apos;s billing. Upload proof, date and amount.</p>
+            {addEftPaystackInitialDisclaimer && (
+              <div
+                className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                role="status"
+              >
+                <p className="font-semibold text-amber-900 mb-1">Paystack initial instalment — paid by EFT</p>
+                <p>
+                  This instalment was the <strong>Paystack initial</strong> payment. You are recording that the learner paid via EFT instead of the Paystack link.
+                  After you save, the Paystack checkout link moves to the <strong>next</strong> Paystack instalment — please ask the learner to make their{" "}
+                  <strong>next</strong> payment through Paystack (card or bank on the link).
+                </p>
+              </div>
+            )}
             <form onSubmit={handleAddEftSubmit} className="flex flex-col gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
@@ -3156,6 +3451,7 @@ const StudentProfile = () => {
                       const plan = billing.plans?.find((p) => p.planCode === code);
                       const instPlan = installmentPlans.find((p) => p.planCode === code);
                       const customPlan = customPlans.find((p) => p.planCode === code);
+                      setAddEftPaystackInitialDisclaimer(false);
                       setAddEftForm((f) => ({
                         ...f,
                         planCode: code,
@@ -3163,6 +3459,7 @@ const StudentProfile = () => {
                         installmentPlanId: instPlan ? instPlan._id : "",
                         customPlanId: customPlan ? customPlan._id : "",
                         installmentNumber: "",
+                        replaceBillingRecordId: "",
                       }));
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -3204,7 +3501,14 @@ const StudentProfile = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Apply to instalment</label>
                   <select
                     value={addEftForm.installmentNumber}
-                    onChange={(e) => setAddEftForm((f) => ({ ...f, installmentNumber: e.target.value }))}
+                    onChange={(e) => {
+                      const num = e.target.value;
+                      const firstPs = getFirstPaystackInstallment(selectedCustomPlan);
+                      setAddEftPaystackInitialDisclaimer(
+                        !!(num && firstPs && Number(num) === Number(firstPs.number))
+                      );
+                      setAddEftForm((f) => ({ ...f, installmentNumber: num }));
+                    }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     required
                   >
@@ -3261,7 +3565,10 @@ const StudentProfile = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAddEftModal(false)}
+                  onClick={() => {
+                    setAddEftModal(false);
+                    setAddEftPaystackInitialDisclaimer(false);
+                  }}
                   disabled={addEftSubmitting}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                 >
@@ -3617,6 +3924,13 @@ const StudentProfile = () => {
                                       currency: p.currency || paymentsModalPlan.currency,
                                       subscriptionCode: paymentsModalPlan.subscriptionCode || undefined,
                                       ...(paymentSlot != null ? { paymentSlot } : {}),
+                                      ...((isFailed && !p.isOutstanding && p.reference) ||
+                                      (p.isOutstanding && p.expired && p.failedChargeReference)
+                                        ? {
+                                            failedChargeReference:
+                                              (isFailed && !p.isOutstanding && p.reference) || p.failedChargeReference,
+                                          }
+                                        : {}),
                                     });
                                     setGenerateLinkLoading(false);
                                     if (res.success && res.data?.paymentUrl) {
@@ -3729,7 +4043,9 @@ const StudentProfile = () => {
                                       paymentDate: new Date().toISOString().slice(0, 10),
                                       amount: p.amount ? String(Number(p.amount) / 100) : "",
                                       file: null,
+                                      replaceBillingRecordId: "",
                                     });
+                                    setAddEftPaystackInitialDisclaimer(false);
                                     setPaymentsModalPlan(null);
                                     setAddEftModal(true);
                                     setAddEftError(null);

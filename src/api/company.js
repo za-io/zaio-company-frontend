@@ -57,6 +57,23 @@ export const getAllTutors = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** Replace bootcamp.tutors (allocated list). Requires company auth-token. */
+export const updateBootcampAllocatedTutors = ({ bootcampId, tutorIds }) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/update-allocated-tutors`,
+      { bootcampId, tutorIds },
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update tutors",
+    }));
+};
+
 export const getAllAssessors = () =>
   axios
     .get(BASE_URL + `/company/all-assessors`)
@@ -441,6 +458,53 @@ export const tutorSignOffQCTOLW = (assessmentId, submissionId, tutorSignature = 
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+const ocQctoSubmissionsHeaders = () => {
+  const token = localStorage.getItem("TOKEN");
+  return token ? { "auth-token": token } : {};
+};
+
+/** QCTO Summative (QCTOSA) submissions for one student — company assessor/moderator/tutor token */
+export const getQCTOAssessmentSubmissionsForStudent = (assessmentId, studentId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/qcto-assessment/${assessmentId}/submissions`, {
+      headers: ocQctoSubmissionsHeaders(),
+      params: { studentId },
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      data: [],
+      message: err.response?.data?.message || err.message || "Request failed",
+    }));
+
+/** QCTO PMT submissions for one student */
+export const getQCTOPMTSubmissionsForStudent = (taskId, studentId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/qcto-pmt/${taskId}/submissions`, {
+      headers: ocQctoSubmissionsHeaders(),
+      params: { studentId },
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      data: [],
+      message: err.response?.data?.message || err.message || "Request failed",
+    }));
+
+/** QCTO Learner Workbook submissions for one student */
+export const getQCTOLearnerWorkbookSubmissionsForStudent = (assessmentId, studentId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/qctolw/${assessmentId}/submissions`, {
+      headers: ocQctoSubmissionsHeaders(),
+      params: { studentId },
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      data: [],
+      message: err.response?.data?.message || err.message || "Request failed",
+    }));
+
 /** Get QCTO learner enrollments (optionally filter by cohortId) */
 export const getQCTOLearnerEnrollments = (cohortId = null) => {
   const token = localStorage.getItem("TOKEN");
@@ -758,6 +822,62 @@ export const getFinanceSummary = (params = {}) => {
       message: err?.response?.data?.message || "Failed to load finance data",
     }));
 };
+
+const FINANCE_POLL_INTERVAL_MS = 2000;
+const FINANCE_POLL_MAX_WAIT_MS = 4 * 60 * 1000;
+
+function financePollSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Loads finance summary via POST /finance-summary/start + polling GET …/job/:id so Heroku’s ~30s HTTP limit
+ * does not kill long-running reports. Falls back to direct GET if the async routes are unavailable.
+ * @param {object} opts - { onPoll?: () => void } called between poll attempts while still pending
+ */
+export async function getFinanceSummaryWithPolling(params = {}, opts = {}) {
+  const { onPoll } = opts;
+  const token = localStorage.getItem("TOKEN");
+  const authHeaders = token ? { "auth-token": token } : {};
+  try {
+    const startRes = await axios.post(`${BASE_URL}/bootcamp/finance-summary/start`, params, {
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      timeout: 60000,
+    });
+    if (!startRes.data?.success || !startRes.data?.jobId) {
+      return getFinanceSummary(params);
+    }
+    const { jobId } = startRes.data;
+    const deadline = Date.now() + FINANCE_POLL_MAX_WAIT_MS;
+    while (Date.now() < deadline) {
+      onPoll?.();
+      const pollRes = await axios.get(`${BASE_URL}/bootcamp/finance-summary/job/${jobId}`, {
+        headers: authHeaders,
+        timeout: 60000,
+      });
+      const d = pollRes.data;
+      if (d?.success && d.pending) {
+        await financePollSleep(FINANCE_POLL_INTERVAL_MS);
+        continue;
+      }
+      return d;
+    }
+    return {
+      success: false,
+      message:
+        "Finance summary is still running or took too long. Try again, pick a narrower date range, or refresh shortly.",
+    };
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 404 || status === 405) {
+      return getFinanceSummary(params);
+    }
+    return {
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load finance data",
+    };
+  }
+}
 
 /** Upload roster CSV/XLSX; returns rows with inSystem, hasPaymentPlan, userId for profile links */
 export const postRosterPaymentCheck = (file) => {

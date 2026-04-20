@@ -18,7 +18,8 @@ export const StudentMoreActionsModal = ({
   showModal,
   setShowModal,
   bootcampId,
-  tutors,
+  /** Tutors allocated on the bootcamp (only these may be assigned, except keeping current if not on list). */
+  tutorsForAssignment = [],
   getAnalytics,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -33,11 +34,24 @@ export const StudentMoreActionsModal = ({
 
   useEffect(() => {
     if (showModal) {
-      setChangedTutor(showModal?.tutor?._id);
+      setChangedTutor(showModal?.tutor?._id != null ? String(showModal.tutor._id) : "");
       setStudentNumberValue(showModal?.userid?.studentNumber ?? "");
       setStudentNumberMessage(null);
     }
   }, [showModal?.userid?._id, showModal?.tutor?._id, showModal?.userid?.studentNumber]);
+
+  const tutorSelectOptions = (() => {
+    const allocated = Array.isArray(tutorsForAssignment) ? [...tutorsForAssignment] : [];
+    const currentId = showModal?.tutor?._id != null ? String(showModal.tutor._id) : "";
+    if (currentId && !allocated.some((t) => String(t._id) === currentId)) {
+      allocated.unshift({
+        _id: showModal.tutor._id,
+        company_username: showModal.tutor.company_username,
+        email: showModal.tutor.email,
+      });
+    }
+    return allocated;
+  })();
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -45,7 +59,7 @@ export const StudentMoreActionsModal = ({
     updateTutor({
       userid: showModal?.userid?._id,
       bootcampid: bootcampId,
-      newAssignedTutor: changedTutor,
+      newAssignedTutor: changedTutor || null,
     })
       .then((res) => {
         handleClose();
@@ -273,19 +287,21 @@ export const StudentMoreActionsModal = ({
               <label className={labelClass + " mb-0"}>New Tutor:</label>
               <select
                 className={`${inputClass} max-w-[240px]`}
-                value={changedTutor}
+                value={changedTutor || ""}
                 onChange={(e) => setChangedTutor(e.target.value)}
               >
-                {tutors.map((tutor) => (
-                  <option
-                    key={tutor._id}
-                    value={tutor._id}
-                    disabled={tutor?._id === showModal?.tutor?._id}
-                  >
-                    {tutor.company_username || tutor.email}
+                <option value="">— None —</option>
+                {tutorSelectOptions.map((tutor) => (
+                  <option key={String(tutor._id)} value={String(tutor._id)}>
+                    {tutor.company_username || tutor.email || String(tutor._id)}
                   </option>
                 ))}
               </select>
+              {tutorSelectOptions.length === 0 && (
+                <p className="text-xs text-amber-400/90 max-w-[280px]">
+                  Add tutors to this bootcamp in the list above the table before assigning here.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={handleSubmit}
