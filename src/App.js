@@ -45,6 +45,7 @@ import ViewOCPrograms from "./pages/ViewOCPrograms";
 import OCLearnerDocuments from "./pages/OCLearnerDocuments";
 import OCStudentDetails from "./pages/OCStudentDetails";
 import OCModuleDetails from "./pages/OCModuleDetails";
+import OCQctoTrackerPage from "./pages/OCQctoTrackerPage";
 import Finance from "./pages/Finance";
 import FinancePasswordGate from "./components/FinancePasswordGate";
 import RosterPaymentCheck from "./pages/RosterPaymentCheck";
@@ -251,6 +252,15 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/oc-programs/:cohortId/documents"
               component={<OCLearnerDocuments />}
+            />
+          }
+        />
+        <Route
+          path="/oc-programs/:cohortId/module-tracker"
+          element={
+            <ProtectedRoute
+              path="/oc-programs/:cohortId/module-tracker"
+              component={<OCQctoTrackerPage />}
             />
           }
         />

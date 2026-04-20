@@ -70,7 +70,6 @@ const ViewOCPrograms = () => {
   const [liveClassSubmitting, setLiveClassSubmitting] = useState(false);
   const [liveClassMessage, setLiveClassMessage] = useState(null);
   const [idCopyZipLoading, setIdCopyZipLoading] = useState(null);
-
   const DEFAULT_LIVE_CLASS_THUMBNAIL =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120'%3E%3Crect fill='%23212a34' width='200' height='120'/%3E%3Ctext x='100' y='65' fill='%236b7280' font-size='14' text-anchor='middle' font-family='system-ui'%3ELive Class%3C/text%3E%3C/svg%3E";
 
@@ -291,6 +290,12 @@ const ViewOCPrograms = () => {
   };
 
   const canAssignRoles = user?.role && ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user.role);
+
+  const openModuleTrackerInNewTab = (view) => {
+    if (!selectedProgram?._id) return;
+    const url = `/oc-programs/${selectedProgram._id}/module-tracker?view=${view}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const handleAssignAssessor = (program) => {
     if (!canAssignRoles) return;
@@ -748,6 +753,24 @@ const ViewOCPrograms = () => {
                   </>
                 )}
               </button>
+              <div className="inline-flex rounded-lg border border-gray-600/60 overflow-hidden">
+                <button
+                  type="button"
+                  title="Open knowledge module tracker in a new tab"
+                  onClick={() => openModuleTrackerInNewTab("km")}
+                  className="px-4 py-2 text-sm font-medium transition-colors bg-gray-800/80 text-gray-200 hover:bg-indigo-600/85 hover:text-white"
+                >
+                  KM view
+                </button>
+                <button
+                  type="button"
+                  title="Open practical module tracker in a new tab"
+                  onClick={() => openModuleTrackerInNewTab("pm")}
+                  className="px-4 py-2 text-sm font-medium transition-colors border-l border-gray-600/60 bg-gray-800/80 text-gray-200 hover:bg-indigo-600/85 hover:text-white"
+                >
+                  PM view
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => {

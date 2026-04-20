@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getOCModuleDetails } from "../../api/company";
 import Loader from "../../components/loader/loader";
@@ -28,6 +28,7 @@ function getQctoTaskSpec(item) {
 const OCModuleDetails = () => {
   const { studentId, moduleId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useUserStore();
   const [moduleData, setModuleData] = useState(null);
   const [studentData, setStudentData] = useState(null);
@@ -300,10 +301,17 @@ const OCModuleDetails = () => {
       <div className={styles.header}>
         <button
           type="button"
-          onClick={() => window.close()}
+          onClick={() => {
+            const ocBack = location.state?.ocBack;
+            if (ocBack?.path) {
+              navigate(ocBack.path, { state: ocBack.state });
+            } else {
+              navigate("/oc-programs");
+            }
+          }}
           className={styles.backBtn}
         >
-          ← Close Tab
+          ← Back
         </button>
         <h1 className={styles.title}>{moduleData.name}</h1>
         <div className={styles.meta}>

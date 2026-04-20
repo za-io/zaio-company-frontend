@@ -273,6 +273,22 @@ export const getCohortStudents = (cohortId) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+/** view: 'km' | 'pm' — per-learner workbook/PMT + SA flags for each QCTO module on the cohort path */
+export const getCohortQctoTracker = (cohortId, view = "km") => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/qcto-tracker`, {
+      headers,
+      params: { view },
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
 /** Requires company auth-token. Returns axios response with responseType blob (application/zip). */
 export const downloadPoeIdCopiesZip = (cohortId) => {
   const token = localStorage.getItem("TOKEN");

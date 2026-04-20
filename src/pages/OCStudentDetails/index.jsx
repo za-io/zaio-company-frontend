@@ -89,20 +89,29 @@ const OCStudentDetails = () => {
   };
 
   const handleModuleClick = (module, moduleType, e) => {
-    e.stopPropagation(); // Prevent row click if needed
-    
-    // Store module data in sessionStorage for the new page to access
-    sessionStorage.setItem(`module-${module.id}`, JSON.stringify({
-      module,
-      moduleType,
-      student: studentData,
-      program
-    }));
-    
-    // Open in new tab
-    const studentId = studentData?.id || student?.id || 'unknown';
-    const url = `/oc-programs/student/${studentId}/module/${module.id}`;
-    window.open(url, '_blank');
+    e.stopPropagation();
+
+    const studentId = studentData?.id || student?.id;
+    if (!studentId) return;
+
+    sessionStorage.setItem(
+      `module-${module.id}`,
+      JSON.stringify({
+        module,
+        moduleType,
+        student: studentData,
+        program,
+      })
+    );
+
+    navigate(`/oc-programs/student/${studentId}/module/${module.id}`, {
+      state: {
+        ocBack: {
+          path: `/oc-programs/student/${studentId}`,
+          state: { student: studentData, program },
+        },
+      },
+    });
   };
 
   if (!studentData) {
