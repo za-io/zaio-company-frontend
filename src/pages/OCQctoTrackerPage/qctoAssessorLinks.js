@@ -28,7 +28,3 @@ export function buildQctoAssessorUrl(ref, studentId, readOnly) {
   }
   return null;
 }
-
-/** Column order: WB×3, SA×3 — indices 0,1,4 are workbook; 2,3,5 are summative */
-export const TRACKER_WB_COL_INDEX = new Set([0, 1, 4]);
-export const TRACKER_SA_COL_INDEX = new Set([2, 3, 5]);

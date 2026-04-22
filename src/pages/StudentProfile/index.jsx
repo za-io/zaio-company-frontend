@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
 import Loader from "../../components/loader/loader";
 
@@ -367,6 +367,16 @@ const StudentProfile = () => {
   const [billingLoading, setBillingLoading] = useState(false);
   const [syncPaystackBillingLoading, setSyncPaystackBillingLoading] = useState(false);
   const [syncPaystackBillingMessage, setSyncPaystackBillingMessage] = useState(null);
+  const [cancelSubModalOpen, setCancelSubModalOpen] = useState(false);
+  const [cancelSubLoading, setCancelSubLoading] = useState(false);
+  const [cancelSubList, setCancelSubList] = useState([]);
+  const [cancelSubError, setCancelSubError] = useState(null);
+  const [cancelSubSuccess, setCancelSubSuccess] = useState(null);
+  const [cancelSubActionCode, setCancelSubActionCode] = useState(null);
+  const [writeOffModalOpen, setWriteOffModalOpen] = useState(false);
+  const [writeOffSelected, setWriteOffSelected] = useState(() => new Set());
+  const [writeOffSubmitting, setWriteOffSubmitting] = useState(false);
+  const [writeOffMessage, setWriteOffMessage] = useState(null);
   const [dismissingOutstandingId, setDismissingOutstandingId] = useState(null);
   const [statementModal, setStatementModal] = useState(null);
   const [statementData, setStatementData] = useState(null);
@@ -627,6 +637,113 @@ const StudentProfile = () => {
       setSyncPaystackBillingMessage({ type: "error", text: e?.message || "Sync failed." });
     }
     setSyncPaystackBillingLoading(false);
+  };
+
+  const openCancelSubModal = async () => {
+    setCancelSubModalOpen(true);
+    setCancelSubError(null);
+    setCancelSubSuccess(null);
+    setCancelSubList([]);
+    setCancelSubLoading(true);
+    try {
+      const res = await listStudentPaystackSubscriptions(userId);
+      if (res.success) {
+        setCancelSubList(Array.isArray(res.subscriptions) ? res.subscriptions : []);
+      } else {
+        setCancelSubError(res.message || "Could not load Paystack subscriptions");
+      }
+    } catch (e) {
+      setCancelSubError(e?.message || "Could not load Paystack subscriptions");
+    } finally {
+      setCancelSubLoading(false);
+    }
+  };
+
+  const upcomingWriteOffRows = useMemo(() => {
+    const rows = [];
+    (billing.plans || []).forEach((plan) => {
+      (plan.upcomingPayments || []).forEach((up, idx) => {
+        if (!up?.writeOff) return;
+        rows.push({
+          rowKey: `${plan.planCode}-${idx}-${up.installmentLabel || ""}-${up.amount}`,
+          plan,
+          up,
+        });
+      });
+    });
+    return rows;
+  }, [billing.plans]);
+
+  const openWriteOffModal = async () => {
+    setWriteOffMessage(null);
+    setWriteOffSelected(() => new Set());
+    setWriteOffModalOpen(true);
+    await fetchBilling();
+  };
+
+  const toggleWriteOffRow = (writeOffObj) => {
+    const k = JSON.stringify(writeOffObj);
+    setWriteOffSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  };
+
+  const handleSubmitWriteOff = async () => {
+    const items = [...writeOffSelected].map((s) => {
+      try {
+        return JSON.parse(s);
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    if (items.length === 0) {
+      setWriteOffMessage({ type: "error", text: "Select at least one upcoming payment to write off." });
+      return;
+    }
+    setWriteOffSubmitting(true);
+    setWriteOffMessage(null);
+    try {
+      const res = await writeOffUpcomingPayments(userId, items);
+      if (res.success) {
+        setWriteOffMessage({ type: "success", text: res.message || "Written off." });
+        setWriteOffSelected(() => new Set());
+        await fetchBilling();
+      } else {
+        setWriteOffMessage({ type: "error", text: res.message || "Failed." });
+      }
+    } catch (e) {
+      setWriteOffMessage({ type: "error", text: e?.message || "Failed." });
+    } finally {
+      setWriteOffSubmitting(false);
+    }
+  };
+
+  const handleCancelOnePaystackSubscription = async (subscriptionCode) => {
+    if (!subscriptionCode) return;
+    const ok = window.confirm(
+      `Cancel Paystack subscription ${subscriptionCode}? This stops recurring debits for this plan.`
+    );
+    if (!ok) return;
+    setCancelSubActionCode(subscriptionCode);
+    setCancelSubError(null);
+    setCancelSubSuccess(null);
+    try {
+      const res = await cancelStudentPaystackSubscription(userId, subscriptionCode);
+      if (res.success) {
+        setCancelSubSuccess(res.message || "Subscription cancelled.");
+        setCancelSubList((prev) => prev.filter((s) => s.subscription_code !== subscriptionCode));
+        await fetchBilling();
+      } else {
+        setCancelSubError(res.message || "Cancel failed");
+      }
+    } catch (e) {
+      setCancelSubError(e?.message || "Cancel failed");
+    } finally {
+      setCancelSubActionCode(null);
+    }
   };
 
   useEffect(() => {
@@ -1507,6 +1624,10 @@ const StudentProfile = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-800">{student.username}</h1>
             <p className="text-lg text-gray-600 mt-1">{student.email}</p>
+            <p className="text-base text-gray-600 mt-1">
+              <span className="text-gray-500">Phone: </span>
+              {(student.phonenumber || "").trim() || "—"}
+            </p>
             <p className="text-sm text-gray-500 mt-2">
               Joined: {new Date(student.createdAt).toLocaleDateString()}
             </p>
@@ -1580,6 +1701,26 @@ const StudentProfile = () => {
             >
               {blockLoading ? "..." : student.accBlocked ? "Unblock Student" : "Block Student"}
             </button>
+            <button
+              type="button"
+              onClick={openCancelSubModal}
+              className="px-6 py-2 rounded font-medium bg-amber-700 hover:bg-amber-800 text-white text-sm"
+            >
+              Cancel Paystack subscriptions
+            </button>
+            <p className="text-xs text-gray-500 text-right max-w-[220px]">
+              Use when the student has deregistered — lists Paystack recurring plans and lets you cancel them.
+            </p>
+            <button
+              type="button"
+              onClick={openWriteOffModal}
+              className="px-6 py-2 rounded font-medium bg-slate-700 hover:bg-slate-800 text-white text-sm"
+            >
+              Clear upcoming payments
+            </button>
+            <p className="text-xs text-gray-500 text-right max-w-[220px]">
+              Write off selected upcoming instalments (custom, 2‑inst EFT, or standalone Paystack slots). Refreshes billing after apply.
+            </p>
             <div className="w-full max-w-xs border border-gray-200 rounded-lg p-3 bg-gray-50 mt-2 text-left">
               <p className="text-xs font-semibold text-gray-700 mb-1">Open learner app as this student</p>
               <p className="text-[11px] text-gray-500 mb-2">
@@ -2788,6 +2929,228 @@ const StudentProfile = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Write off upcoming payments */}
+      {writeOffModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !writeOffSubmitting && setWriteOffModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Clear upcoming payments (write off)</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Tick the lines you have waived in the business (e.g. deregistered learner). They disappear from upcoming
+              billing and Finance instalment schedules where applicable.
+            </p>
+            {writeOffMessage && (
+              <p
+                className={`text-sm mb-3 ${writeOffMessage.type === "success" ? "text-green-700" : "text-red-600"}`}
+              >
+                {writeOffMessage.text}
+              </p>
+            )}
+            {billingLoading ? (
+              <p className="text-gray-600 py-6">Loading billing…</p>
+            ) : upcomingWriteOffRows.length === 0 ? (
+              <p className="text-sm text-gray-600 py-4">
+                No write-offable upcoming lines for this learner (or nothing pending). If you only see Paystack “Pay
+                now” / failed rows, dismiss those separately. Pure Paystack API next debits are cleared by cancelling the
+                subscription in Paystack.
+              </p>
+            ) : (
+              <>
+                <div className="flex justify-end gap-2 mb-2">
+                  <button
+                    type="button"
+                    className="text-xs text-indigo-600 hover:underline"
+                    onClick={() =>
+                      setWriteOffSelected(
+                        new Set(upcomingWriteOffRows.map((r) => JSON.stringify(r.up.writeOff)))
+                      )
+                    }
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs text-gray-600 hover:underline"
+                    onClick={() => setWriteOffSelected(() => new Set())}
+                  >
+                    Clear selection
+                  </button>
+                </div>
+                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="min-w-full text-sm text-left">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-2 py-2 w-10" />
+                        <th className="px-3 py-2 font-semibold text-gray-700">Plan</th>
+                        <th className="px-3 py-2 font-semibold text-gray-700">Line</th>
+                        <th className="px-3 py-2 font-semibold text-gray-700">Due</th>
+                        <th className="px-3 py-2 font-semibold text-gray-700">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {upcomingWriteOffRows.map((row) => {
+                        const k = JSON.stringify(row.up.writeOff);
+                        const checked = writeOffSelected.has(k);
+                        return (
+                          <tr key={row.rowKey}>
+                            <td className="px-2 py-2 align-top">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleWriteOffRow(row.up.writeOff)}
+                                className="rounded border-gray-300"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-gray-800">
+                              <span className="font-medium">{row.plan.planCode}</span>
+                              {row.plan.planName ? (
+                                <span className="block text-xs text-gray-500">{row.plan.planName}</span>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 text-gray-700">
+                              {row.up.installmentLabel || "—"}
+                              <span className="block text-xs text-gray-500 capitalize">{row.up.paymentType || ""}</span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                              {row.up.dueDate ? formatDate(row.up.dueDate) : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-gray-800">{formatAmount(row.up.amount)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                disabled={writeOffSubmitting}
+                onClick={() => setWriteOffModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={writeOffSubmitting || upcomingWriteOffRows.length === 0}
+                onClick={handleSubmitWriteOff}
+                className="px-4 py-2 text-sm font-medium text-white bg-slate-700 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+              >
+                {writeOffSubmitting ? "Applying…" : "Write off selected"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Paystack subscriptions (deregistration) */}
+      {cancelSubModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !cancelSubLoading && !cancelSubActionCode && setCancelSubModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-1">Paystack subscriptions</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Subscriptions linked to this student&apos;s email or linked payer email in Paystack. Cancelling stops future
+              recurring debits (same as Paystack &quot;disable subscription&quot;).
+            </p>
+            {cancelSubLoading ? (
+              <p className="text-gray-600 py-8 text-center">Loading subscriptions from Paystack…</p>
+            ) : (
+              <>
+                {cancelSubError && (
+                  <p className="text-sm text-red-600 mb-3">{cancelSubError}</p>
+                )}
+                {cancelSubSuccess && (
+                  <p className="text-sm text-green-700 mb-3">{cancelSubSuccess}</p>
+                )}
+                {!cancelSubList.length && !cancelSubError ? (
+                  <p className="text-sm text-gray-600 py-4">
+                    No active Paystack subscriptions found for this learner&apos;s email(s). If they pay under a different
+                    Paystack customer, cancel from the Paystack dashboard or link the correct payer email on this profile
+                    first.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table className="min-w-full text-sm text-left">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold text-gray-700">Subscription</th>
+                          <th className="px-3 py-2 font-semibold text-gray-700">Plan</th>
+                          <th className="px-3 py-2 font-semibold text-gray-700">Status</th>
+                          <th className="px-3 py-2 font-semibold text-gray-700">Next debit</th>
+                          <th className="px-3 py-2 font-semibold text-gray-700">Amount</th>
+                          <th className="px-3 py-2 font-semibold text-gray-700 w-28" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {cancelSubList.map((s) => {
+                          const st = (s.status || "").toLowerCase();
+                          const cancellable = st !== "cancelled" && st !== "complete" && st !== "completed";
+                          return (
+                            <tr key={s.subscription_code}>
+                              <td className="px-3 py-2 font-mono text-xs text-gray-800">{s.subscription_code}</td>
+                              <td className="px-3 py-2 text-gray-700">
+                                {s.plan?.plan_code || "—"}
+                                {s.plan?.name ? (
+                                  <span className="block text-xs text-gray-500">{s.plan.name}</span>
+                                ) : null}
+                              </td>
+                              <td className="px-3 py-2 capitalize text-gray-700">{s.status || "—"}</td>
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {s.next_payment_date ? formatDate(s.next_payment_date) : "—"}
+                              </td>
+                              <td className="px-3 py-2 text-gray-700">
+                                {s.plan?.amount != null ? formatAmount(s.plan.amount) : "—"}
+                              </td>
+                              <td className="px-3 py-2">
+                                {cancellable ? (
+                                  <button
+                                    type="button"
+                                    disabled={!!cancelSubActionCode}
+                                    onClick={() => handleCancelOnePaystackSubscription(s.subscription_code)}
+                                    className="px-2 py-1 text-xs font-medium rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                                  >
+                                    {cancelSubActionCode === s.subscription_code ? "Cancelling…" : "Cancel"}
+                                  </button>
+                                ) : (
+                                  <span className="text-xs text-gray-400">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                disabled={!!cancelSubActionCode || cancelSubLoading}
+                onClick={() => setCancelSubModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -122,6 +122,42 @@ export const changePaystackPaymentDate = (userId, { subscriptionCode, newPayment
       return { success: false, message: err?.response?.data?.message || "Failed to change payment date" };
     });
 
+/** List Paystack subscriptions for this learner (by email / linked payer). */
+export const listStudentPaystackSubscriptions = (userId) =>
+  axios
+    .get(API_URL + `/student-profile/${userId}/paystack-subscriptions`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return {
+        success: false,
+        subscriptions: [],
+        message: err?.response?.data?.message || "Failed to load Paystack subscriptions",
+      };
+    });
+
+/** Cancel (disable) one Paystack subscription — stops recurring debits. */
+export const cancelStudentPaystackSubscription = (userId, subscriptionCode) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/paystack-subscriptions/cancel`, {
+      subscription_code: subscriptionCode,
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to cancel subscription" };
+    });
+
+/** Write off selected upcoming payment lines (see billing upcomingPayments[].writeOff). */
+export const writeOffUpcomingPayments = (userId, items) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/write-off-upcoming-payments`, { items })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to write off payments" };
+    });
+
 // Get full Manati statement for a student (for company app – when clicking a Manati plan)
 export const getStudentManatiStatement = (userId, agreementCode) =>
   axios

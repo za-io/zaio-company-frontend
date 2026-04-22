@@ -1,13 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getCohortQctoTracker, getOCCohortDetails } from "../../api/company";
+import {
+  getCohortQctoTracker,
+  getOCCohortDetails,
+  updateOCCohortModuleDeadlines,
+} from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
-import {
-  buildQctoAssessorUrl,
-  TRACKER_SA_COL_INDEX,
-  TRACKER_WB_COL_INDEX,
-} from "./qctoAssessorLinks";
+import { buildQctoAssessorUrl } from "./qctoAssessorLinks";
+
+function dateToDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes()
+  )}`;
+}
+
+function formatDeadlineDisplay(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
 
 const OCQctoTrackerPage = () => {
   const { cohortId } = useParams();
@@ -17,11 +34,15 @@ const OCQctoTrackerPage = () => {
   const view = viewParam === "pm" ? "pm" : "km";
   const { user } = useUserStore();
   const assessorReadOnly = user?.role === "TUTOR";
+  const canEditDeadlines =
+    user?.role === "TUTOR" || user?.role === "SUPER_STUDENT_ADMIN";
 
   const [cohortName, setCohortName] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deadlineForms, setDeadlineForms] = useState({});
+  const [savingCourseId, setSavingCourseId] = useState(null);
 
   useEffect(() => {
     if (!cohortId) return;
@@ -63,11 +84,89 @@ const OCQctoTrackerPage = () => {
   }, [cohortId, view]);
 
   useEffect(() => {
+    if (!data?.modules?.length) return;
+    const next = {};
+    for (const m of data.modules) {
+      const dl = m.deadlines || {};
+      next[m.courseId] = {
+        learnerWorkbookDue: dateToDatetimeLocal(dl.learnerWorkbookDue),
+        summativeDue: dateToDatetimeLocal(dl.summativeDue),
+        pmModuleDue: dateToDatetimeLocal(dl.pmModuleDue),
+      };
+    }
+    setDeadlineForms(next);
+  }, [data]);
+
+  useEffect(() => {
     const label = view === "km" ? "KM" : "PM";
     document.title = cohortName
       ? `${label} tracker — ${cohortName} · Zaio`
       : `${label} module tracker · Zaio`;
   }, [cohortName, view]);
+
+  const updateDeadlineField = (courseId, field, value) => {
+    setDeadlineForms((prev) => ({
+      ...prev,
+      [courseId]: { ...prev[courseId], [field]: value },
+    }));
+  };
+
+  const saveDeadlinesForModule = async (courseId) => {
+    if (!cohortId || !canEditDeadlines) return;
+    const mod = data?.modules?.find((m) => m.courseId === courseId);
+    const hasSummativeRef = !!mod?.refs?.summative;
+    const fromForm = deadlineForms[courseId];
+    const f = {
+      learnerWorkbookDue:
+        fromForm?.learnerWorkbookDue !== undefined
+          ? fromForm.learnerWorkbookDue
+          : dateToDatetimeLocal(mod?.deadlines?.learnerWorkbookDue),
+      summativeDue:
+        fromForm?.summativeDue !== undefined
+          ? fromForm.summativeDue
+          : dateToDatetimeLocal(mod?.deadlines?.summativeDue),
+      pmModuleDue:
+        fromForm?.pmModuleDue !== undefined
+          ? fromForm.pmModuleDue
+          : dateToDatetimeLocal(mod?.deadlines?.pmModuleDue),
+    };
+    /** Only send fields for this view; omit summative when no SA is configured so we do not clear stored dates. */
+    const patch = { courseId };
+    if (view === "km") {
+      patch.learnerWorkbookDue = f.learnerWorkbookDue || null;
+      if (hasSummativeRef) {
+        patch.summativeDue = f.summativeDue || null;
+      }
+    } else {
+      patch.pmModuleDue = f.pmModuleDue || null;
+      if (hasSummativeRef) {
+        patch.summativeDue = f.summativeDue || null;
+      }
+    }
+    setSavingCourseId(courseId);
+    try {
+      const res = await updateOCCohortModuleDeadlines(cohortId, [patch]);
+      if (!res?.success) {
+        alert(res?.message || "Could not save deadlines");
+        return;
+      }
+      const trackerRes = await getCohortQctoTracker(cohortId, view);
+      if (trackerRes?.success && trackerRes.data) {
+        setData(trackerRes.data);
+      } else {
+        alert(trackerRes?.message || "Saved, but could not refresh the tracker.");
+      }
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        e?.message ||
+        "Could not save deadlines";
+      alert(msg);
+    } finally {
+      setSavingCourseId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0f1419] px-6 md:px-12 lg:px-24 xl:px-36 py-10">
@@ -110,16 +209,141 @@ const OCQctoTrackerPage = () => {
             <p className="text-sm text-gray-500 mb-6">
               {view === "km"
                 ? "Per knowledge module: learner workbook and summative assessment status for each learner. Click a WB or SA cell to open that item for the learner in the assessor app."
-                : "Per practical module: PMT (practical module task) and summative assessment status for each learner. Click a PMT or SA cell to open that item for the learner in the assessor app."}
+                : "Per practical module: PMT (practical module task) and summative assessment status for each learner. Click a PMT or SA cell to open that item for the assessor app. One PM module deadline applies to all PMT tasks in that module."}
             </p>
             <div className="space-y-8">
-              {data.modules.map((mod) => (
+              {data.modules.map((mod) => {
+                const hasSummativeRef = !!mod.refs?.summative;
+                return (
                 <div key={mod.courseId} className="rounded-xl border border-gray-700/50 overflow-hidden">
                   <div className="bg-gray-800/40 px-4 py-3 border-b border-gray-700/40">
                     <h2 className="text-sm font-medium text-gray-200">
                       {view === "km" ? "KM" : "PM"} — {mod.name}
                     </h2>
                   </div>
+
+                  {(canEditDeadlines ||
+                    mod.deadlines?.learnerWorkbookDue ||
+                    mod.deadlines?.summativeDue ||
+                    mod.deadlines?.pmModuleDue) && (
+                    <div className="px-4 py-4 bg-gray-900/25 border-b border-gray-700/40">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+                        Cohort deadlines
+                      </p>
+                      {canEditDeadlines ? (
+                        <div className="flex flex-col gap-4">
+                          {view === "km" ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <label className="block text-sm text-gray-400">
+                                Learner workbook (LWB) due
+                                <input
+                                  type="datetime-local"
+                                  className="mt-1 w-full rounded-lg bg-gray-800/80 border border-gray-600/60 px-3 py-2 text-gray-200 text-sm"
+                                  value={deadlineForms[mod.courseId]?.learnerWorkbookDue || ""}
+                                  onChange={(e) =>
+                                    updateDeadlineField(
+                                      mod.courseId,
+                                      "learnerWorkbookDue",
+                                      e.target.value
+                                    )
+                                  }
+                                />
+                              </label>
+                              {hasSummativeRef && (
+                              <label className="block text-sm text-gray-400">
+                                Summative assessment (SA) due
+                                <input
+                                  type="datetime-local"
+                                  className="mt-1 w-full rounded-lg bg-gray-800/80 border border-gray-600/60 px-3 py-2 text-gray-200 text-sm"
+                                  value={deadlineForms[mod.courseId]?.summativeDue || ""}
+                                  onChange={(e) =>
+                                    updateDeadlineField(mod.courseId, "summativeDue", e.target.value)
+                                  }
+                                />
+                              </label>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <label className="block text-sm text-gray-400">
+                                PM module due (all PMT tasks)
+                                <input
+                                  type="datetime-local"
+                                  className="mt-1 w-full rounded-lg bg-gray-800/80 border border-gray-600/60 px-3 py-2 text-gray-200 text-sm"
+                                  value={deadlineForms[mod.courseId]?.pmModuleDue || ""}
+                                  onChange={(e) =>
+                                    updateDeadlineField(mod.courseId, "pmModuleDue", e.target.value)
+                                  }
+                                />
+                              </label>
+                              {hasSummativeRef && (
+                              <label className="block text-sm text-gray-400">
+                                Summative assessment (SA) due
+                                <input
+                                  type="datetime-local"
+                                  className="mt-1 w-full rounded-lg bg-gray-800/80 border border-gray-600/60 px-3 py-2 text-gray-200 text-sm"
+                                  value={deadlineForms[mod.courseId]?.summativeDue || ""}
+                                  onChange={(e) =>
+                                    updateDeadlineField(mod.courseId, "summativeDue", e.target.value)
+                                  }
+                                />
+                              </label>
+                              )}
+                            </div>
+                          )}
+                          <div>
+                            <button
+                              type="button"
+                              disabled={savingCourseId === mod.courseId}
+                              onClick={() => saveDeadlinesForModule(mod.courseId)}
+                              className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600/90 hover:bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {savingCourseId === mod.courseId ? "Saving…" : "Save deadlines"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-400">
+                          {view === "km" ? (
+                            <>
+                              <div>
+                                <dt className="text-gray-500">LWB due</dt>
+                                <dd className="text-gray-300">
+                                  {formatDeadlineDisplay(mod.deadlines?.learnerWorkbookDue)}
+                                </dd>
+                              </div>
+                              {hasSummativeRef && (
+                              <div>
+                                <dt className="text-gray-500">SA due</dt>
+                                <dd className="text-gray-300">
+                                  {formatDeadlineDisplay(mod.deadlines?.summativeDue)}
+                                </dd>
+                              </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <dt className="text-gray-500">PM module (all PMT tasks) due</dt>
+                                <dd className="text-gray-300">
+                                  {formatDeadlineDisplay(mod.deadlines?.pmModuleDue)}
+                                </dd>
+                              </div>
+                              {hasSummativeRef && (
+                              <div>
+                                <dt className="text-gray-500">SA due</dt>
+                                <dd className="text-gray-300">
+                                  {formatDeadlineDisplay(mod.deadlines?.summativeDue)}
+                                </dd>
+                              </div>
+                              )}
+                            </>
+                          )}
+                        </dl>
+                      )}
+                    </div>
+                  )}
+
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse min-w-[960px]">
                       <thead>
@@ -147,6 +371,8 @@ const OCQctoTrackerPage = () => {
                           >
                             {view === "km" ? "WB tutor ✓" : "PMT tutor ✓"}
                           </th>
+                          {hasSummativeRef && (
+                            <>
                           <th
                             className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap"
                             title="Summative assessment submitted — click a cell below to open in assessor app"
@@ -159,6 +385,8 @@ const OCQctoTrackerPage = () => {
                           >
                             SA tutor ✓
                           </th>
+                            </>
+                          )}
                           <th
                             className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap"
                             title={
@@ -168,27 +396,38 @@ const OCQctoTrackerPage = () => {
                           >
                             {view === "km" ? "WB assessed" : "PMT assessed"}
                           </th>
+                          {hasSummativeRef && (
                           <th
                             className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap"
                             title="Summative assessment assessed — click a cell below to open in assessor app"
                           >
                             SA assessed
                           </th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-700/40">
                         {mod.rows.map((row) => {
-                          const flags = [
-                            row.learnerWorkbook?.submitted,
-                            row.learnerWorkbook?.tutorVerified,
-                            row.summativeAssessment?.submitted,
-                            row.summativeAssessment?.tutorVerified,
-                            row.learnerWorkbook?.assessed,
-                            row.summativeAssessment?.assessed,
-                          ];
                           const wbTitle =
                             view === "km" ? "Open learner workbook (assessor)" : "Open PMT (assessor)";
                           const saTitle = "Open summative assessment (assessor)";
+                          const cells = [
+                            { ref: mod.refs?.workbook, flag: row.learnerWorkbook?.submitted },
+                            { ref: mod.refs?.workbook, flag: row.learnerWorkbook?.tutorVerified },
+                          ];
+                          if (hasSummativeRef) {
+                            cells.push(
+                              { ref: mod.refs?.summative, flag: row.summativeAssessment?.submitted },
+                              { ref: mod.refs?.summative, flag: row.summativeAssessment?.tutorVerified }
+                            );
+                          }
+                          cells.push({ ref: mod.refs?.workbook, flag: row.learnerWorkbook?.assessed });
+                          if (hasSummativeRef) {
+                            cells.push({
+                              ref: mod.refs?.summative,
+                              flag: row.summativeAssessment?.assessed,
+                            });
+                          }
                           return (
                             <tr key={row.studentId} className="hover:bg-gray-800/20">
                               <td className="px-3 py-3 text-sm text-gray-300">
@@ -197,17 +436,13 @@ const OCQctoTrackerPage = () => {
                                   {row.email}
                                 </span>
                               </td>
-                              {flags.map((ok, colIdx) => {
-                                const ref =
-                                  TRACKER_WB_COL_INDEX.has(colIdx)
-                                    ? mod.refs?.workbook
-                                    : TRACKER_SA_COL_INDEX.has(colIdx)
-                                      ? mod.refs?.summative
-                                      : null;
-                                const url = ref
-                                  ? buildQctoAssessorUrl(ref, row.studentId, assessorReadOnly)
+                              {cells.map((cell, colIdx) => {
+                                const url = cell.ref
+                                  ? buildQctoAssessorUrl(cell.ref, row.studentId, assessorReadOnly)
                                   : null;
-                                const label = TRACKER_WB_COL_INDEX.has(colIdx) ? wbTitle : saTitle;
+                                const label =
+                                  cell.ref === mod.refs?.summative ? saTitle : wbTitle;
+                                const ok = cell.flag;
                                 const inner = (
                                   <span
                                     className={
@@ -246,7 +481,8 @@ const OCQctoTrackerPage = () => {
                     </table>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

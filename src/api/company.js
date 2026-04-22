@@ -289,6 +289,22 @@ export const getCohortQctoTracker = (cohortId, view = "km") => {
     });
 };
 
+/** Tutor + super student admin. `deadlines`: [{ courseId, learnerWorkbookDue?, summativeDue?, pmModuleDue? }] */
+export const updateOCCohortModuleDeadlines = (cohortId, deadlines) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "auth-token": token } : {}),
+  };
+  return axios
+    .patch(`${BASE_URL}/oc-cohort/${cohortId}/module-deadlines`, { deadlines }, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
 /** Requires company auth-token. Returns axios response with responseType blob (application/zip). */
 export const downloadPoeIdCopiesZip = (cohortId) => {
   const token = localStorage.getItem("TOKEN");

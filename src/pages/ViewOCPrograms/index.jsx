@@ -41,6 +41,9 @@ const ViewOCPrograms = () => {
   const [showTutorModal, setShowTutorModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedTutor, setSelectedTutor] = useState("");
+  /** Multi-select student user ids for bulk tutor assignment */
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [bulkTutorAssign, setBulkTutorAssign] = useState(false);
   const [tutors, setTutors] = useState([]);
   const [showAddStudentsModal, setShowAddStudentsModal] = useState(false);
   const [addStudentsEmails, setAddStudentsEmails] = useState("");
@@ -369,6 +372,7 @@ const ViewOCPrograms = () => {
       const response = await getCohortStudents(program._id);
       if (response?.status === 200 && response?.success) {
         setStudents(response.data || []);
+        setSelectedStudentIds([]);
         setSelectedProgram(program);
         setShowStudentsTable(true);
       } else {
@@ -439,13 +443,92 @@ const ViewOCPrograms = () => {
       alert("Error: Student enrollment ID not found. Please refresh and try again.");
       return;
     }
+    setBulkTutorAssign(false);
     setSelectedStudent(student);
     setSelectedTutor(student.tutor?.id || "");
     setShowTutorModal(true);
   };
 
+  const handleOpenBulkAssignTutor = () => {
+    if (!canAssignRoles) return;
+    const picked = students.filter((s) => selectedStudentIds.includes(s.id));
+    const missing = picked.filter((s) => !s.enrollmentId);
+    if (missing.length > 0) {
+      alert("Some selected students are missing enrollment data. Refresh and try again.");
+      return;
+    }
+    if (picked.length === 0) return;
+    setBulkTutorAssign(true);
+    setSelectedStudent(null);
+    setSelectedTutor("");
+    setShowTutorModal(true);
+  };
+
+  const toggleStudentSelected = (studentId) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const toggleSelectAllStudents = () => {
+    if (students.length === 0) return;
+    setSelectedStudentIds((prev) =>
+      prev.length === students.length ? [] : students.map((s) => s.id)
+    );
+  };
+
   const handleSaveTutor = async () => {
-    if (!selectedTutor || !selectedStudent) return;
+    if (!selectedTutor) return;
+
+    if (bulkTutorAssign) {
+      const picked = students.filter((s) => selectedStudentIds.includes(s.id));
+      if (picked.length === 0) {
+        alert("No students selected.");
+        return;
+      }
+      setLoading(true);
+      const failures = [];
+      const tutorUpdates = new Map();
+      try {
+        for (const s of picked) {
+          if (!s.enrollmentId) {
+            failures.push(`${s.name || s.email}: missing enrollment`);
+            continue;
+          }
+          try {
+            const response = await assignTutorToStudent(s.enrollmentId, selectedTutor);
+            if (response?.status === 200 && response?.success && response.data?.tutor) {
+              tutorUpdates.set(s.id, response.data.tutor);
+            } else {
+              failures.push(`${s.name || s.email}: ${response?.message || "Request failed"}`);
+            }
+          } catch (err) {
+            failures.push(`${s.name || s.email}: ${err?.message || "Request failed"}`);
+          }
+        }
+        if (tutorUpdates.size > 0) {
+          setStudents((prev) =>
+            prev.map((st) =>
+              tutorUpdates.has(st.id) ? { ...st, tutor: tutorUpdates.get(st.id) } : st
+            )
+          );
+        }
+        setShowTutorModal(false);
+        setSelectedTutor("");
+        setBulkTutorAssign(false);
+        setSelectedStudentIds([]);
+        if (failures.length > 0) {
+          alert(
+            `Assigned tutor to ${tutorUpdates.size} learner(s). Failed (${failures.length}):\n${failures.slice(0, 8).join("\n")}${failures.length > 8 ? "\n…" : ""}`
+          );
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (!selectedStudent) return;
 
     setLoading(true);
     try {
@@ -462,6 +545,7 @@ const ViewOCPrograms = () => {
         setShowTutorModal(false);
         setSelectedTutor("");
         setSelectedStudent(null);
+        setBulkTutorAssign(false);
       } else {
         alert(response?.message || "Error assigning tutor");
       }
@@ -777,6 +861,7 @@ const ViewOCPrograms = () => {
                   setShowStudentsTable(false);
                   setSelectedProgram(null);
                   setStudents([]);
+                  setSelectedStudentIds([]);
                 }}
                 className="bg-gray-600/80 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
               >
@@ -866,10 +951,47 @@ const ViewOCPrograms = () => {
             )}
           </div>
 
+          {canAssignRoles && students.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 mb-4 px-1">
+              <span className="text-sm text-gray-400">
+                {selectedStudentIds.length === 0
+                  ? "Select learners to assign a tutor in bulk."
+                  : `${selectedStudentIds.length} learner${selectedStudentIds.length === 1 ? "" : "s"} selected`}
+              </span>
+              <button
+                type="button"
+                onClick={toggleSelectAllStudents}
+                className="text-sm text-indigo-400/95 hover:text-indigo-300 underline-offset-2 hover:underline"
+              >
+                {selectedStudentIds.length === students.length ? "Clear selection" : "Select all"}
+              </button>
+              <button
+                type="button"
+                disabled={selectedStudentIds.length === 0 || loading}
+                onClick={handleOpenBulkAssignTutor}
+                className="inline-flex items-center gap-2 bg-emerald-600/90 hover:bg-emerald-600 disabled:opacity-45 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+              >
+                Assign tutor to selected
+              </button>
+            </div>
+          )}
+
           <div className="rounded-xl border border-gray-700/50 overflow-hidden">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-gray-800/40">
+                  {canAssignRoles && (
+                    <th className="px-3 py-4 w-12 text-left">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500/40"
+                        checked={students.length > 0 && selectedStudentIds.length === students.length}
+                        onChange={toggleSelectAllStudents}
+                        title="Select all learners"
+                        aria-label="Select all learners"
+                      />
+                    </th>
+                  )}
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID Number</th>
@@ -881,6 +1003,17 @@ const ViewOCPrograms = () => {
               <tbody className="divide-y divide-gray-700/40">
                 {students.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-800/30 transition-colors duration-150">
+                    {canAssignRoles && (
+                      <td className="px-3 py-4 w-12 align-middle">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500/40"
+                          checked={selectedStudentIds.includes(student.id)}
+                          onChange={() => toggleStudentSelected(student.id)}
+                          aria-label={`Select ${student.name || student.email}`}
+                        />
+                      </td>
+                    )}
                     <td className="px-5 py-4 text-sm text-gray-300">{student.name}</td>
                     <td className="px-5 py-4 text-sm text-gray-300">{student.email}</td>
                     <td className="px-5 py-4 text-sm text-gray-300">{student.idNumber || "—"}</td>
@@ -1547,14 +1680,32 @@ const ViewOCPrograms = () => {
           setShowTutorModal(false);
           setSelectedTutor("");
           setSelectedStudent(null);
+          setBulkTutorAssign(false);
         }}
       >
         <Modal.Header closeButton className="bg-gray-800/50 text-gray-100 border-gray-700/50">
           <Modal.Title>
-            Assign Tutor — {selectedStudent?.name || "Student"}
+            {bulkTutorAssign
+              ? `Assign Tutor — ${selectedStudentIds.length} learner${selectedStudentIds.length === 1 ? "" : "s"}`
+              : `Assign Tutor — ${selectedStudent?.name || "Student"}`}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body className="bg-[#1c2128] text-gray-100">
+          {bulkTutorAssign && (
+            <div className="mb-4 max-h-40 overflow-y-auto rounded-lg border border-gray-700/50 bg-gray-900/40 p-3">
+              <p className="text-xs text-gray-500 mb-2">Learners to update</p>
+              <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+                {students
+                  .filter((s) => selectedStudentIds.includes(s.id))
+                  .map((s) => (
+                    <li key={s.id}>
+                      {s.name}{" "}
+                      <span className="text-gray-500">({s.email})</span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-400 mb-2">
               Select Tutor
@@ -1572,7 +1723,7 @@ const ViewOCPrograms = () => {
               ))}
             </select>
           </div>
-          {selectedStudent?.tutor && (
+          {!bulkTutorAssign && selectedStudent?.tutor && (
             <div className="mb-4 p-3 bg-gray-700 rounded">
               <p className="text-sm text-gray-300">
                 Current Tutor: <span className="font-semibold text-white">{selectedStudent.tutor.name}</span>
@@ -1585,6 +1736,7 @@ const ViewOCPrograms = () => {
                 setShowTutorModal(false);
                 setSelectedTutor("");
                 setSelectedStudent(null);
+                setBulkTutorAssign(false);
               }}
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
             >
@@ -1592,10 +1744,14 @@ const ViewOCPrograms = () => {
             </button>
             <button
               onClick={handleSaveTutor}
-              disabled={!selectedTutor}
+              disabled={!selectedTutor || (bulkTutorAssign && selectedStudentIds.length === 0)}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded disabled:opacity-50"
             >
-              {selectedStudent?.tutor ? "Update Tutor" : "Assign Tutor"}
+              {bulkTutorAssign
+                ? `Assign to ${selectedStudentIds.length} learner${selectedStudentIds.length === 1 ? "" : "s"}`
+                : selectedStudent?.tutor
+                  ? "Update Tutor"
+                  : "Assign Tutor"}
             </button>
           </div>
         </Modal.Body>
