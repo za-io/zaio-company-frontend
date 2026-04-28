@@ -1,7 +1,18 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Tooltip,
+  Legend,
+} from "chart.js";
 import {
   getFinanceSummaryWithPolling,
+  getFinanceSummary,
   getFinanceAttentionRejected,
   getFinancePendingEftSubmissions,
 } from "../../api/company";
@@ -18,6 +29,7 @@ import Loader from "../../components/loader/loader";
 import CopyableEmailCell from "../../components/CopyableEmailCell";
 
 const FINANCE_ROLES = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN"];
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 function formatMonthValue(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -70,6 +82,39 @@ function sumPendingRowAmountsCents(rows) {
   }, 0);
 }
 
+function sumHighChanceToPayAmountsCents(rows) {
+  return (rows || []).reduce((acc, r) => {
+    const highChance = !!r?.recentLearningActivity || !!r?.paidPreviousMonth;
+    if (!highChance) return acc;
+    if (r?.status === "paid") return acc;
+    const n = Math.round(Number(r.amount) || 0);
+    return acc + (Number.isFinite(n) ? n : 0);
+  }, 0);
+}
+
+function formatMonthLabel(monthKey) {
+  const [year, month] = String(monthKey || "").split("-").map((v) => parseInt(v, 10));
+  if (!year || !month) return "Unknown";
+  return new Date(year, month - 1, 1).toLocaleDateString("en-ZA", {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getRollingMonths(count = 12) {
+  const months = [];
+  const now = new Date();
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      monthKey: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    });
+  }
+  return months;
+}
+
 const InstallmentTable = ({
   rows,
   title,
@@ -82,6 +127,7 @@ const InstallmentTable = ({
   showAccountActions = false,
   onBlockToggle,
   blockLoadingUserId,
+  highlightRecentLikelyPayers = false,
 }) => (
   <div
     className={
@@ -140,6 +186,8 @@ const InstallmentTable = ({
                 showAccountActions &&
                 Number(row.bootcampMaxCompletedPct) >= 90 &&
                 paymentStress;
+              const highChanceLikelyPayer =
+                highlightRecentLikelyPayers && (!!row.recentLearningActivity || !!row.paidPreviousMonth);
               const rowTitleParts = [];
               if (atRiskDeregistration) {
                 rowTitleParts.push(
@@ -149,6 +197,17 @@ const InstallmentTable = ({
               if (accountPaymentDelinquent) {
                 rowTitleParts.push(
                   `Bootcamp ~${row.bootcampMaxCompletedPct}% complete — payment stress: ${row.globalUnpaidInstallmentCount ?? 0} unpaid on plan(s), ${row.pendingInstallmentCount ?? 0} unpaid in this period, ${row.rejectedBillingCount ?? 0} rejected billing rows.`
+                );
+              }
+              if (highChanceLikelyPayer) {
+                rowTitleParts.push(
+                  `High chance payer: ${
+                    row.recentLearningActivity
+                      ? `recent learner activity (~1.5 weeks, ${formatDate(row.recentLearningActivityAt)})`
+                      : ""
+                  }${row.recentLearningActivity && row.paidPreviousMonth ? " + " : ""}${
+                    row.paidPreviousMonth ? "paid in previous month" : ""
+                  }.`
                 );
               }
               return (
@@ -164,6 +223,8 @@ const InstallmentTable = ({
                       }`
                     : atRiskDeregistration
                       ? "bg-red-500/10 hover:bg-red-500/[0.14]"
+                      : highChanceLikelyPayer
+                        ? "bg-yellow-500/10 hover:bg-yellow-500/[0.16]"
                       : "hover:bg-white/[0.04]"
                 }`}
               >
@@ -255,7 +316,24 @@ const InstallmentTable = ({
               <td className="px-3 py-2 whitespace-nowrap font-semibold text-emerald-300/95 tabular-nums">
                 {centsToZAR(sumRowAmountsCents(rows))}
               </td>
-              <td colSpan={showAccountActions ? 5 : 4} className="px-3 py-2" />
+              {highlightRecentLikelyPayers && (
+                <>
+                  <td
+                    colSpan={showAccountActions ? 2 : 1}
+                    className="px-3 py-2 text-right font-medium text-yellow-300/90 whitespace-nowrap"
+                    title="Rows highlighted yellow as recent learner activity in the last ~1.5 weeks"
+                  >
+                    High chance to pay total
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap font-semibold text-yellow-300 tabular-nums">
+                    {centsToZAR(sumHighChanceToPayAmountsCents(rows))}
+                  </td>
+                </>
+              )}
+              <td
+                colSpan={highlightRecentLikelyPayers ? 2 : showAccountActions ? 5 : 4}
+                className="px-3 py-2"
+              />
             </tr>
           </tfoot>
         )}
@@ -281,6 +359,9 @@ function flattenUsers(users) {
         bootcampMaxCompletedPct: Number(u.bootcampMaxCompletedPct) || 0,
         pendingInstallmentCount: Number(u.pendingInstallmentCount) || 0,
         globalUnpaidInstallmentCount: Number(u.globalUnpaidInstallmentCount) || 0,
+        recentLearningActivity: !!u.recentLearningActivity,
+        recentLearningActivityAt: u.recentLearningActivityAt || null,
+        paidPreviousMonth: !!u.paidPreviousMonth,
         excludeFromFinanceReports: !!u.excludeFromFinanceReports,
         accBlocked: !!u.accBlocked,
         planCode: inst.planCode,
@@ -329,6 +410,8 @@ const Finance = () => {
   /** EFT proof submissions pending approval (loaded with Finance summary) */
   const [eftPending, setEftPending] = useState([]);
   const [eftActionKey, setEftActionKey] = useState(null);
+  const [allMonthsCollectedSeries, setAllMonthsCollectedSeries] = useState([]);
+  const [allMonthsCollectedLoading, setAllMonthsCollectedLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -482,6 +565,31 @@ const Finance = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [includeExcluded]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadAllMonthsCollected = async () => {
+      setAllMonthsCollectedLoading(true);
+      const months = getRollingMonths(12);
+      const responses = await Promise.all(
+        months.map((m) => getFinanceSummary({ year: m.year, month: m.month, includeExcluded }))
+      );
+      if (cancelled) return;
+      const series = months.map((m, idx) => ({
+        monthKey: m.monthKey,
+        collectedCents:
+          responses[idx]?.success && Number.isFinite(Number(responses[idx]?.stats?.amounts?.collectedCents))
+            ? Number(responses[idx].stats.amounts.collectedCents)
+            : 0,
+      }));
+      setAllMonthsCollectedSeries(series);
+      setAllMonthsCollectedLoading(false);
+    };
+    loadAllMonthsCollected();
+    return () => {
+      cancelled = true;
+    };
+  }, [includeExcluded]);
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -493,6 +601,55 @@ const Finance = () => {
   const upcomingRows = flattenUsers(data?.upcoming ?? []);
   const paidRows = flattenUsers(data?.paid);
   const unpaidRows = flattenUsers(data?.unpaid);
+  const allMonthsCollectedChartData = {
+    labels: allMonthsCollectedSeries.map((item) => formatMonthLabel(item.monthKey)),
+    datasets: [
+      {
+        label: "Collected",
+        data: allMonthsCollectedSeries.map((item) => Number((item.collectedCents / 100).toFixed(2))),
+        borderColor: "rgba(16, 185, 129, 1)",
+        backgroundColor: "rgba(16, 185, 129, 0.2)",
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 5,
+        pointBackgroundColor: "rgba(16, 185, 129, 1)",
+        tension: 0.3,
+        fill: false,
+      },
+    ],
+  };
+  const allMonthsCollectedChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: { color: "#e5e7eb" },
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) =>
+            `${ctx.dataset.label}: R ${Number(ctx.parsed.y || 0).toLocaleString("en-ZA", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: "#9ca3af" },
+        grid: { color: "rgba(255,255,255,0.08)" },
+      },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: "#9ca3af",
+          callback: (value) => `R ${Number(value).toLocaleString("en-ZA")}`,
+        },
+        grid: { color: "rgba(255,255,255,0.08)" },
+      },
+    },
+  };
 
   /** Collected = paid lines across all three tabs (matches backend collectedCents). */
   const collectedSlicePaidTab = sumRowAmountsCents(paidRows);
@@ -506,6 +663,14 @@ const Finance = () => {
   const pendingSliceOutstanding = sumPendingRowAmountsCents(unpaidRows);
   const pendingSliceUpcoming = sumPendingRowAmountsCents(upcomingRows);
   const pendingFromTabsSum = pendingSlicePaidTab + pendingSliceOutstanding + pendingSliceUpcoming;
+  const possibleCollectableCents =
+    sumHighChanceToPayAmountsCents(paidRows) +
+    sumHighChanceToPayAmountsCents(unpaidRows) +
+    sumHighChanceToPayAmountsCents(upcomingRows);
+  const likelyLeftAfterPossibleCents = Math.max(
+    0,
+    Number(stats?.amounts?.stillToCollectCents ?? 0) - possibleCollectableCents
+  );
 
   const scheduledInPeriodCents = stats?.amounts?.scheduledInPeriodCents ?? 0;
   const collectedForRateCents = stats?.amounts?.collectedCents ?? 0;
@@ -811,6 +976,16 @@ const Finance = () => {
                   <p className="text-[11px] text-gray-400">Still to collect</p>
                   <p className="text-2xl font-bold text-amber-400 mt-0.5">{centsToZAR(stats.amounts.stillToCollectCents)}</p>
                   <p className="text-[11px] text-gray-500 mt-1">Sum of pending installments (all tabs)</p>
+                  <div className="mt-2 pt-2 border-t border-white/10 space-y-1 text-[10px] leading-relaxed">
+                    <p className="text-yellow-300/90">
+                      Still possibly collectable:{" "}
+                      <span className="font-semibold tabular-nums">{centsToZAR(possibleCollectableCents)}</span>
+                    </p>
+                    <p className="text-gray-400">
+                      Likely left to collect after that:{" "}
+                      <span className="font-semibold tabular-nums">{centsToZAR(likelyLeftAfterPossibleCents)}</span>
+                    </p>
+                  </div>
                   <div className="mt-2 pt-2 border-t border-white/10 space-y-1 text-[10px] text-gray-500 leading-relaxed">
                     <p className="text-gray-400 font-medium">Where that amount sits</p>
                     <p>
@@ -872,6 +1047,22 @@ const Finance = () => {
               </div>
             </div>
           )}
+
+          <div className="rounded-2xl border border-white/10 p-4 mb-6 bg-white/[0.03]">
+            <p className="text-sm font-semibold text-white mb-1">Money collected of all months</p>
+            <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
+              Rolling 12-month line graph of collected amounts.
+            </p>
+            {allMonthsCollectedLoading ? (
+              <p className="text-xs text-gray-500">Loading monthly collected trend…</p>
+            ) : allMonthsCollectedSeries.length > 0 ? (
+              <div className="h-[300px]">
+                <Line data={allMonthsCollectedChartData} options={allMonthsCollectedChartOptions} />
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">No monthly collected data available.</p>
+            )}
+          </div>
 
           <div className="rounded-xl border border-white/15 p-3 mb-6 bg-white/[0.02] text-[11px] text-gray-400 leading-relaxed">
             <p className="font-medium text-gray-300 mb-1.5">Why totals can look different</p>
@@ -1048,6 +1239,7 @@ const Finance = () => {
                 rows={upcomingRows}
                 onToggleTest={handleTableToggleTest}
                 savingUserId={savingUserId}
+                highlightRecentLikelyPayers
               />
             )}
             {financeTab === "paid" && (
@@ -1074,6 +1266,7 @@ const Finance = () => {
                 showAccountActions
                 onBlockToggle={handleBlockToggle}
                 blockLoadingUserId={blockLoadingUserId}
+                highlightRecentLikelyPayers
               />
             )}
           </div>

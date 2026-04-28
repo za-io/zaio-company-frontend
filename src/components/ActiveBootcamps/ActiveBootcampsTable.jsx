@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  getEnrolledBootcamps,
+  getEnrolledBootcampsWithPolling,
   archiveBootcamp,
   archiveManyBootcamps,
   getBootcampConfig,
@@ -878,12 +878,14 @@ const BootcampLiveClassesModal = ({ isOpen, onClose, bootcampId, bootcampName, o
   );
 };
 
-const BOOTCAMPS_PAGE_SIZE = 4;
+/** Per-page row count (server max 50; larger pages need async + poll to avoid Heroku timeout). */
+const BOOTCAMPS_PAGE_SIZE = 12;
 
 function ActiveBootcampsTable() {
   const navigate = useNavigate();
   const [bootcamps, setBootcamps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadHint, setLoadHint] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -906,7 +908,19 @@ function ActiveBootcampsTable() {
 
   const fetchBootcamps = (pageNum = page) => {
     setLoading(true);
-    getEnrolledBootcamps({ page: pageNum, limit: BOOTCAMPS_PAGE_SIZE })
+    setLoadHint("");
+    let pollHintSet = false;
+    getEnrolledBootcampsWithPolling(
+      { page: pageNum, limit: BOOTCAMPS_PAGE_SIZE },
+      {
+        onPoll: () => {
+          if (!pollHintSet) {
+            pollHintSet = true;
+            setLoadHint("Loading bootcamps (large lists run in the background on Heroku)…");
+          }
+        },
+      }
+    )
       .then((res) => {
         const list = res?.enrolledBootcamps || [];
         setBootcamps(Array.isArray(list) ? list : []);
@@ -918,7 +932,10 @@ function ActiveBootcampsTable() {
         console.log("Error fetching bootcamps:", err);
         setBootcamps([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoadHint("");
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -1033,6 +1050,7 @@ function ActiveBootcampsTable() {
         <div className="active-bootcamps-loading">
           <Loader size={32} />
           Loading bootcamps...
+          {loadHint && <p className="text-xs text-slate-400 mt-2 max-w-md text-center leading-relaxed">{loadHint}</p>}
         </div>
       </div>
     );

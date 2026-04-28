@@ -553,20 +553,85 @@ export const getQCTOLearnerEnrollments = (cohortId = null) => {
     });
 };
 
-// Student enrolled bootcamps (paginated, default 4 per page)
+// Student enrolled bootcamps (paginated, default 4 per page for sync GET)
 export const getEnrolledBootcamps = ({ page = 1, limit = 4 } = {}) => {
   const token = localStorage.getItem("TOKEN");
   const headers = token ? { "auth-token": token } : {};
   const params = { page, limit };
 
   return axios
-    .get(`${BASE_URL}/bootcamp/enrolled`, { headers, params })
+    .get(`${BASE_URL}/bootcamp/enrolled`, { headers, params, timeout: 120000 })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
       return { enrolledBootcamps: [], total: 0, page: 1, limit: 4, totalPages: 0 };
     });
 };
+
+const ENROLLED_POLL_INTERVAL_MS = 2000;
+const ENROLLED_POLL_MAX_WAIT_MS = 3 * 60 * 1000;
+
+function enrolledPollSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Loads enrolled bootcamps via POST /enrolled/start + polling GET …/job/:id (Heroku-safe).
+ * Falls back to direct GET if async routes are unavailable.
+ * @param {object} params - { page, limit, includeExcluded ignored }
+ * @param {object} [opts] - { onPoll?: () => void }
+ */
+export async function getEnrolledBootcampsWithPolling({ page = 1, limit = 12 } = {}, opts = {}) {
+  const { onPoll } = opts;
+  const token = localStorage.getItem("TOKEN");
+  const authHeaders = token ? { "auth-token": token } : {};
+  const body = { page, limit };
+  try {
+    const startRes = await axios.post(`${BASE_URL}/bootcamp/enrolled/start`, body, {
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      timeout: 60000,
+    });
+    if (!startRes.data?.success || !startRes.data?.jobId) {
+      return getEnrolledBootcamps({ page, limit });
+    }
+    const { jobId } = startRes.data;
+    const deadline = Date.now() + ENROLLED_POLL_MAX_WAIT_MS;
+    while (Date.now() < deadline) {
+      onPoll?.();
+      const pollRes = await axios.get(`${BASE_URL}/bootcamp/enrolled/job/${jobId}`, {
+        headers: authHeaders,
+        timeout: 60000,
+      });
+      const d = pollRes.data;
+      if (d?.success && d.pending) {
+        await enrolledPollSleep(ENROLLED_POLL_INTERVAL_MS);
+        continue;
+      }
+      return d;
+    }
+    return {
+      success: false,
+      message: "Loading bootcamps is taking too long. Try again or use a smaller page size.",
+      enrolledBootcamps: [],
+      total: 0,
+      page,
+      limit,
+      totalPages: 0,
+    };
+  } catch (err) {
+    const status = err?.response?.status;
+    if (status === 404 || status === 405) {
+      return getEnrolledBootcamps({ page, limit });
+    }
+    return {
+      enrolledBootcamps: [],
+      total: 0,
+      page: 1,
+      limit: 4,
+      totalPages: 0,
+    };
+  }
+}
 
 // Archive a bootcamp
 export const archiveBootcamp = (bootcampId) => {
