@@ -3,6 +3,7 @@ import { roundOff } from "../../utils/mathUtils";
 import { useUserStore } from "../../store/UserProvider";
 import { useState } from "react";
 import { getCourseItemDetails } from "../../api/student";
+import { postReEnrollDsCourse } from "../../api/company";
 
 // Modal component for showing item details - Dark theme
 const ItemDetailsModal = ({ isOpen, onClose, title, items, loading, type }) => {
@@ -123,10 +124,14 @@ const LearningpathTable = ({
   loading,
   userId,
   learningpath,
+  learningpathId,
+  bootcampId: _bootcampId,
+  onDataRefresh,
 }) => {
   const navigate = useNavigate();
   const { user, setUser } = useUserStore();
   const [searchQuery, setSearchQuery] = useState(null);
+  const [reEnrollingCourseId, setReEnrollingCourseId] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalItems, setModalItems] = useState([]);
@@ -151,6 +156,30 @@ const LearningpathTable = ({
     setModalOpen(false);
     setModalItems([]);
     setModalTitle("");
+  };
+
+  const handleReEnrollDataScience = async (courseId, courseName) => {
+    if (!learningpathId || !userId) {
+      alert("Missing learning path or student.");
+      return;
+    }
+    const ok = window.confirm(
+      `Re-enroll notebook files for "${courseName}"?\n\nThis re-runs Nbgrader setup for this student when the challenge was not released correctly.`
+    );
+    if (!ok) return;
+    setReEnrollingCourseId(String(courseId));
+    const res = await postReEnrollDsCourse({
+      userId,
+      courseId: String(courseId),
+      learningpathId: String(learningpathId),
+    });
+    setReEnrollingCourseId(null);
+    if (res?.success) {
+      alert(res.message || "Done. Ask the student to refresh the challenge.");
+      onDataRefresh?.();
+    } else {
+      alert(res?.message || "Re-enroll failed");
+    }
   };
 
   // Calculate overall averages
@@ -341,9 +370,26 @@ const LearningpathTable = ({
                         >
                           {/* Course Name */}
                           <td className="px-6 py-4">
-                            <span className="text-sm font-medium text-white">
-                              {course.courseName}
-                            </span>
+                            <div className="flex flex-col gap-2 items-start">
+                              <span className="text-sm font-medium text-white">
+                                {course.courseName}
+                              </span>
+                              {course.hasDataScienceChallenge && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReEnrollDataScience(course._id, course.courseName);
+                                  }}
+                                  disabled={reEnrollingCourseId === String(course._id)}
+                                  className="text-xs font-medium px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {reEnrollingCourseId === String(course._id)
+                                    ? "Re-enrolling…"
+                                    : "Re-enroll (Data Sci / Nbgrader)"}
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           {/* Lectures */}

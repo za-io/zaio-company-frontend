@@ -43,6 +43,8 @@ const OCQctoTrackerPage = () => {
   const [error, setError] = useState(null);
   const [deadlineForms, setDeadlineForms] = useState({});
   const [savingCourseId, setSavingCourseId] = useState(null);
+  /** PM view: task list modal { moduleName, studentName, studentId, tasks } */
+  const [pmtModal, setPmtModal] = useState(null);
 
   useEffect(() => {
     if (!cohortId) return;
@@ -209,7 +211,7 @@ const OCQctoTrackerPage = () => {
             <p className="text-sm text-gray-500 mb-6">
               {view === "km"
                 ? "Per knowledge module: learner workbook and summative assessment status for each learner. Click a WB or SA cell to open that item for the learner in the assessor app."
-                : "Per practical module: PMT (practical module task) and summative assessment status for each learner. Click a PMT or SA cell to open that item for the assessor app. One PM module deadline applies to all PMT tasks in that module."}
+                : "Per practical module: PMT cells show progress as tasks completed out of the total (e.g. 2/5 submitted). Click a PMT cell to see all tasks and open each in the assessor app. Click SA cells for the summative. One PM module deadline applies to all PMT tasks in that module."}
             </p>
             <div className="space-y-8">
               {data.modules.map((mod) => {
@@ -352,21 +354,29 @@ const OCQctoTrackerPage = () => {
                             Name
                           </th>
                           <th
-                            className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap max-w-[140px]"
+                            className={
+                              view === "km"
+                                ? "px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap max-w-[140px]"
+                                : "px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[10.5rem]"
+                            }
                             title={
-                              (view === "km" ? "Learner workbook submitted" : "PMT submitted") +
-                              " — click a cell below to open in assessor app"
+                              view === "km"
+                                ? "Learner workbook submitted — click a cell below to open in assessor app"
+                                : "Submitted count / total PMT tasks — click a cell to see all tasks"
                             }
                           >
                             {view === "km" ? "WB submitted" : "PMT submitted"}
                           </th>
                           <th
-                            className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap max-w-[140px]"
+                            className={
+                              view === "km"
+                                ? "px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap max-w-[140px]"
+                                : "px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[10.5rem]"
+                            }
                             title={
-                              (view === "km"
-                                ? "Learner workbook verified by tutor"
-                                : "PMT verified by tutor") +
-                              " — click a cell below to open in assessor app"
+                              view === "km"
+                                ? "Learner workbook verified by tutor — click a cell below to open in assessor app"
+                                : "Tutor-verified count / total PMT tasks — click a cell to see all tasks"
                             }
                           >
                             {view === "km" ? "WB tutor ✓" : "PMT tutor ✓"}
@@ -390,8 +400,9 @@ const OCQctoTrackerPage = () => {
                           <th
                             className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap"
                             title={
-                              (view === "km" ? "Learner workbook assessed" : "PMT assessed") +
-                              " — click a cell below to open in assessor app"
+                              view === "km"
+                                ? "Learner workbook assessed — click a cell below to open in assessor app"
+                                : "Assessed count / total PMT tasks — click a cell to see all tasks"
                             }
                           >
                             {view === "km" ? "WB assessed" : "PMT assessed"}
@@ -408,9 +419,198 @@ const OCQctoTrackerPage = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-700/40">
                         {mod.rows.map((row) => {
-                          const wbTitle =
-                            view === "km" ? "Open learner workbook (assessor)" : "Open PMT (assessor)";
                           const saTitle = "Open summative assessment (assessor)";
+                          const pmtListTitle =
+                            "All PMT tasks for this learner — click to list tasks and open in assessor";
+                          const cellBtnClass =
+                            "text-left w-full min-h-[2rem] rounded px-1 -mx-1 py-0.5 text-inherit hover:underline hover:bg-gray-800/60 focus:outline-none focus:ring-1 focus:ring-indigo-500/80 cursor-pointer";
+
+                          const yesNo = (ok) => (
+                            <span
+                              className={ok ? "text-emerald-400/95 font-medium" : "text-gray-500"}
+                            >
+                              {ok ? "Yes" : "—"}
+                            </span>
+                          );
+
+                          /** PM: show e.g. "2/5 submitted" using per-task flags from the API */
+                          const pmtProgressLabel = (count, total, suffix) => {
+                            if (!total) {
+                              return <span className="text-gray-500">—</span>;
+                            }
+                            const allDone = count === total;
+                            return (
+                              <span
+                                className={
+                                  allDone ? "text-emerald-400/95 font-medium" : "text-gray-300"
+                                }
+                              >
+                                <span className="tabular-nums">
+                                  {count}/{total}
+                                </span>{" "}
+                                {suffix}
+                              </span>
+                            );
+                          };
+
+                          if (view === "pm") {
+                            const pmtTasks = row.pmtTasks || [];
+                            const pmtTotal = pmtTasks.length;
+                            const pmtSubmitted = pmtTasks.filter((t) => t.submitted).length;
+                            const pmtTutor = pmtTasks.filter((t) => t.tutorVerified).length;
+                            const pmtAssessed = pmtTasks.filter((t) => t.assessed).length;
+
+                            return (
+                              <tr key={row.studentId} className="hover:bg-gray-800/20">
+                                <td className="px-3 py-3 text-sm text-gray-300">
+                                  <span className="font-medium">{row.name}</span>
+                                  <span className="block text-xs text-gray-500 truncate max-w-[220px]">
+                                    {row.email}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-3 text-sm">
+                                  <button
+                                    type="button"
+                                    title={pmtListTitle}
+                                    className={cellBtnClass}
+                                    onClick={() =>
+                                      setPmtModal({
+                                        moduleName: mod.name,
+                                        studentName: row.name,
+                                        studentId: row.studentId,
+                                        tasks: row.pmtTasks || [],
+                                      })
+                                    }
+                                  >
+                                    {pmtProgressLabel(pmtSubmitted, pmtTotal, "submitted")}
+                                  </button>
+                                </td>
+                                <td className="px-3 py-3 text-sm">
+                                  <button
+                                    type="button"
+                                    title={pmtListTitle}
+                                    className={cellBtnClass}
+                                    onClick={() =>
+                                      setPmtModal({
+                                        moduleName: mod.name,
+                                        studentName: row.name,
+                                        studentId: row.studentId,
+                                        tasks: row.pmtTasks || [],
+                                      })
+                                    }
+                                  >
+                                    {pmtProgressLabel(pmtTutor, pmtTotal, "tutor ✓")}
+                                  </button>
+                                </td>
+                                {hasSummativeRef && (
+                                  <>
+                                    <td className="px-3 py-3 text-sm">
+                                      {(() => {
+                                        const url = mod.refs?.summative
+                                          ? buildQctoAssessorUrl(
+                                              mod.refs.summative,
+                                              row.studentId,
+                                              assessorReadOnly
+                                            )
+                                          : null;
+                                        const inner = yesNo(row.summativeAssessment?.submitted);
+                                        if (!url) {
+                                          return inner;
+                                        }
+                                        return (
+                                          <button
+                                            type="button"
+                                            title={saTitle}
+                                            className={cellBtnClass}
+                                            onClick={() =>
+                                              window.open(url, "_blank", "noopener,noreferrer")
+                                            }
+                                          >
+                                            {inner}
+                                          </button>
+                                        );
+                                      })()}
+                                    </td>
+                                    <td className="px-3 py-3 text-sm">
+                                      {(() => {
+                                        const url = mod.refs?.summative
+                                          ? buildQctoAssessorUrl(
+                                              mod.refs.summative,
+                                              row.studentId,
+                                              assessorReadOnly
+                                            )
+                                          : null;
+                                        const inner = yesNo(row.summativeAssessment?.tutorVerified);
+                                        if (!url) {
+                                          return inner;
+                                        }
+                                        return (
+                                          <button
+                                            type="button"
+                                            title={saTitle}
+                                            className={cellBtnClass}
+                                            onClick={() =>
+                                              window.open(url, "_blank", "noopener,noreferrer")
+                                            }
+                                          >
+                                            {inner}
+                                          </button>
+                                        );
+                                      })()}
+                                    </td>
+                                  </>
+                                )}
+                                <td className="px-3 py-3 text-sm">
+                                  <button
+                                    type="button"
+                                    title={pmtListTitle}
+                                    className={cellBtnClass}
+                                    onClick={() =>
+                                      setPmtModal({
+                                        moduleName: mod.name,
+                                        studentName: row.name,
+                                        studentId: row.studentId,
+                                        tasks: row.pmtTasks || [],
+                                      })
+                                    }
+                                  >
+                                    {pmtProgressLabel(pmtAssessed, pmtTotal, "assessed")}
+                                  </button>
+                                </td>
+                                {hasSummativeRef && (
+                                  <td className="px-3 py-3 text-sm">
+                                    {(() => {
+                                      const url = mod.refs?.summative
+                                        ? buildQctoAssessorUrl(
+                                            mod.refs.summative,
+                                            row.studentId,
+                                            assessorReadOnly
+                                          )
+                                        : null;
+                                      const inner = yesNo(row.summativeAssessment?.assessed);
+                                      if (!url) {
+                                        return inner;
+                                      }
+                                      return (
+                                        <button
+                                          type="button"
+                                          title={saTitle}
+                                          className={cellBtnClass}
+                                          onClick={() =>
+                                            window.open(url, "_blank", "noopener,noreferrer")
+                                          }
+                                        >
+                                          {inner}
+                                        </button>
+                                      );
+                                    })()}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          }
+
+                          const wbTitle = "Open learner workbook (assessor)";
                           const cells = [
                             { ref: mod.refs?.workbook, flag: row.learnerWorkbook?.submitted },
                             { ref: mod.refs?.workbook, flag: row.learnerWorkbook?.tutorVerified },
@@ -487,6 +687,120 @@ const OCQctoTrackerPage = () => {
           </>
         )}
       </div>
+
+      {pmtModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pmt-modal-title"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 py-8"
+          onClick={() => setPmtModal(null)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-xl border border-gray-600/50 bg-[#151a22] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-700/60 px-5 py-4">
+              <div>
+                <h2 id="pmt-modal-title" className="text-lg font-semibold text-gray-100">
+                  PMT tasks
+                </h2>
+                <p className="mt-1 text-sm text-gray-400">
+                  <span className="text-gray-300">{pmtModal.studentName}</span>
+                  <span className="mx-1.5 text-gray-600">·</span>
+                  {pmtModal.moduleName}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-800/80 hover:text-gray-200"
+                onClick={() => setPmtModal(null)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4">
+              {pmtModal.tasks?.length ? (
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-700/50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <th className="py-2 pr-3">Task</th>
+                      <th className="py-2 pr-2 whitespace-nowrap">Submitted</th>
+                      <th className="py-2 pr-2 whitespace-nowrap">Tutor ✓</th>
+                      <th className="py-2 pr-2 whitespace-nowrap">Assessed</th>
+                      <th className="py-2 text-right">Assessor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/40 text-gray-300">
+                    {pmtModal.tasks.map((t) => {
+                      const ref = {
+                        kind: "qctopmt",
+                        id: t.taskId,
+                        lectureId: t.lectureId,
+                      };
+                      const openUrl = buildQctoAssessorUrl(
+                        ref,
+                        pmtModal.studentId,
+                        assessorReadOnly
+                      );
+                      return (
+                        <tr key={t.taskId} className="align-top">
+                          <td className="py-3 pr-3">{t.lectureName || "PMT task"}</td>
+                          <td className="py-3 pr-2">
+                            <span
+                              className={
+                                t.submitted ? "font-medium text-emerald-400/95" : "text-gray-500"
+                              }
+                            >
+                              {t.submitted ? "Yes" : "—"}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-2">
+                            <span
+                              className={
+                                t.tutorVerified ? "font-medium text-emerald-400/95" : "text-gray-500"
+                              }
+                            >
+                              {t.tutorVerified ? "Yes" : "—"}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-2">
+                            <span
+                              className={
+                                t.assessed ? "font-medium text-emerald-400/95" : "text-gray-500"
+                              }
+                            >
+                              {t.assessed ? "Yes" : "—"}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            {openUrl ? (
+                              <a
+                                href={openUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-indigo-400 hover:underline"
+                              >
+                                Open
+                              </a>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  No PMT tasks are configured for this module on the learning path.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

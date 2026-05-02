@@ -5,7 +5,7 @@ import Loader from "../../components/loader/loader";
 import LearningpathTable from "../StudentLearningPath/table";
 
 const StudentLearningPath = () => {
-  const { learningpathid } = useParams();
+  const { learningpathid, bootcampid } = useParams();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const user_id = queryParams.get("user_id");
@@ -34,11 +34,14 @@ const StudentLearningPath = () => {
     <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8">
       <LearningpathTable
         learningpath={learningpath}
+        learningpathId={learningpathId}
+        bootcampId={bootcampid || null}
         data={learningpath?.courses}
         total={learningpath?.total}
         loading={loading}
         userId={userId}
         userData={learningpath?.userData}
+        onDataRefresh={getAnalytics}
       />
 
       {loading && (

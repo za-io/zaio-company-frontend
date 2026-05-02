@@ -1056,6 +1056,21 @@ export const deleteRosterTask = (taskId) => {
     }));
 };
 
+/** Re-provision Nbgrader / DS notebook files for a student in one course (company admin). */
+export const postReEnrollDsCourse = (payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+  return axios
+    .post(`${BASE_URL}/bootcamp/re-enroll-ds-course`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Re-enroll failed",
+    }));
+};
+
 /** Issue learner JWT for a student (company admin auth + COMPANY_LOGIN_AS_STUDENT_PASSWORD). */
 export const postStudentLoginAsToken = (payload) => {
   const token = localStorage.getItem("TOKEN");
