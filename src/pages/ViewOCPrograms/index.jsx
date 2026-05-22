@@ -11,6 +11,7 @@ import {
   getAllAssessors,
   getAllModerators,
   assignTutorToStudent,
+  patchOcEnrollmentExcludeFromOcStaffViews,
   createAccountsForEmails,
   addStudentsToOCCohort,
   createOrLinkAccountWithStudentNumber,
@@ -19,9 +20,61 @@ import {
   updateLiveClass,
   deleteLiveClass,
   downloadPoeIdCopiesZip,
+  getOCCohortDetails,
+  updateOCCohortModuleDeadlines,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
+
+function dateToDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function datetimeLocalToIso(val) {
+  if (!val || !String(val).trim()) return null;
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function formatDeadlineDisplay(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** Merge cohort.qctoModuleDeadlines with learning-path course order (QCTO-KM / QCTO-PM only). */
+function buildQctoDeadlineTimetableRows(cohort) {
+  const courses = cohort?.learningPath?.learningpathcourses;
+  if (!courses?.length) return [];
+  const byCourseId = new Map(
+    (cohort.qctoModuleDeadlines || []).map((d) => {
+      const id = d.courseId != null && typeof d.courseId.toString === "function" ? d.courseId.toString() : String(d.courseId);
+      return [id, d];
+    })
+  );
+  const rows = [];
+  for (const course of courses) {
+    if (!course) continue;
+    const ct = course.coursetype;
+    if (ct !== "QCTO-KM" && ct !== "QCTO-PM") continue;
+    const id = course._id != null && typeof course._id.toString === "function" ? course._id.toString() : String(course._id);
+    const d = byCourseId.get(id) || {};
+    rows.push({
+      courseId: id,
+      courseName: course.coursename || "",
+      courseType: ct,
+      learnerWorkbookDue: d.learnerWorkbookDue ?? null,
+      summativeDue: d.summativeDue ?? null,
+      pmModuleDue: d.pmModuleDue ?? null,
+    });
+  }
+  return rows;
+}
 
 const ViewOCPrograms = () => {
   const navigate = useNavigate();
@@ -58,6 +111,8 @@ const ViewOCPrograms = () => {
   const [qctoEnrollments, setQctoEnrollments] = useState([]);
   const [qctoEnrollmentsLoading, setQctoEnrollmentsLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  /** Enrollment id currently toggling OC test-account visibility */
+  const [ocTestToggleEnrollmentId, setOcTestToggleEnrollmentId] = useState(null);
   const [liveClasses, setLiveClasses] = useState([]);
   const [liveClassesLoading, setLiveClassesLoading] = useState(false);
   const [showLiveClassModal, setShowLiveClassModal] = useState(false);
@@ -73,6 +128,12 @@ const ViewOCPrograms = () => {
   const [liveClassSubmitting, setLiveClassSubmitting] = useState(false);
   const [liveClassMessage, setLiveClassMessage] = useState(null);
   const [idCopyZipLoading, setIdCopyZipLoading] = useState(null);
+  /** Full cohort doc for QCTO deadline timetable (learning path courses populated). */
+  const [cohortDeadlineDetail, setCohortDeadlineDetail] = useState(null);
+  const [cohortDeadlineLoading, setCohortDeadlineLoading] = useState(false);
+  const [deadlineFormByCourseId, setDeadlineFormByCourseId] = useState({});
+  const [deadlineSaveMessage, setDeadlineSaveMessage] = useState(null);
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
   const DEFAULT_LIVE_CLASS_THUMBNAIL =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120'%3E%3Crect fill='%23212a34' width='200' height='120'/%3E%3Ctext x='100' y='65' fill='%236b7280' font-size='14' text-anchor='middle' font-family='system-ui'%3ELive Class%3C/text%3E%3C/svg%3E";
 
@@ -293,6 +354,7 @@ const ViewOCPrograms = () => {
   };
 
   const canAssignRoles = user?.role && ["SUPER_ADMIN", "COMPANY_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user.role);
+  const canEditOcDeadlines = user?.role === "TUTOR" || user?.role === "SUPER_STUDENT_ADMIN";
 
   const openModuleTrackerInNewTab = (view) => {
     if (!selectedProgram?._id) return;
@@ -426,6 +488,53 @@ const ViewOCPrograms = () => {
     fetchLiveClasses();
   }, [showStudentsTable, selectedProgram?._id]);
 
+  useEffect(() => {
+    if (!showStudentsTable || !selectedProgram?._id) {
+      setCohortDeadlineDetail(null);
+      setDeadlineFormByCourseId({});
+      setDeadlineSaveMessage(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setCohortDeadlineLoading(true);
+      try {
+        const res = await getOCCohortDetails(selectedProgram._id);
+        if (cancelled) return;
+        if (res?.status === 200 && res?.success && res.data) {
+          setCohortDeadlineDetail(res.data);
+        } else {
+          setCohortDeadlineDetail(null);
+        }
+      } catch {
+        if (!cancelled) setCohortDeadlineDetail(null);
+      } finally {
+        if (!cancelled) setCohortDeadlineLoading(false);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [showStudentsTable, selectedProgram?._id]);
+
+  useEffect(() => {
+    if (!cohortDeadlineDetail) {
+      setDeadlineFormByCourseId({});
+      return;
+    }
+    const rows = buildQctoDeadlineTimetableRows(cohortDeadlineDetail);
+    const next = {};
+    for (const r of rows) {
+      next[r.courseId] = {
+        learnerWorkbookDue: dateToDatetimeLocal(r.learnerWorkbookDue),
+        summativeDue: dateToDatetimeLocal(r.summativeDue),
+        pmModuleDue: dateToDatetimeLocal(r.pmModuleDue),
+      };
+    }
+    setDeadlineFormByCourseId(next);
+  }, [cohortDeadlineDetail]);
+
   const handleViewStudentDetails = (student) => {
     navigate(`/oc-programs/student/${student.id}`, {
       state: { student, program: selectedProgram },
@@ -447,6 +556,36 @@ const ViewOCPrograms = () => {
     setSelectedStudent(student);
     setSelectedTutor(student.tutor?.id || "");
     setShowTutorModal(true);
+  };
+
+  const handleToggleOcTestAccount = async (student) => {
+    if (!canAssignRoles || !student?.enrollmentId) {
+      alert("Missing enrollment data. Refresh and try again.");
+      return;
+    }
+    const nextVal = !student.excludeFromOcStaffViews;
+    const msg = nextVal
+      ? "Hide this learner from tutors, assessors, and moderators for this OC cohort?"
+      : "Show this learner again to tutors, assessors, and moderators for this cohort?";
+    if (!window.confirm(msg)) return;
+    setOcTestToggleEnrollmentId(student.enrollmentId);
+    try {
+      const res = await patchOcEnrollmentExcludeFromOcStaffViews(student.enrollmentId, nextVal);
+      if (res?.success) {
+        const flag = !!res.data?.excludeFromOcStaffViews;
+        setStudents((prev) =>
+          prev.map((s) =>
+            s.enrollmentId === student.enrollmentId ? { ...s, excludeFromOcStaffViews: flag } : s
+          )
+        );
+      } else {
+        alert(res?.message || "Could not update.");
+      }
+    } catch (e) {
+      alert(e?.response?.data?.message || e?.message || "Request failed.");
+    } finally {
+      setOcTestToggleEnrollmentId(null);
+    }
   };
 
   const handleOpenBulkAssignTutor = () => {
@@ -745,6 +884,53 @@ const ViewOCPrograms = () => {
     }
   };
 
+  const updateOcDeadlineField = (courseId, field, value) => {
+    setDeadlineFormByCourseId((prev) => ({
+      ...prev,
+      [courseId]: { ...(prev[courseId] || {}), [field]: value },
+    }));
+  };
+
+  const handleSaveOcDeadlines = async () => {
+    if (!selectedProgram?._id || !canEditOcDeadlines || !cohortDeadlineDetail) return;
+    const rows = buildQctoDeadlineTimetableRows(cohortDeadlineDetail);
+    if (rows.length === 0) return;
+    const deadlines = rows.map((r) => {
+      const f = deadlineFormByCourseId[r.courseId] || {};
+      const patch = { courseId: r.courseId };
+      if (r.courseType === "QCTO-KM") {
+        patch.learnerWorkbookDue = datetimeLocalToIso(f.learnerWorkbookDue);
+        patch.summativeDue = datetimeLocalToIso(f.summativeDue);
+      } else {
+        patch.pmModuleDue = datetimeLocalToIso(f.pmModuleDue);
+      }
+      return patch;
+    });
+    setDeadlineSaving(true);
+    setDeadlineSaveMessage(null);
+    try {
+      const res = await updateOCCohortModuleDeadlines(selectedProgram._id, deadlines);
+      if (!res?.success) {
+        setDeadlineSaveMessage({ type: "error", text: res?.message || "Could not save deadlines." });
+        return;
+      }
+      setDeadlineSaveMessage({ type: "success", text: "Deadlines saved." });
+      const refreshed = await getOCCohortDetails(selectedProgram._id);
+      if (refreshed?.status === 200 && refreshed?.success && refreshed.data) {
+        setCohortDeadlineDetail(refreshed.data);
+      }
+    } catch (err) {
+      setDeadlineSaveMessage({
+        type: "error",
+        text: err?.response?.data?.message || err?.message || "Could not save deadlines.",
+      });
+    } finally {
+      setDeadlineSaving(false);
+    }
+  };
+
+  const ocDeadlineTimetableRows = cohortDeadlineDetail ? buildQctoDeadlineTimetableRows(cohortDeadlineDetail) : [];
+
   return (
     <div className="min-h-screen bg-[#0f1419] px-6 md:px-12 lg:px-24 xl:px-36 py-10">
       {/* Page Header */}
@@ -862,6 +1048,9 @@ const ViewOCPrograms = () => {
                   setSelectedProgram(null);
                   setStudents([]);
                   setSelectedStudentIds([]);
+                  setCohortDeadlineDetail(null);
+                  setDeadlineFormByCourseId({});
+                  setDeadlineSaveMessage(null);
                 }}
                 className="bg-gray-600/80 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
               >
@@ -870,7 +1059,148 @@ const ViewOCPrograms = () => {
             </div>
           </div>
 
-          {/* Live Classes - shown first for easy access */}
+          {/* QCTO module deadlines — cohort-wide timetable (same as KM/PM tracker deadlines) */}
+          <div className="mb-10 rounded-xl border border-gray-700/50 bg-gray-800/25 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-base font-medium text-gray-200">QCTO module deadlines</h3>
+                <p className="text-sm text-gray-500 mt-1 max-w-3xl">
+                  Full timetable in learning-path order for this cohort. Dates apply to every learner enrolled here.
+                  {canEditOcDeadlines
+                    ? " Edit fields below, then save."
+                    : " Only tutors and super student admins can edit deadlines."}
+                </p>
+              </div>
+              {canEditOcDeadlines && (
+                <button
+                  type="button"
+                  disabled={deadlineSaving || cohortDeadlineLoading || ocDeadlineTimetableRows.length === 0}
+                  onClick={handleSaveOcDeadlines}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600/90 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all duration-200"
+                >
+                  {deadlineSaving ? "Saving…" : "Save deadlines"}
+                </button>
+              )}
+            </div>
+            {deadlineSaveMessage && (
+              <p
+                className={`text-sm mb-4 ${
+                  deadlineSaveMessage.type === "error" ? "text-red-400/90" : "text-emerald-400/90"
+                }`}
+              >
+                {deadlineSaveMessage.text}
+              </p>
+            )}
+            {cohortDeadlineLoading ? (
+              <div className="flex items-center gap-2 text-gray-500 py-6">
+                <Loader />
+                <span>Loading deadlines…</span>
+              </div>
+            ) : ocDeadlineTimetableRows.length === 0 ? (
+              <p className="text-gray-500 text-[15px] py-4">
+                No QCTO-KM or QCTO-PM modules on this cohort&apos;s learning path.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-gray-700/40">
+                <table className="min-w-full divide-y divide-gray-700/60">
+                  <thead className="bg-gray-900/50">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        #
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Module
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Type
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Learner workbook
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Summative
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        PM module
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/50 bg-gray-900/20">
+                    {ocDeadlineTimetableRows.map((row, idx) => {
+                      const f = deadlineFormByCourseId[row.courseId] || {};
+                      return (
+                        <tr key={row.courseId}>
+                          <td className="px-3 py-3 text-sm text-gray-500">{idx + 1}</td>
+                          <td className="px-3 py-3 text-sm text-gray-100 font-medium max-w-[min(280px,40vw)]">
+                            <span className="break-words">{row.courseName || "—"}</span>
+                          </td>
+                          <td className="px-3 py-3 text-sm text-gray-400">
+                            {row.courseType === "QCTO-KM" ? "KM" : "PM"}
+                          </td>
+                          <td className="px-3 py-3 text-sm">
+                            {row.courseType === "QCTO-KM" ? (
+                              canEditOcDeadlines ? (
+                                <input
+                                  type="datetime-local"
+                                  value={f.learnerWorkbookDue ?? ""}
+                                  onChange={(e) =>
+                                    updateOcDeadlineField(row.courseId, "learnerWorkbookDue", e.target.value)
+                                  }
+                                  className="w-full min-w-[11rem] max-w-[14rem] rounded-md border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-gray-200"
+                                />
+                              ) : (
+                                <span className="text-gray-400">{formatDeadlineDisplay(row.learnerWorkbookDue)}</span>
+                              )
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-sm">
+                            {row.courseType === "QCTO-KM" ? (
+                              canEditOcDeadlines ? (
+                                <input
+                                  type="datetime-local"
+                                  value={f.summativeDue ?? ""}
+                                  onChange={(e) =>
+                                    updateOcDeadlineField(row.courseId, "summativeDue", e.target.value)
+                                  }
+                                  className="w-full min-w-[11rem] max-w-[14rem] rounded-md border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-gray-200"
+                                />
+                              ) : (
+                                <span className="text-gray-400">{formatDeadlineDisplay(row.summativeDue)}</span>
+                              )
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-sm">
+                            {row.courseType === "QCTO-PM" ? (
+                              canEditOcDeadlines ? (
+                                <input
+                                  type="datetime-local"
+                                  value={f.pmModuleDue ?? ""}
+                                  onChange={(e) =>
+                                    updateOcDeadlineField(row.courseId, "pmModuleDue", e.target.value)
+                                  }
+                                  className="w-full min-w-[11rem] max-w-[14rem] rounded-md border border-gray-600 bg-gray-900 px-2 py-1.5 text-xs text-gray-200"
+                                />
+                              ) : (
+                                <span className="text-gray-400">{formatDeadlineDisplay(row.pmModuleDue)}</span>
+                              )
+                            ) : (
+                              <span className="text-gray-600">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Live classes */}
           <div className="mb-10">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
               <h3 className="text-base font-medium text-gray-200">Live Classes</h3>
@@ -997,6 +1327,11 @@ const ViewOCPrograms = () => {
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID Number</th>
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Start Date</th>
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Tutor</th>
+                  {canAssignRoles && (
+                    <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap max-w-[200px]">
+                      Hide from tutors / assessors
+                    </th>
+                  )}
                   <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -1014,7 +1349,19 @@ const ViewOCPrograms = () => {
                         />
                       </td>
                     )}
-                    <td className="px-5 py-4 text-sm text-gray-300">{student.name}</td>
+                    <td className="px-5 py-4 text-sm text-gray-300">
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        {student.name}
+                        {student.excludeFromOcStaffViews && (
+                          <span
+                            title="Hidden from tutors, assessors, and moderators in company tools"
+                            className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400/95 border border-amber-500/35"
+                          >
+                            OC test
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-5 py-4 text-sm text-gray-300">{student.email}</td>
                     <td className="px-5 py-4 text-sm text-gray-300">{student.idNumber || "—"}</td>
                     <td className="px-5 py-4 text-sm text-gray-300">{formatDate(student.startDate)}</td>
@@ -1025,6 +1372,25 @@ const ViewOCPrograms = () => {
                         <span className="text-gray-500 italic">Not Assigned</span>
                       )}
                     </td>
+                    {canAssignRoles && (
+                      <td className="px-4 py-4 align-middle max-w-[200px]">
+                        <label className="inline-flex items-start gap-2 cursor-pointer text-gray-400 text-[13px] leading-snug">
+                          <input
+                            type="checkbox"
+                            checked={!!student.excludeFromOcStaffViews}
+                            disabled={ocTestToggleEnrollmentId === student.enrollmentId}
+                            onChange={() => handleToggleOcTestAccount(student)}
+                            aria-label={`OC test account — hide from tutors and assessors for ${student.name || student.email || "learner"}`}
+                            className="mt-1 rounded border-gray-600 bg-gray-800 text-amber-500 focus:ring-amber-500/40 shrink-0"
+                          />
+                          <span>
+                            {student.excludeFromOcStaffViews
+                              ? "Yes — tutors & assessors won't see them"
+                              : "No"}
+                          </span>
+                        </label>
+                      </td>
+                    )}
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap gap-2">
                         {canAssignRoles && (

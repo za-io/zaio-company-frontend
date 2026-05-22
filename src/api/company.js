@@ -261,17 +261,23 @@ export const getAllOCCohorts = (company_id) => {
     .catch((err) => console.log(err));
 };
 
-export const getOCCohortDetails = (cohortId) =>
-  axios
-    .get(`${BASE_URL}/oc-cohort/${cohortId}`)
+export const getOCCohortDetails = (cohortId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}`, { headers })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+};
 
-export const getCohortStudents = (cohortId) =>
-  axios
-    .get(`${BASE_URL}/oc-cohort/${cohortId}/students`)
+export const getCohortStudents = (cohortId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/students`, { headers })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+};
 
 /** view: 'km' | 'pm' — per-learner workbook/PMT + SA flags for each QCTO module on the cohort path */
 export const getCohortQctoTracker = (cohortId, view = "km") => {
@@ -446,17 +452,23 @@ export const deleteBootcampLiveClass = (bootcampId, liveClassId) => {
     });
 };
 
-export const getOCStudentDetails = (studentId) =>
-  axios
-    .get(`${BASE_URL}/oc-cohort/student/${studentId}`)
+export const getOCStudentDetails = (studentId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/oc-cohort/student/${studentId}`, { headers })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+};
 
-export const getOCModuleDetails = (studentId, moduleId) =>
-  axios
-    .get(`${BASE_URL}/oc-cohort/student/${studentId}/module/${moduleId}`)
+export const getOCModuleDetails = (studentId, moduleId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/oc-cohort/student/${studentId}/module/${moduleId}`, { headers })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+};
 
 export const assignTutorToStudent = (enrollmentId, tutorId) =>
   axios
@@ -465,6 +477,26 @@ export const assignTutorToStudent = (enrollmentId, tutorId) =>
     })
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+/** Mark OC cohort enrollment hidden from tutors/assessors/moderators (super student admin / company admin). */
+export const patchOcEnrollmentExcludeFromOcStaffViews = (enrollmentId, excludeFromOcStaffViews) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "auth-token": token } : {}),
+  };
+  return axios
+    .patch(
+      `${BASE_URL}/oc-cohort/enrollment/${enrollmentId}/exclude-from-oc-staff-views`,
+      { excludeFromOcStaffViews },
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
 
 export const tutorSignOffQCTOAssessment = (assessmentId, submissionId, tutorSignature = "") =>
   axios
@@ -686,6 +718,34 @@ export const linkBootcampGoogleClassroom = (bootcampId, googleClassroomCourseId)
       console.log(err);
       return { success: false, message: err?.response?.data?.message || "Failed to update" };
     });
+};
+
+/** SUPER_ADMIN or SUPER_STUDENT_ADMIN: create Discord cohort role + private channel (bot must be online). */
+export const provisionBootcampDiscord = (bootcampId, body) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return axios
+    .post(`${BASE_URL}/bootcamp/config/${bootcampId}/provision-discord`, body || {}, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to provision Discord",
+      ...(typeof err?.response?.data === "object" && err.response.data ? err.response.data : {}),
+    }));
+};
+
+/** Save Discord role + channel snowflake IDs (manual setup) or { clear: true }. */
+export const saveBootcampDiscordLinks = (bootcampId, body) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return axios
+    .put(`${BASE_URL}/bootcamp/config/${bootcampId}/discord-links`, body || {}, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to save Discord links",
+      ...(typeof err?.response?.data === "object" && err.response.data ? err.response.data : {}),
+    }));
 };
 
 // Edit bootcamp configuration
@@ -912,11 +972,14 @@ export const getFinanceSummary = (params = {}) => {
   }
   const q = search.toString();
   return axios
-    .get(`${BASE_URL}/bootcamp/finance-summary${q ? `?${q}` : ""}`, { headers })
+    .get(`${BASE_URL}/bootcamp/finance-summary${q ? `?${q}` : ""}`, {
+      headers,
+      timeout: 120000,
+    })
     .then((res) => res.data)
     .catch((err) => ({
       success: false,
-      message: err?.response?.data?.message || "Failed to load finance data",
+      message: err?.response?.data?.message || err?.message || "Failed to load finance data",
     }));
 };
 
@@ -939,7 +1002,7 @@ export async function getFinanceSummaryWithPolling(params = {}, opts = {}) {
   try {
     const startRes = await axios.post(`${BASE_URL}/bootcamp/finance-summary/start`, params, {
       headers: { ...authHeaders, "Content-Type": "application/json" },
-      timeout: 60000,
+      timeout: 120000,
     });
     if (!startRes.data?.success || !startRes.data?.jobId) {
       return getFinanceSummary(params);
@@ -950,7 +1013,7 @@ export async function getFinanceSummaryWithPolling(params = {}, opts = {}) {
       onPoll?.();
       const pollRes = await axios.get(`${BASE_URL}/bootcamp/finance-summary/job/${jobId}`, {
         headers: authHeaders,
-        timeout: 60000,
+        timeout: 120000,
       });
       const d = pollRes.data;
       if (d?.success && d.pending) {

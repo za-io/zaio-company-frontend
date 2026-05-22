@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getEnrolledBootcampsWithPolling,
@@ -6,7 +6,8 @@ import {
   archiveManyBootcamps,
   getBootcampConfig,
   editBootcampConfig,
-  linkBootcampGoogleClassroom,
+  provisionBootcampDiscord,
+  saveBootcampDiscordLinks,
   getBootcampLiveClasses,
   createBootcampLiveClass,
   updateBootcampLiveClass,
@@ -28,6 +29,7 @@ import {
   startOfWeek,
   endOfWeek,
 } from "date-fns";
+import { useUserStore } from "../../store/UserProvider";
 
 // Mini Calendar Date Picker for Edit Modal
 const MiniCalendarPicker = ({ selectedDate, onDateSelect }) => {
@@ -298,21 +300,23 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     setSaving(true);
     setMessage(null);
     const configToSave = {
-      ...config,
+      bootcampName: config.bootcampName,
+      startDate: config.startDate,
+      commitedMins: Number(config.commitedMins),
       holidays: formatHolidaysString(),
+      selectedWeekdays: config.selectedWeekdays,
+      googleClassroom: (config.linkedGoogleClassroomCourseId || "").trim(),
     };
-    const [configResult, linkResult] = await Promise.all([
-      editBootcampConfig(bootcampId, configToSave),
-      linkBootcampGoogleClassroom(bootcampId, (config.linkedGoogleClassroomCourseId || "").trim()),
-    ]);
+    const configResult = await editBootcampConfig(bootcampId, configToSave);
     setSaving(false);
-    if (configResult.success && linkResult.success) {
+    if (configResult.success) {
       setMessage({ type: "success", text: "Configuration saved successfully!" });
-      setTimeout(() => { onSave(); onClose(); }, 1000);
-    } else if (!configResult.success) {
-      setMessage({ type: "error", text: configResult.message });
+      setTimeout(() => {
+        onSave();
+        onClose();
+      }, 1000);
     } else {
-      setMessage({ type: "error", text: linkResult.message || "Failed to update Google Classroom link" });
+      setMessage({ type: "error", text: configResult.message || "Failed to save configuration" });
     }
   };
 
@@ -324,7 +328,7 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     }
     setLinkingClassroom(true);
     setMessage(null);
-    const result = await linkBootcampGoogleClassroom(bootcampId, raw);
+    const result = await editBootcampConfig(bootcampId, { googleClassroom: raw });
     setLinkingClassroom(false);
     if (result.success) {
       setMessage({ type: "success", text: "Google Classroom link saved successfully!" });
@@ -371,7 +375,10 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
               </svg>
               <h3>View Only</h3>
               <p>This bootcamp has <strong>{enrolledCount} student(s)</strong> enrolled.</p>
-              <p>Configuration cannot be changed once students are enrolled. You can view the current config below.</p>
+              <p>Configuration cannot be changed once students are enrolled.</p>
+              <p>
+                <strong>Google Classroom invite link</strong> can still be updated below (SUPER_ADMIN, SUPER_STUDENT_ADMIN, COMPANY_ADMIN).
+              </p>
             </div>
             <div className="edit-modal-config-view" style={{ marginTop: "16px", padding: "16px", background: "#f8f9fa", borderRadius: "8px" }}>
               <div className="edit-form-group" style={{ marginBottom: "12px" }}>
@@ -524,13 +531,6 @@ function formatBootcampDate(dateStr) {
   }
 }
 
-function parseCourseId(input) {
-  if (!input || typeof input !== "string") return "";
-  const trimmed = input.trim();
-  const urlMatch = trimmed.match(/classroom\.google\.com\/[^/]+\/c\/([a-zA-Z0-9_-]+)/) || trimmed.match(/classroom\.google\.com\/c\/([a-zA-Z0-9_-]+)/);
-  return urlMatch ? urlMatch[1] : trimmed;
-}
-
 const LinkGoogleClassroomModal = ({ isOpen, onClose, bootcampId, bootcampName, onSave }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -543,43 +543,56 @@ const LinkGoogleClassroomModal = ({ isOpen, onClose, bootcampId, bootcampName, o
       setLoading(true);
       setMessage(null);
       setInputValue("");
-      getBootcampConfig(bootcampId).then((res) => {
-        if (res.success && res.bootcamp?.linkedGoogleClassroomCourseId) {
-          setLinkedCourseId(res.bootcamp.linkedGoogleClassroomCourseId);
-          setInputValue(res.bootcamp.linkedGoogleClassroomCourseId);
-        } else setLinkedCourseId("");
-        setLoading(false);
-      }).catch(() => setLoading(false));
+      getBootcampConfig(bootcampId)
+        .then((res) => {
+          if (res.success && res.bootcamp) {
+            const bc = res.bootcamp;
+            const display = (bc.googleClassroom || bc.linkedGoogleClassroomCourseId || "").trim();
+            setLinkedCourseId((bc.linkedGoogleClassroomCourseId || "").trim());
+            setInputValue(display);
+          } else {
+            setLinkedCourseId("");
+          }
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
     }
   }, [isOpen, bootcampId]);
 
   const handleLink = async () => {
-    const courseId = parseCourseId(inputValue);
-    if (!courseId) {
-      setMessage({ type: "error", text: "Enter a Google Classroom course ID or paste the course URL." });
+    const raw = inputValue.trim();
+    if (!raw) {
+      setMessage({ type: "error", text: "Paste the full Google Classroom invite link, course URL, or course ID." });
       return;
     }
     setSaving(true);
     setMessage(null);
-    const result = await linkBootcampGoogleClassroom(bootcampId, courseId);
+    const result = await editBootcampConfig(bootcampId, { googleClassroom: raw });
     setSaving(false);
     if (result.success) {
-      setMessage({ type: "success", text: "Google Classroom linked successfully!" });
-      setLinkedCourseId(courseId);
-      setTimeout(() => { onSave(); onClose(); }, 1000);
-    } else setMessage({ type: "error", text: result.message || "Failed to link" });
+      setMessage({ type: "success", text: "Google Classroom link saved successfully!" });
+      setLinkedCourseId((result.bootcamp?.linkedGoogleClassroomCourseId || "").trim());
+      setInputValue((result.bootcamp?.googleClassroom || raw).trim());
+      setTimeout(() => {
+        onSave();
+        onClose();
+      }, 1000);
+    } else setMessage({ type: "error", text: result.message || "Failed to save link" });
   };
 
   const handleUnlink = async () => {
     setSaving(true);
     setMessage(null);
-    const result = await linkBootcampGoogleClassroom(bootcampId, "");
+    const result = await editBootcampConfig(bootcampId, { googleClassroom: "" });
     setSaving(false);
     if (result.success) {
       setMessage({ type: "success", text: "Google Classroom unlinked." });
       setLinkedCourseId("");
       setInputValue("");
-      setTimeout(() => { onSave(); onClose(); }, 800);
+      setTimeout(() => {
+        onSave();
+        onClose();
+      }, 800);
     } else setMessage({ type: "error", text: result.message || "Failed to unlink" });
   };
 
@@ -599,21 +612,341 @@ const LinkGoogleClassroomModal = ({ isOpen, onClose, bootcampId, bootcampName, o
           ) : (
             <>
               <div className="edit-form-group">
-                <label>Google Classroom course ID or URL</label>
+                <label>Google Classroom invite link or course URL</label>
                 <input
                   type="text"
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="e.g. 123456789 or https://classroom.google.com/c/123456789"
+                  placeholder="Paste the full invite link from Classroom (recommended)"
                 />
+                <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                  Saved as-is for student onboarding. Course ID is parsed separately for integrations.
+                </p>
               </div>
-              {linkedCourseId && <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>Currently linked: <code>{linkedCourseId}</code></p>}
+              {(linkedCourseId || inputValue) && (
+                <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+                  Parsed course id (API): <code>{linkedCourseId || "—"}</code>
+                </p>
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                 <button type="button" className="edit-modal-save" onClick={handleLink} disabled={saving || !inputValue.trim()}>
                   {saving ? "Saving..." : "Link"}
                 </button>
                 {linkedCourseId && (
                   <button type="button" className="dropdown-item archive-btn" onClick={handleUnlink} disabled={saving}>Unlink</button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/** SUPER_ADMIN / SUPER_STUDENT_ADMIN: Discord cohort role + channel — paste IDs (default) or create via bot. */
+const DiscordBootcampProvisionModal = ({ isOpen, onClose, bootcampId, bootcampName, onSave }) => {
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [showBotSection, setShowBotSection] = useState(false);
+
+  const [manualRoleId, setManualRoleId] = useState("");
+  const [manualChannelId, setManualChannelId] = useState("");
+  const [manualRoleName, setManualRoleName] = useState("");
+  const [manualChannelName, setManualChannelName] = useState("");
+
+  const [roleName, setRoleName] = useState("");
+  const [channelName, setChannelName] = useState("");
+  const [replace, setReplace] = useState(false);
+  const [existing, setExisting] = useState(null);
+
+  const loadConfig = useCallback(() => {
+    if (!bootcampId) return Promise.resolve();
+    setLoading(true);
+    return getBootcampConfig(bootcampId)
+      .then((res) => {
+        if (res.success && res.bootcamp) {
+          const bc = res.bootcamp;
+          const name = (bc.bootcampName || bootcampName || "Bootcamp").trim() || "Bootcamp";
+          setRoleName(`${name} — Students`.slice(0, 100));
+          setChannelName(`${name} chat`.slice(0, 90));
+          setManualRoleId(bc.discordBootcampRoleId || "");
+          setManualChannelId(bc.discordBootcampChannelId || "");
+          setManualRoleName(bc.discordBootcampRoleName || "");
+          setManualChannelName(bc.discordBootcampChannelName || "");
+          setExisting({
+            roleId: bc.discordBootcampRoleId || "",
+            roleLabel: bc.discordBootcampRoleName || "",
+            channelId: bc.discordBootcampChannelId || "",
+            channelLabel: bc.discordBootcampChannelName || "",
+          });
+        } else {
+          setExisting(null);
+        }
+      })
+      .catch(() => setExisting(null))
+      .finally(() => setLoading(false));
+  }, [bootcampId, bootcampName]);
+
+  useEffect(() => {
+    if (!isOpen || !bootcampId) return;
+      setMessage(null);
+      setReplace(false);
+      setShowBotSection(false);
+      loadConfig();
+  }, [isOpen, bootcampId, loadConfig]);
+
+  const syncExistingFromResponse = (data) => {
+    const r = {
+      roleId: data.discordBootcampRoleId || "",
+      roleLabel: data.discordBootcampRoleName || "",
+      channelId: data.discordBootcampChannelId || "",
+      channelLabel: data.discordBootcampChannelName || "",
+    };
+    setExisting(r);
+    setManualRoleId(r.roleId);
+    setManualChannelId(r.channelId);
+    setManualRoleName(r.roleLabel);
+    setManualChannelName(r.channelLabel);
+  };
+
+  const handleSaveManual = async () => {
+    setSubmitting(true);
+    setMessage(null);
+    const res = await saveBootcampDiscordLinks(bootcampId, {
+      discordBootcampRoleId: manualRoleId.trim(),
+      discordBootcampChannelId: manualChannelId.trim(),
+      discordBootcampRoleName: manualRoleName.trim(),
+      discordBootcampChannelName: manualChannelName.trim(),
+    });
+    setSubmitting(false);
+    if (res.success) {
+      setMessage({ type: "success", text: res.message || "Saved." });
+      syncExistingFromResponse(res);
+      if (onSave) onSave();
+    } else {
+      setMessage({ type: "error", text: res.message || "Could not save." });
+    }
+  };
+
+  const handleClearManual = async () => {
+    if (!window.confirm("Remove stored Discord role and channel IDs for this bootcamp?")) return;
+    setSubmitting(true);
+    setMessage(null);
+    const res = await saveBootcampDiscordLinks(bootcampId, { clear: true });
+    setSubmitting(false);
+    if (res.success) {
+      setMessage({ type: "success", text: res.message || "Cleared." });
+      syncExistingFromResponse({
+        discordBootcampRoleId: "",
+        discordBootcampRoleName: "",
+        discordBootcampChannelId: "",
+        discordBootcampChannelName: "",
+      });
+      if (onSave) onSave();
+    } else {
+      setMessage({ type: "error", text: res.message || "Could not clear." });
+    }
+  };
+
+  const handleProvision = async () => {
+    setSubmitting(true);
+    setMessage(null);
+    const res = await provisionBootcampDiscord(bootcampId, {
+      roleName: roleName.trim(),
+      channelName: channelName.trim(),
+      replace: !!replace,
+    });
+    setSubmitting(false);
+    if (res.success) {
+      setMessage({ type: "success", text: res.message || "Discord role and channel created." });
+      syncExistingFromResponse(res);
+      setReplace(false);
+      if (onSave) onSave();
+    } else {
+      setMessage({ type: "error", text: res.message || "Could not provision Discord." });
+      if (res.discordBootcampRoleId && res.discordBootcampChannelId) {
+        syncExistingFromResponse(res);
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const hasExisting = existing?.roleId && existing?.channelId;
+
+  return (
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="edit-modal-header">
+          <h2>Discord — cohort role &amp; channel</h2>
+          <button type="button" className="edit-modal-close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="edit-modal-body">
+          {bootcampName && <p style={{ color: "#94a3b8", marginBottom: 12 }}>{bootcampName}</p>}
+
+          <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+            <strong>Recommended:</strong> In Discord, create the private channel and cohort role yourself, then paste the numeric IDs
+            below. Turn on <strong>User Settings → App Settings → Advanced → Developer Mode</strong>, then right‑click the role or
+            channel → <strong>Copy ID</strong>.
+          </p>
+
+          {message && <div className={`edit-modal-message ${message.type}`}>{message.text}</div>}
+
+          {loading ? (
+            <div className="edit-modal-loading">
+              <Loader size={24} />
+              <p>Loading…</p>
+            </div>
+          ) : (
+            <>
+              {hasExisting && (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: 12,
+                    borderRadius: 8,
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    fontSize: 13,
+                    color: "#e2e8f0",
+                  }}
+                >
+                  <p style={{ margin: "0 0 8px", fontWeight: 600 }}>Currently stored</p>
+                  <p style={{ margin: 0 }}>
+                    Role: <code style={{ color: "#86efac" }}>{existing.roleLabel || existing.roleId || "—"}</code>
+                  </p>
+                  <p style={{ margin: "6px 0 0" }}>
+                    Channel: <code style={{ color: "#86efac" }}>{existing.channelLabel || existing.channelId || "—"}</code>
+                  </p>
+                </div>
+              )}
+
+              <div className="edit-form-group">
+                <label>Role ID (snowflake)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={manualRoleId}
+                  onChange={(e) => setManualRoleId(e.target.value.replace(/\D/g, ""))}
+                  placeholder="e.g. 1234567890123456789"
+                  disabled={submitting}
+                />
+              </div>
+              <div className="edit-form-group">
+                <label>Channel ID (snowflake)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={manualChannelId}
+                  onChange={(e) => setManualChannelId(e.target.value.replace(/\D/g, ""))}
+                  placeholder="e.g. 9876543210987654321"
+                  disabled={submitting}
+                />
+              </div>
+              <div className="edit-form-group">
+                <label>Role label (optional, for your reference)</label>
+                <input
+                  type="text"
+                  value={manualRoleName}
+                  onChange={(e) => setManualRoleName(e.target.value)}
+                  placeholder="e.g. May 2026 Students"
+                  disabled={submitting}
+                />
+              </div>
+              <div className="edit-form-group">
+                <label>Channel label (optional)</label>
+                <input
+                  type="text"
+                  value={manualChannelName}
+                  onChange={(e) => setManualChannelName(e.target.value)}
+                  placeholder="e.g. may-2026-private"
+                  disabled={submitting}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="edit-modal-save"
+                  onClick={handleSaveManual}
+                  disabled={submitting || !manualRoleId.trim() || !manualChannelId.trim()}
+                >
+                  {submitting ? "Saving…" : "Save Discord IDs"}
+                </button>
+                {hasExisting && (
+                  <button
+                    type="button"
+                    className="dropdown-item archive-btn"
+                    onClick={handleClearManual}
+                    disabled={submitting}
+                  >
+                    Clear stored IDs
+                  </button>
+                )}
+              </div>
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #334155" }}>
+                <button
+                  type="button"
+                  className="dropdown-item edit-btn"
+                  style={{ width: "100%", textAlign: "left", marginBottom: 8 }}
+                  onClick={() => {
+                    setShowBotSection((s) => !s);
+                    setMessage(null);
+                  }}
+                >
+                  {showBotSection ? "▼" : "▶"} Create with Zaio bot instead (needs Manage Roles; may fail if 2FA is required for mods)
+                </button>
+
+                {showBotSection && (
+                  <div style={{ marginTop: 12 }}>
+                    <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
+                      The bot creates a new role and private channel in the server from <code>DISCORD_GUILD_ID</code>. If Discord returns
+                      Missing Permissions or Two factor required, use manual IDs above.
+                    </p>
+                    {hasExisting && (
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer", fontSize: 13 }}>
+                        <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+                        <span>Replace stored IDs after bot creates new role/channel (old Discord objects are not deleted)</span>
+                      </label>
+                    )}
+                    <div className="edit-form-group">
+                      <label>Role name (new)</label>
+                      <input
+                        type="text"
+                        value={roleName}
+                        onChange={(e) => setRoleName(e.target.value)}
+                        disabled={hasExisting && !replace}
+                      />
+                    </div>
+                    <div className="edit-form-group">
+                      <label>Channel name slug</label>
+                      <input
+                        type="text"
+                        value={channelName}
+                        onChange={(e) => setChannelName(e.target.value)}
+                        disabled={hasExisting && !replace}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="edit-modal-save"
+                      onClick={handleProvision}
+                      disabled={
+                        submitting || !roleName.trim() || !channelName.trim() || (hasExisting && !replace)
+                      }
+                    >
+                      {submitting
+                        ? "Working…"
+                        : hasExisting && !replace
+                          ? "Check “Replace stored IDs” to run bot"
+                          : "Create in Discord via bot"}
+                    </button>
+                  </div>
                 )}
               </div>
             </>
@@ -883,6 +1216,8 @@ const BOOTCAMPS_PAGE_SIZE = 12;
 
 function ActiveBootcampsTable() {
   const navigate = useNavigate();
+  const { user } = useUserStore();
+  const canProvisionBootcampDiscord = ["SUPER_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user?.role);
   const [bootcamps, setBootcamps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadHint, setLoadHint] = useState("");
@@ -902,6 +1237,9 @@ function ActiveBootcampsTable() {
   const [liveClassesBootcampName, setLiveClassesBootcampName] = useState("");
   const [autoEnrollmentModalOpen, setAutoEnrollmentModalOpen] = useState(false);
   const [autoEnrollmentBootcamp, setAutoEnrollmentBootcamp] = useState(null);
+  const [discordProvisionOpen, setDiscordProvisionOpen] = useState(false);
+  const [discordProvisionBootcampId, setDiscordProvisionBootcampId] = useState(null);
+  const [discordProvisionBootcampName, setDiscordProvisionBootcampName] = useState("");
   const dropdownRef = useRef(null);
 
   const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
@@ -991,6 +1329,14 @@ function ActiveBootcampsTable() {
     setLiveClassesBootcampId(bootcampId);
     setLiveClassesBootcampName(bootcampName || "Bootcamp");
     setLiveClassesModalOpen(true);
+    setOpenDropdown(null);
+  };
+
+  const handleDiscordProvisionOpen = (e, bootcampId, bootcampName) => {
+    e.stopPropagation();
+    setDiscordProvisionBootcampId(bootcampId);
+    setDiscordProvisionBootcampName(bootcampName || "Bootcamp");
+    setDiscordProvisionOpen(true);
     setOpenDropdown(null);
   };
 
@@ -1182,6 +1528,16 @@ function ActiveBootcampsTable() {
                           >
                             Live Classes
                           </button>
+                          {canProvisionBootcampDiscord && (
+                            <button
+                              className="dropdown-item edit-btn"
+                              onClick={(e) =>
+                                handleDiscordProvisionOpen(e, b._id, b.bootcampName || b.learningpath?.learningpathname)
+                              }
+                            >
+                              Discord role &amp; channel
+                            </button>
+                          )}
                           <button
                             className="dropdown-item archive-btn"
                             onClick={(e) => handleArchive(e, b._id, b.bootcampName)}
@@ -1255,6 +1611,17 @@ function ActiveBootcampsTable() {
         bootcampId={liveClassesBootcampId}
         bootcampName={liveClassesBootcampName}
         onSave={() => {}}
+      />
+      <DiscordBootcampProvisionModal
+        isOpen={discordProvisionOpen}
+        onClose={() => {
+          setDiscordProvisionOpen(false);
+          setDiscordProvisionBootcampId(null);
+          setDiscordProvisionBootcampName("");
+        }}
+        bootcampId={discordProvisionBootcampId}
+        bootcampName={discordProvisionBootcampName}
+        onSave={() => fetchBootcamps(page)}
       />
 
       {/* Auto Enrollment details modal */}

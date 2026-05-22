@@ -115,6 +115,23 @@ function getRollingMonths(count = 12) {
   return months;
 }
 
+/** Run async work on items with limited concurrency (avoids N parallel full finance-summary calls). */
+async function mapPool(items, concurrency, fn) {
+  if (!items.length) return [];
+  const n = Math.min(Math.max(1, concurrency), items.length);
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  return results;
+}
+
 const InstallmentTable = ({
   rows,
   title,
@@ -412,6 +429,8 @@ const Finance = () => {
   const [eftActionKey, setEftActionKey] = useState(null);
   const [allMonthsCollectedSeries, setAllMonthsCollectedSeries] = useState([]);
   const [allMonthsCollectedLoading, setAllMonthsCollectedLoading] = useState(false);
+  /** Incremented when main Apply/load finishes so the 12-month chart loads after (never 12× parallel with primary summary). */
+  const [financeMainLoadId, setFinanceMainLoadId] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -469,6 +488,7 @@ const Finance = () => {
     }
     setFinanceLoadHint("");
     setLoading(false);
+    setFinanceMainLoadId((x) => x + 1);
   }, [mode, monthValue, rangeStart, rangeEnd, includeExcluded]);
 
   const handleTableToggleTest = async (userId, checked) => {
@@ -566,29 +586,35 @@ const Finance = () => {
   }, [includeExcluded]);
 
   useEffect(() => {
+    if (financeMainLoadId === 0) return;
     let cancelled = false;
     const loadAllMonthsCollected = async () => {
       setAllMonthsCollectedLoading(true);
+      setAllMonthsCollectedSeries([]);
       const months = getRollingMonths(12);
-      const responses = await Promise.all(
-        months.map((m) => getFinanceSummary({ year: m.year, month: m.month, includeExcluded }))
-      );
-      if (cancelled) return;
-      const series = months.map((m, idx) => ({
-        monthKey: m.monthKey,
-        collectedCents:
-          responses[idx]?.success && Number.isFinite(Number(responses[idx]?.stats?.amounts?.collectedCents))
-            ? Number(responses[idx].stats.amounts.collectedCents)
-            : 0,
-      }));
-      setAllMonthsCollectedSeries(series);
-      setAllMonthsCollectedLoading(false);
+      const CHART_CONCURRENCY = 2;
+      try {
+        const series = await mapPool(months, CHART_CONCURRENCY, async (m) => {
+          const res = await getFinanceSummary({ year: m.year, month: m.month, includeExcluded });
+          if (cancelled) return { monthKey: m.monthKey, collectedCents: 0 };
+          return {
+            monthKey: m.monthKey,
+            collectedCents:
+              res?.success && Number.isFinite(Number(res?.stats?.amounts?.collectedCents))
+                ? Number(res.stats.amounts.collectedCents)
+                : 0,
+          };
+        });
+        if (!cancelled) setAllMonthsCollectedSeries(series);
+      } finally {
+        if (!cancelled) setAllMonthsCollectedLoading(false);
+      }
     };
     loadAllMonthsCollected();
     return () => {
       cancelled = true;
     };
-  }, [includeExcluded]);
+  }, [includeExcluded, financeMainLoadId]);
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -1051,7 +1077,8 @@ const Finance = () => {
           <div className="rounded-2xl border border-white/10 p-4 mb-6 bg-white/[0.03]">
             <p className="text-sm font-semibold text-white mb-1">Money collected of all months</p>
             <p className="text-[11px] text-gray-400 mb-3 leading-relaxed">
-              Rolling 12-month line graph of collected amounts.
+              Rolling 12-month line graph of collected amounts. Loads after the main summary above (fetched a few months at a
+              time so the page doesn’t run 12 full reports in parallel).
             </p>
             {allMonthsCollectedLoading ? (
               <p className="text-xs text-gray-500">Loading monthly collected trend…</p>

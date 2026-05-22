@@ -307,8 +307,12 @@ function encodePaystackEftChoice(row) {
 
 /** Pending, failed Pay now links, and rejected Paystack billing rows for standalone plans; fallback to Payment 1..N when no rows yet. */
 function buildPaystackEftPaymentChoices(plan) {
-  if (!plan?.subscriptionCode || plan.partner) return [];
-  if ((plan.planCode || "").startsWith("CUSTOM-") || (plan.planCode || "").startsWith("2INST-")) return [];
+  if (plan?.partner) return [];
+  const pc = (plan?.planCode || "").trim();
+  const hasSubscriptionCode = !!(plan?.subscriptionCode && String(plan.subscriptionCode).trim());
+  /** Backend allows EFT without SUB_… when plan code is Paystack PLN_… */
+  if (!hasSubscriptionCode && !pc.startsWith("PLN_")) return [];
+  if (pc.startsWith("CUSTOM-") || pc.startsWith("2INST-")) return [];
   const raw = [];
   (plan.payments || []).forEach((p, idx) => {
     const isPending = p.status === "pending";
@@ -2390,7 +2394,9 @@ const StudentProfile = () => {
                             Change payment date
                           </button>
                         )}
-                        {billingTypeLabel === "Paystack" && plan.subscriptionCode && !plan.partner && (
+                        {billingTypeLabel === "Paystack" &&
+                          (plan.subscriptionCode || (plan.planCode || "").startsWith("PLN_")) &&
+                          !plan.partner && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -4238,7 +4244,8 @@ const StudentProfile = () => {
                         const showDismiss = p.outstandingPaymentId;
                         const showMarkAsPaid = isPending && (p.customPlanId || p.installmentPlanId);
                         const isStandalonePaystackPlan =
-                          paymentsModalPlan.subscriptionCode &&
+                          (paymentsModalPlan.subscriptionCode ||
+                            (paymentsModalPlan.planCode || "").startsWith("PLN_")) &&
                           !(paymentsModalPlan.planCode || "").startsWith("CUSTOM-") &&
                           !(paymentsModalPlan.planCode || "").startsWith("2INST-") &&
                           !paymentsModalPlan.partner;
