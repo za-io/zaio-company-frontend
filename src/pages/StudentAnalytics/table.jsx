@@ -4,7 +4,6 @@ import { roundOff } from "../../utils/mathUtils";
 import { blockUser, unblockUser, updateTutor } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
-import { WarningModal } from "./WarningModal";
 import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
@@ -12,6 +11,53 @@ import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors } from "
 import { StudentMoreActionsModal } from "./StudentMoreActions";
 import { RxCheckCircled } from "react-icons/rx";
 import { HiOutlineClipboardDocument } from "react-icons/hi2";
+
+const getClassroomConnectionStatus = (row) => {
+  const linked =
+    row?.googleClassroomLinked ||
+    (row?.linkedGoogleClassroomCourseId && String(row.linkedGoogleClassroomCourseId).trim());
+  if (linked) {
+    return {
+      label: "Connected",
+      className: "text-green-400",
+      title: "Google Classroom linked to this bootcamp",
+    };
+  }
+  if (row?.userid?.googleClassroomSignedIn) {
+    return {
+      label: "Signed in",
+      className: "text-amber-400",
+      title: "Signed in to Google but classroom not linked to this bootcamp",
+    };
+  }
+  return {
+    label: "Not connected",
+    className: "text-gray-500",
+    title: "Google Classroom not connected",
+  };
+};
+
+const getAuthMethodDisplay = (user) => {
+  if (user?.authMethod) {
+    return user.authMethod;
+  }
+  const sso = (user?.sso || "none").toLowerCase();
+  const studentNumber = user?.studentNumber && String(user.studentNumber).trim();
+  if (sso === "googlelogin") return "GoogleAuth";
+  if (studentNumber) return "Student number";
+  return "Email";
+};
+
+const getAuthMethodStyle = (method) => {
+  switch (method) {
+    case "GoogleAuth":
+      return "text-blue-400";
+    case "Student number":
+      return "text-violet-400";
+    default:
+      return "text-gray-400";
+  }
+};
 
 const AnalyticsTable = ({
   data,
@@ -33,7 +79,6 @@ const AnalyticsTable = ({
     });
   };
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
-  const [showWarningModal, setShowWarningModal] = useState(null);
   const [showMoreActionsModal, setShowMoreActionsModal] = useState(null);
 
   const [studentDeferredModalConfig, setStudentDeferredModalConfig] =
@@ -264,12 +309,6 @@ const AnalyticsTable = ({
 
   return (
     <div>
-      <WarningModal
-        bootcampId={data?.bootcampDetails?._id}
-        showModal={showWarningModal}
-        setShowModal={setShowWarningModal}
-      />
-
       <StudentMoreActionsModal
         bootcampId={data?.bootcampDetails?._id}
         showModal={showMoreActionsModal}
@@ -514,22 +553,25 @@ const AnalyticsTable = ({
                     Student #
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Auth
+                  </th>
+                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Progress
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Tutor
                   </th>
+                  {searchType === "bootcamp" && (
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Classroom
+                    </th>
+                  )}
                   <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Calendar
                   </th>
                   {!["TUTOR"]?.includes(user?.role) && (
                     <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                       Status
-                    </th>
-                  )}
-                  {!["TUTOR"]?.includes(user?.role) && (
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                      Warnings
                     </th>
                   )}
                   <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -648,6 +690,21 @@ const AnalyticsTable = ({
                           </div>
                         </td>
 
+                        {/* Auth method */}
+                        <td className="px-4 py-4">
+                          {(() => {
+                            const authMethod = getAuthMethodDisplay(ba?.userid);
+                            return (
+                              <span
+                                className={`text-sm font-medium whitespace-nowrap ${getAuthMethodStyle(authMethod)}`}
+                                title={`Sign-in method: ${authMethod}`}
+                              >
+                                {authMethod}
+                              </span>
+                            );
+                          })()}
+                        </td>
+
                         {/* Progress */}
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
@@ -683,6 +740,22 @@ const AnalyticsTable = ({
                             {ba?.tutor?.company_username || ba?.tutor?.email || "Not Assigned"}
                           </span>
                         </td>
+
+                        {searchType === "bootcamp" && (
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                            {(() => {
+                              const status = getClassroomConnectionStatus(ba);
+                              return (
+                                <span
+                                  className={`text-sm font-medium ${status.className}`}
+                                  title={status.title}
+                                >
+                                  {status.label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
 
                         {/* View Calendar / Student Profile */}
                         <td className="px-4 py-4 text-center">
@@ -743,21 +816,6 @@ const AnalyticsTable = ({
                                 <Loader size={16} />
                               )}
                             </div>
-                          </td>
-                        )}
-
-                        {/* Warnings */}
-                        {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-4 py-4 text-center">
-                            <button
-                              className="px-3 py-1.5 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded-lg text-xs font-medium transition-colors"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setShowWarningModal(ba);
-                              }}
-                            >
-                              Warning
-                            </button>
                           </td>
                         )}
 

@@ -932,7 +932,7 @@ const ViewOCPrograms = () => {
   const ocDeadlineTimetableRows = cohortDeadlineDetail ? buildQctoDeadlineTimetableRows(cohortDeadlineDetail) : [];
 
   return (
-    <div className="min-h-screen bg-[#0f1419] px-6 md:px-12 lg:px-24 xl:px-36 py-10">
+    <div className="min-h-screen bg-[#0f1419] px-4 sm:px-6 lg:px-8 py-10">
       {/* Page Header */}
       <div className="mb-10">
         <h1 className="text-3xl font-semibold text-gray-100 mb-2 tracking-tight">OC Programs</h1>
@@ -949,7 +949,7 @@ const ViewOCPrograms = () => {
           <p className="text-red-400/90 text-lg">{error}</p>
         </div>
       ) : showStudentsTable ? (
-        <div className="bg-[#1c2128] rounded-2xl border border-gray-700/50 p-8 max-w-7xl shadow-xl shadow-black/10">
+        <div className="bg-[#1c2128] rounded-2xl border border-gray-700/50 p-6 lg:p-8 w-full shadow-xl shadow-black/10">
           <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
             <h2 className="text-xl font-medium text-gray-100">
               Students — {selectedProgram?.cohortName}
@@ -1306,8 +1306,8 @@ const ViewOCPrograms = () => {
             </div>
           )}
 
-          <div className="rounded-xl border border-gray-700/50 overflow-hidden">
-            <table className="w-full border-collapse">
+          <div className="rounded-xl border border-gray-700/50 overflow-x-auto">
+            <table className="w-full border-collapse min-w-[1100px]">
               <thead>
                 <tr className="bg-gray-800/40">
                   {canAssignRoles && (
@@ -1322,17 +1322,17 @@ const ViewOCPrograms = () => {
                       />
                     </th>
                   )}
-                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">ID Number</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Start Date</th>
-                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Tutor</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">Name</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[200px]">Email</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">ID Number</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">Start Date</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">Tutor</th>
                   {canAssignRoles && (
-                    <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap max-w-[200px]">
+                    <th className="px-4 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[240px]">
                       Hide from tutors / assessors
                     </th>
                   )}
-                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                  <th className="px-5 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap min-w-[280px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700/40">
@@ -1373,8 +1373,8 @@ const ViewOCPrograms = () => {
                       )}
                     </td>
                     {canAssignRoles && (
-                      <td className="px-4 py-4 align-middle max-w-[200px]">
-                        <label className="inline-flex items-start gap-2 cursor-pointer text-gray-400 text-[13px] leading-snug">
+                      <td className="px-4 py-4 align-middle min-w-[240px]">
+                        <label className="inline-flex items-start gap-2 cursor-pointer text-gray-400 text-[13px] leading-snug whitespace-nowrap">
                           <input
                             type="checkbox"
                             checked={!!student.excludeFromOcStaffViews}
@@ -1578,7 +1578,7 @@ const ViewOCPrograms = () => {
           <p className="text-gray-500 text-[15px]">Create your first OC cohort to get started.</p>
         </div>
       ) : (
-        <div className="bg-[#1c2128] rounded-2xl border border-gray-700/50 p-8 max-w-7xl shadow-xl shadow-black/10">
+        <div className="bg-[#1c2128] rounded-2xl border border-gray-700/50 p-6 lg:p-8 w-full shadow-xl shadow-black/10">
           <h2 className="text-base font-medium text-gray-200 mb-6">All cohorts</h2>
           <div className="rounded-xl border border-gray-700/50 overflow-hidden">
             <table className="w-full border-collapse">
