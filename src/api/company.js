@@ -295,6 +295,237 @@ export const getCohortQctoTracker = (cohortId, view = "km") => {
     });
 };
 
+/** --- Moderation sample batches (v1) --- */
+const moderationSampleHeaders = () => {
+  const token = localStorage.getItem("TOKEN");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { "auth-token": token } : {}),
+  };
+};
+
+function moderationApiError(err, fallback) {
+  if (err?.response?.status === 404) {
+    return {
+      success: false,
+      message:
+        "Moderation samples API not found. Restart zaio-backend (npm start) so new routes load.",
+    };
+  }
+  return {
+    success: false,
+    message: err?.response?.data?.message || err?.message || fallback,
+  };
+}
+
+export const getModerationSampleEligibility = (cohortId, params) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/moderation-samples/eligibility`, {
+      headers: moderationSampleHeaders(),
+      params,
+    })
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const listModerationSamplesForCohort = (cohortId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/${cohortId}/moderation-samples`, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({ ...moderationApiError(err, "Request failed"), data: [] }));
+
+export const createModerationSampleDraft = (cohortId, body) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/${cohortId}/moderation-samples`, body, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const getModerationSampleBatch = (batchId) =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/moderation-samples/${batchId}`, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const regenerateModerationSample = (batchId) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/moderation-samples/${batchId}/regenerate`, {}, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const remoderateModerationSample = (batchId) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/moderation-samples/${batchId}/remoderate`, {}, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const patchModerationSampleItems = (batchId, adjustments) =>
+  axios
+    .patch(
+      `${BASE_URL}/oc-cohort/moderation-samples/${batchId}/items`,
+      { adjustments },
+      { headers: moderationSampleHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const sendModerationSampleToModerator = (batchId, body = {}) =>
+  axios
+    .post(`${BASE_URL}/oc-cohort/moderation-samples/${batchId}/send`, body, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const listMyModerationSamples = () =>
+  axios
+    .get(`${BASE_URL}/oc-cohort/moderation-samples/mine`, {
+      headers: moderationSampleHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({ ...moderationApiError(err, "Request failed"), data: [] }));
+
+export const updateModerationSampleItemStatus = (batchId, itemId, body) =>
+  axios
+    .patch(
+      `${BASE_URL}/oc-cohort/moderation-samples/${batchId}/items/${itemId}/moderation-status`,
+      body,
+      { headers: moderationSampleHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => moderationApiError(err, "Request failed"));
+
+export const downloadModerationSampleManifest = async (batchId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const res = await axios.get(
+    `${BASE_URL}/oc-cohort/moderation-samples/${batchId}/manifest.csv`,
+    { headers, responseType: "blob" }
+  );
+  const blob = new Blob([res.data], { type: "text/csv" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `moderation-sample-${batchId}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const createModerationReport = async (
+  batchId,
+  {
+    moderatorFirstName,
+    moderatorSurname,
+    moderatorIdNumber,
+    moderatorRegistrationId,
+    moderatorSignature,
+    moderatorComments,
+    regenerate = false,
+  } = {}
+) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  try {
+    const res = await axios.post(
+      `${BASE_URL}/oc-cohort/moderation-samples/${batchId}/create-report`,
+      {
+        moderatorFirstName,
+        moderatorSurname,
+        moderatorIdNumber,
+        moderatorRegistrationId,
+        moderatorSignature,
+        moderatorComments,
+        regenerate,
+      },
+      { headers, responseType: "blob" }
+    );
+    const contentType = res.headers["content-type"] || "application/pdf";
+    const ext = contentType.includes("html") ? "html" : "pdf";
+    const blob = new Blob([res.data], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `moderation-report-${batchId}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    return { success: true };
+  } catch (err) {
+    if (err?.response?.data instanceof Blob) {
+      try {
+        const text = await err.response.data.text();
+        const parsed = JSON.parse(text);
+        return { success: false, message: parsed.message || "Could not create report" };
+      } catch {
+        return { success: false, message: "Could not create report" };
+      }
+    }
+    return { success: false, message: err?.message || "Could not create report" };
+  }
+};
+
+export const viewModerationReport = async (batchId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  try {
+    const res = await axios.get(
+      `${BASE_URL}/oc-cohort/moderation-samples/${batchId}/report.pdf`,
+      { headers, responseType: "blob" }
+    );
+    const contentType = res.headers["content-type"] || "";
+    if (contentType.includes("application/json")) {
+      const text = await res.data.text();
+      const parsed = JSON.parse(text);
+      return { success: false, message: parsed.message || "Could not open report" };
+    }
+    const blob = new Blob([res.data], {
+      type: contentType || "application/pdf",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+    if (!opened) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+    }
+    return { success: true };
+  } catch (err) {
+    const status = err?.response?.status;
+    if (err?.response?.data instanceof Blob) {
+      try {
+        const text = await err.response.data.text();
+        if (text.trim().startsWith("{")) {
+          const parsed = JSON.parse(text);
+          return { success: false, message: parsed.message || "Could not open report" };
+        }
+        if (status === 404) {
+          return {
+            success: false,
+            message: "Report not found. Restart the backend if you recently deployed changes.",
+          };
+        }
+      } catch {
+        return { success: false, message: "Could not open report" };
+      }
+    }
+    return { success: false, message: err?.message || "Could not open report" };
+  }
+};
+
 /** Tutor + super student admin. `deadlines`: [{ courseId, learnerWorkbookDue?, summativeDue?, pmModuleDue? }] */
 export const updateOCCohortModuleDeadlines = (cohortId, deadlines) => {
   const token = localStorage.getItem("TOKEN");

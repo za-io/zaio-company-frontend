@@ -3,7 +3,10 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getCohortQctoTracker,
   getOCCohortDetails,
+  listModerationSamplesForCohort,
+  remoderateModerationSample,
   updateOCCohortModuleDeadlines,
+  viewModerationReport,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
@@ -26,6 +29,80 @@ function formatDeadlineDisplay(iso) {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function moderationArtifactOptionsForModule(mod, view) {
+  const options = [];
+  if (view === "km") {
+    if (mod.refs?.workbook && mod.refs?.summative) {
+      options.push({
+        artifactType: "qcto_km",
+        label: "KM moderation (LWB + SA)",
+      });
+    } else {
+      if (mod.refs?.workbook) {
+        options.push({ artifactType: "qctolw", label: "Learner workbook (LWB)" });
+      }
+      if (mod.refs?.summative) {
+        options.push({ artifactType: "qctosa", label: "Summative assessment (SA)" });
+      }
+    }
+  } else {
+    if ((mod.refs?.pmtTasks || []).length) {
+      options.push({
+        artifactType: "qcto_pm",
+        label: "PM moderation (all PMT tasks)",
+      });
+    }
+    if (mod.refs?.summative) {
+      options.push({ artifactType: "qctosa", label: "Summative assessment (SA)" });
+    }
+  }
+  return options;
+}
+
+function findActiveModerationBatch(batches, mod, view) {
+  const options = moderationArtifactOptionsForModule(mod, view);
+  const primary = options[0];
+  if (!primary) return null;
+
+  const activeStatuses = new Set(["sent", "in_progress", "completed"]);
+  const candidates = (batches || []).filter((b) => {
+    if (b.courseId !== mod.courseId || !activeStatuses.has(b.status)) return false;
+    if (b.artifactType !== primary.artifactType) return false;
+    if (primary.artifactType === "qctopmt" && primary.pmtTaskId) {
+      return String(b.pmtTaskId || "") === String(primary.pmtTaskId);
+    }
+    if (primary.artifactType === "qcto_pm" || primary.artifactType === "qcto_km") {
+      return !b.pmtTaskId;
+    }
+    return true;
+  });
+
+  return candidates.sort(
+    (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+  )[0];
+}
+
+function summarizeModerationBatch(batch) {
+  if (!batch || batch.status !== "completed") return null;
+  const included = (batch.items || []).filter((it) => it.includedInFinalSample);
+  if (!included.length) return null;
+
+  const disagreeCount = included.filter((it) => it.moderationStatus === "disagree").length;
+  const returnedCount = included.filter((it) => it.moderationStatus === "returned").length;
+  const allAgree = included.every((it) => it.moderationStatus === "agree");
+
+  return {
+    allAgree,
+    needsRemoderation: disagreeCount > 0 || returnedCount > 0,
+    disagreeCount,
+    returnedCount,
+    hasReport: Boolean(
+      batch.moderationReport?.generatedAt && batch.moderationReport?.moderatorSignature
+    ),
+    batchId: batch._id,
+  };
+}
+
 const OCQctoTrackerPage = () => {
   const { cohortId } = useParams();
   const [searchParams] = useSearchParams();
@@ -36,6 +113,9 @@ const OCQctoTrackerPage = () => {
   const assessorReadOnly = user?.role === "TUTOR";
   const canEditDeadlines =
     user?.role === "TUTOR" || user?.role === "SUPER_STUDENT_ADMIN";
+  const canManageModerationSamples = ["SUPER_STUDENT_ADMIN", "COMPANY_ADMIN", "SUPER_ADMIN"].includes(
+    user?.role
+  );
 
   const [cohortName, setCohortName] = useState("");
   const [data, setData] = useState(null);
@@ -45,6 +125,77 @@ const OCQctoTrackerPage = () => {
   const [savingCourseId, setSavingCourseId] = useState(null);
   /** PM view: task list modal { moduleName, studentName, studentId, tasks } */
   const [pmtModal, setPmtModal] = useState(null);
+  /** Pick LWB / SA / PMT before opening moderation sample create flow */
+  const [moderationSamplePicker, setModerationSamplePicker] = useState(null);
+  const [moderationBatches, setModerationBatches] = useState([]);
+  const [remoderatingCourseId, setRemoderatingCourseId] = useState(null);
+  const [viewingReportBatchId, setViewingReportBatchId] = useState(null);
+
+  const loadModerationBatches = async () => {
+    if (!canManageModerationSamples || !cohortId) return;
+    const res = await listModerationSamplesForCohort(cohortId);
+    if (res?.success) {
+      setModerationBatches(res.data || []);
+    }
+  };
+
+  const openModerationSampleCreate = (mod) => {
+    const options = moderationArtifactOptionsForModule(mod, view);
+    if (!options.length) {
+      alert("No assessable artifacts configured for this module.");
+      return;
+    }
+    if (options.length === 1) {
+      const o = options[0];
+      const params = new URLSearchParams({
+        courseId: mod.courseId,
+        artifactType: o.artifactType,
+      });
+      if (o.pmtTaskId) params.set("pmtTaskId", o.pmtTaskId);
+      navigate(`/oc-programs/${cohortId}/moderation-samples?${params.toString()}`);
+      return;
+    }
+    setModerationSamplePicker({ mod, options });
+  };
+
+  const confirmModerationSampleArtifact = (option) => {
+    if (!moderationSamplePicker?.mod) return;
+    const params = new URLSearchParams({
+      courseId: moderationSamplePicker.mod.courseId,
+      artifactType: option.artifactType,
+    });
+    if (option.pmtTaskId) params.set("pmtTaskId", option.pmtTaskId);
+    setModerationSamplePicker(null);
+    navigate(`/oc-programs/${cohortId}/moderation-samples?${params.toString()}`);
+  };
+
+  const handleRemoderate = async (mod, batch) => {
+    if (
+      !window.confirm(
+        "Archive the current moderation result and create a new sample? The moderator will review a fresh sample."
+      )
+    ) {
+      return;
+    }
+    setRemoderatingCourseId(mod.courseId);
+    const res = await remoderateModerationSample(batch._id);
+    setRemoderatingCourseId(null);
+    if (res?.success) {
+      await loadModerationBatches();
+      openModerationSampleCreate(mod);
+    } else {
+      alert(res?.message || "Could not start remoderation");
+    }
+  };
+
+  const handleViewReport = async (batchId) => {
+    setViewingReportBatchId(batchId);
+    const res = await viewModerationReport(batchId);
+    setViewingReportBatchId(null);
+    if (!res?.success) {
+      alert(res?.message || "Could not open moderation report");
+    }
+  };
 
   useEffect(() => {
     if (!cohortId) return;
@@ -70,6 +221,12 @@ const OCQctoTrackerPage = () => {
           setData(null);
           setError(trackerRes?.message || "Could not load tracker");
         }
+        if (canManageModerationSamples) {
+          const modRes = await listModerationSamplesForCohort(cohortId);
+          if (!cancelled && modRes?.success) {
+            setModerationBatches(modRes.data || []);
+          }
+        }
       } catch (e) {
         if (!cancelled) {
           setError(e?.message || "Could not load tracker");
@@ -83,7 +240,7 @@ const OCQctoTrackerPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [cohortId, view]);
+  }, [cohortId, view, canManageModerationSamples]);
 
   useEffect(() => {
     if (!data?.modules?.length) return;
@@ -181,18 +338,31 @@ const OCQctoTrackerPage = () => {
           ← Back to OC Programs
         </button>
 
-        <h1 className="text-2xl font-semibold text-gray-100 mb-1">
-          {view === "km" ? "Knowledge modules (KM)" : "Practical modules (PM)"}
-        </h1>
-        <p className="text-gray-500 text-[15px] mb-8">
-          {cohortName ? (
-            <>
-              Cohort: <span className="text-gray-300">{cohortName}</span>
-            </>
-          ) : (
-            "Loading cohort…"
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-100 mb-1">
+              {view === "km" ? "Knowledge modules (KM)" : "Practical modules (PM)"}
+            </h1>
+            <p className="text-gray-500 text-[15px]">
+              {cohortName ? (
+                <>
+                  Cohort: <span className="text-gray-300">{cohortName}</span>
+                </>
+              ) : (
+                "Loading cohort…"
+              )}
+            </p>
+          </div>
+          {canManageModerationSamples && (
+            <button
+              type="button"
+              onClick={() => navigate(`/oc-programs/${cohortId}/moderation-samples`)}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-700/80 hover:bg-violet-600 text-white"
+            >
+              Moderation samples
+            </button>
           )}
-        </p>
+        </div>
 
         {loading ? (
           <div className="flex items-center gap-2 text-gray-500 py-12">
@@ -218,10 +388,85 @@ const OCQctoTrackerPage = () => {
                 const hasSummativeRef = !!mod.refs?.summative;
                 return (
                 <div key={mod.courseId} className="rounded-xl border border-gray-700/50 overflow-hidden">
-                  <div className="bg-gray-800/40 px-4 py-3 border-b border-gray-700/40">
+                  <div className="bg-gray-800/40 px-4 py-3 border-b border-gray-700/40 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-sm font-medium text-gray-200">
                       {view === "km" ? "KM" : "PM"} — {mod.name}
                     </h2>
+                    {canManageModerationSamples && (() => {
+                      const batch = findActiveModerationBatch(moderationBatches, mod, view);
+                      const summary = summarizeModerationBatch(batch);
+
+                      if (batch && batch.status !== "completed") {
+                        return (
+                          <span className="text-xs font-medium text-blue-300">
+                            Moderation in progress
+                          </span>
+                        );
+                      }
+
+                      if (summary?.allAgree) {
+                        return (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-green-400">
+                              Moderated successfully
+                            </span>
+                            {summary.hasReport && (
+                              <button
+                                type="button"
+                                disabled={viewingReportBatchId === summary.batchId}
+                                onClick={() => handleViewReport(summary.batchId)}
+                                className="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
+                              >
+                                {viewingReportBatchId === summary.batchId
+                                  ? "Opening…"
+                                  : "View report"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (summary?.needsRemoderation) {
+                        const issueParts = [];
+                        if (summary.disagreeCount) {
+                          issueParts.push(
+                            `${summary.disagreeCount} disagreed`
+                          );
+                        }
+                        if (summary.returnedCount) {
+                          issueParts.push(
+                            `${summary.returnedCount} returned`
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-medium text-amber-400">
+                              Moderation issue: {issueParts.join(", ")} — remoderation required
+                            </span>
+                            <button
+                              type="button"
+                              disabled={remoderatingCourseId === mod.courseId}
+                              onClick={() => handleRemoderate(mod, batch)}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white disabled:opacity-50"
+                            >
+                              {remoderatingCourseId === mod.courseId
+                                ? "Starting…"
+                                : "Remoderate"}
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          className="text-xs px-3 py-1.5 rounded-lg bg-violet-700/80 text-violet-100 hover:bg-violet-600 font-medium"
+                          onClick={() => openModerationSampleCreate(mod)}
+                        >
+                          Create moderation sample
+                        </button>
+                      );
+                    })()}
                   </div>
 
                   {(canEditDeadlines ||
@@ -415,6 +660,12 @@ const OCQctoTrackerPage = () => {
                             SA assessed
                           </th>
                           )}
+                          <th
+                            className="px-3 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap"
+                            title="Learner was included in the moderation sample and reviewed by the moderator"
+                          >
+                            Moderated
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-700/40">
@@ -606,6 +857,7 @@ const OCQctoTrackerPage = () => {
                                     })()}
                                   </td>
                                 )}
+                                <td className="px-3 py-3 text-sm">{yesNo(row.moderated)}</td>
                               </tr>
                             );
                           }
@@ -674,6 +926,17 @@ const OCQctoTrackerPage = () => {
                                   </td>
                                 );
                               })}
+                              <td className="px-3 py-3 text-sm">
+                                <span
+                                  className={
+                                    row.moderated
+                                      ? "text-emerald-400/95 font-medium"
+                                      : "text-gray-500"
+                                  }
+                                >
+                                  {row.moderated ? "Yes" : "—"}
+                                </span>
+                              </td>
                             </tr>
                           );
                         })}
@@ -797,6 +1060,56 @@ const OCQctoTrackerPage = () => {
                   No PMT tasks are configured for this module on the learning path.
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {moderationSamplePicker && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="moderation-sample-picker-title"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4 py-8"
+          onClick={() => setModerationSamplePicker(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-gray-600/50 bg-[#151a22] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-gray-700/60 px-5 py-4">
+              <h2 id="moderation-sample-picker-title" className="text-lg font-semibold text-gray-100">
+                Create moderation sample
+              </h2>
+              <p className="mt-1 text-sm text-gray-400">
+                {view === "km" ? "KM" : "PM"} — {moderationSamplePicker.mod?.name}
+              </p>
+              <p className="mt-2 text-xs text-gray-500">
+                {view === "km"
+                  ? "One sample per KM includes both learner workbook and summative assessment (25% of eligible learners)."
+                  : "Choose which artifact to sample (25% of eligible assessed submissions)."}
+              </p>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-2">
+              {moderationSamplePicker.options.map((opt) => (
+                <button
+                  key={`${opt.artifactType}-${opt.pmtTaskId || ""}`}
+                  type="button"
+                  onClick={() => confirmModerationSampleArtifact(opt)}
+                  className="w-full text-left px-4 py-3 rounded-lg border border-gray-700/50 bg-gray-800/40 text-gray-200 text-sm hover:border-violet-500/50 hover:bg-violet-950/30 transition-colors"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="px-5 pb-4 flex justify-end">
+              <button
+                type="button"
+                className="text-sm text-gray-400 hover:text-gray-200"
+                onClick={() => setModerationSamplePicker(null)}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

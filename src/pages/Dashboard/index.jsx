@@ -448,7 +448,11 @@ const Dashboard = () => {
   
   useEffect(() => {
     // Redirect assessors and moderators directly to OC Programs page
-    if (user?.role === "ASSESSOR" || user?.role === "MODERATOR") {
+    if (user?.role === "MODERATOR") {
+      navigate("/moderation-queue");
+      return;
+    }
+    if (user?.role === "ASSESSOR") {
       navigate("/oc-programs");
       return;
     }

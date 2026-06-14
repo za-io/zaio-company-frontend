@@ -46,6 +46,8 @@ import OCLearnerDocuments from "./pages/OCLearnerDocuments";
 import OCStudentDetails from "./pages/OCStudentDetails";
 import OCModuleDetails from "./pages/OCModuleDetails";
 import OCQctoTrackerPage from "./pages/OCQctoTrackerPage";
+import OCModerationSamplesPage from "./pages/OCModerationSamples";
+import OCModeratorQueuePage from "./pages/OCModeratorQueue";
 import Finance from "./pages/Finance";
 import FinancePasswordGate from "./components/FinancePasswordGate";
 import RosterPaymentCheck from "./pages/RosterPaymentCheck";
@@ -261,6 +263,33 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/oc-programs/:cohortId/module-tracker"
               component={<OCQctoTrackerPage />}
+            />
+          }
+        />
+        <Route
+          path="/oc-programs/:cohortId/moderation-samples"
+          element={
+            <ProtectedRoute
+              path="/oc-programs/:cohortId/moderation-samples"
+              component={<OCModerationSamplesPage />}
+            />
+          }
+        />
+        <Route
+          path="/moderation-queue/:batchId"
+          element={
+            <ProtectedRoute
+              path="/moderation-queue/:batchId"
+              component={<OCModeratorQueuePage />}
+            />
+          }
+        />
+        <Route
+          path="/moderation-queue"
+          element={
+            <ProtectedRoute
+              path="/moderation-queue"
+              component={<OCModeratorQueuePage />}
             />
           }
         />
