@@ -48,6 +48,12 @@ import OCModuleDetails from "./pages/OCModuleDetails";
 import OCQctoTrackerPage from "./pages/OCQctoTrackerPage";
 import OCModerationSamplesPage from "./pages/OCModerationSamples";
 import OCModeratorQueuePage from "./pages/OCModeratorQueue";
+import ManageTeam from "./pages/ManageTeam";
+import AssessorEarnings from "./pages/AssessorEarnings";
+import AssessorSettings from "./pages/AssessorSettings";
+import OCLateSubmissions from "./pages/OCLateSubmissions";
+import OCLateVerifications from "./pages/OCLateVerifications";
+import QCTOPayments from "./pages/QCTOPayments";
 import Finance from "./pages/Finance";
 import FinancePasswordGate from "./components/FinancePasswordGate";
 import RosterPaymentCheck from "./pages/RosterPaymentCheck";
@@ -228,6 +234,42 @@ const AppHelper = () => {
               path="/program/add/exiting"
               component={<AddExiting />}
             />
+          }
+        />
+        <Route
+          path="/manage-team"
+          element={
+            <ProtectedRoute path="/manage-team" component={<ManageTeam />} />
+          }
+        />
+        <Route
+          path="/assessor-earnings"
+          element={
+            <ProtectedRoute path="/assessor-earnings" component={<AssessorEarnings />} />
+          }
+        />
+        <Route
+          path="/assessor-settings"
+          element={
+            <ProtectedRoute path="/assessor-settings" component={<AssessorSettings />} />
+          }
+        />
+        <Route
+          path="/late-submissions"
+          element={
+            <ProtectedRoute path="/late-submissions" component={<OCLateSubmissions />} />
+          }
+        />
+        <Route
+          path="/late-verifications"
+          element={
+            <ProtectedRoute path="/late-verifications" component={<OCLateVerifications />} />
+          }
+        />
+        <Route
+          path="/moderator-earnings"
+          element={
+            <ProtectedRoute path="/moderator-earnings" component={<AssessorEarnings />} />
           }
         />
         <Route
@@ -425,6 +467,12 @@ const AppHelper = () => {
                 </FinancePasswordGate>
               }
             />
+          }
+        />
+        <Route
+          path="/qcto-payments"
+          element={
+            <ProtectedRoute path="/qcto-payments" component={<QCTOPayments />} />
           }
         />
         <Route

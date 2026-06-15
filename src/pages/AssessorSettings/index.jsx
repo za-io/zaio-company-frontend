@@ -1,20 +1,32 @@
 import React, { useState, useEffect } from "react";
-import { getMyTutorAvailability, setMyTutorAvailability } from "../../api/company";
+import { Navigate } from "react-router-dom";
+import {
+  getAssessorNotificationSettings,
+  updateAssessorNotificationSettings,
+} from "../../api/company";
+import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
 
-export default function TutorSettings() {
+export default function AssessorSettings() {
+  const { user } = useUserStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [notificationEmail, setNotificationEmail] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+
+  const isAssessor = user?.role === "ASSESSOR";
 
   const load = async () => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await getMyTutorAvailability();
+      const res = await getAssessorNotificationSettings();
       if (res?.success && res?.data) {
         setNotificationEmail(res.data.notificationEmail || "");
+        setAccountEmail(res.data.accountEmail || "");
+      } else if (!res?.success) {
+        setMessage({ type: "error", text: res?.message || "Failed to load settings" });
       }
     } catch (e) {
       setMessage({ type: "error", text: "Failed to load settings" });
@@ -23,18 +35,19 @@ export default function TutorSettings() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (isAssessor) load();
+    else setLoading(false);
+  }, [isAssessor]);
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     setMessage(null);
     try {
-      const res = await setMyTutorAvailability({
-        notificationEmail: notificationEmail.trim() || undefined,
-      });
+      const res = await updateAssessorNotificationSettings(notificationEmail);
       if (res?.success) {
+        setNotificationEmail(res.data?.notificationEmail || "");
+        setAccountEmail(res.data?.accountEmail || "");
         setMessage({ type: "success", text: "Settings saved." });
       } else {
         setMessage({ type: "error", text: res?.message || "Failed to save" });
@@ -45,19 +58,23 @@ export default function TutorSettings() {
     setSaving(false);
   };
 
+  if (!isAssessor) {
+    return <Navigate to="/" replace />;
+  }
+
   if (loading) return <Loader />;
 
   return (
     <div className="max-w-xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold text-white mb-2">Settings</h1>
-          <p className="text-gray-400 mb-6">
-            Configure how you receive booking and QCTO verification notifications.
-          </p>
+      <p className="text-gray-400 mb-6">
+        Configure how you receive assessment notifications.
+      </p>
 
       <form onSubmit={handleSave} className="space-y-6">
         <div>
           <label htmlFor="notificationEmail" className="block text-sm font-medium text-gray-300 mb-2">
-            Notification email
+            Assessment notification email
           </label>
           <input
             id="notificationEmail"
@@ -68,7 +85,8 @@ export default function TutorSettings() {
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
           />
           <p className="mt-1.5 text-xs text-gray-500">
-            When a student books a session or submits QCTO work (LW, KM/PM summative, or PMT) for verification, we send details to this address. Leave blank to use your account email.
+            We email you when a full PM module or summative is tutor-verified and ready to assess.
+            Leave blank to use your account email{accountEmail ? ` (${accountEmail})` : ""}.
           </p>
         </div>
 

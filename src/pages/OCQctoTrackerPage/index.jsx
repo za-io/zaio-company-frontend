@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   getCohortQctoTracker,
@@ -109,6 +109,11 @@ const OCQctoTrackerPage = () => {
   const navigate = useNavigate();
   const viewParam = (searchParams.get("view") || "km").toLowerCase();
   const view = viewParam === "pm" ? "pm" : "km";
+  const highlightStudentId = (searchParams.get("highlightStudent") || "").trim();
+  const highlightCourseId = (searchParams.get("highlightCourse") || "").trim();
+  const openPmtFromUrl =
+    searchParams.get("openPmt") === "1" || searchParams.get("openPmt") === "true";
+  const highlightHandledRef = useRef(false);
   const { user } = useUserStore();
   const assessorReadOnly = user?.role === "TUTOR";
   const canEditDeadlines =
@@ -263,6 +268,57 @@ const OCQctoTrackerPage = () => {
       : `${label} module tracker · Zaio`;
   }, [cohortName, view]);
 
+  useEffect(() => {
+    highlightHandledRef.current = false;
+  }, [highlightStudentId, highlightCourseId, cohortId]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !data?.modules?.length ||
+      !highlightStudentId ||
+      !highlightCourseId ||
+      highlightHandledRef.current
+    ) {
+      return;
+    }
+
+    const mod = data.modules.find((m) => String(m.courseId) === highlightCourseId);
+    const row = mod?.rows?.find((r) => String(r.studentId) === highlightStudentId);
+    if (!mod || !row) return;
+
+    highlightHandledRef.current = true;
+
+    const modEl = document.getElementById(`tracker-module-${highlightCourseId}`);
+    const rowEl = document.getElementById(`tracker-row-${highlightCourseId}-${highlightStudentId}`);
+
+    modEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      rowEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 350);
+
+    if (openPmtFromUrl && view === "pm" && (row.pmtTasks || []).length) {
+      window.setTimeout(() => {
+        setPmtModal({
+          moduleName: mod.name,
+          studentName: row.name,
+          studentId: row.studentId,
+          tasks: row.pmtTasks || [],
+          highlightPending: true,
+        });
+      }, 500);
+    }
+  }, [loading, data, highlightStudentId, highlightCourseId, openPmtFromUrl, view]);
+
+  const isHighlightedModule = (courseId) =>
+    highlightCourseId && String(courseId) === highlightCourseId;
+
+  const isHighlightedRow = (courseId, studentId) =>
+    highlightCourseId &&
+    highlightStudentId &&
+    String(courseId) === highlightCourseId &&
+    String(studentId) === highlightStudentId;
+
   const updateDeadlineField = (courseId, field, value) => {
     setDeadlineForms((prev) => ({
       ...prev,
@@ -387,7 +443,15 @@ const OCQctoTrackerPage = () => {
               {data.modules.map((mod) => {
                 const hasSummativeRef = !!mod.refs?.summative;
                 return (
-                <div key={mod.courseId} className="rounded-xl border border-gray-700/50 overflow-hidden">
+                <div
+                  key={mod.courseId}
+                  id={`tracker-module-${mod.courseId}`}
+                  className={`rounded-xl border overflow-hidden ${
+                    isHighlightedModule(mod.courseId)
+                      ? "border-amber-400/70 ring-2 ring-amber-400/50"
+                      : "border-gray-700/50"
+                  }`}
+                >
                   <div className="bg-gray-800/40 px-4 py-3 border-b border-gray-700/40 flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-sm font-medium text-gray-200">
                       {view === "km" ? "KM" : "PM"} — {mod.name}
@@ -712,7 +776,15 @@ const OCQctoTrackerPage = () => {
                             const pmtAssessed = pmtTasks.filter((t) => t.assessed).length;
 
                             return (
-                              <tr key={row.studentId} className="hover:bg-gray-800/20">
+                              <tr
+                                key={row.studentId}
+                                id={`tracker-row-${mod.courseId}-${row.studentId}`}
+                                className={
+                                  isHighlightedRow(mod.courseId, row.studentId)
+                                    ? "bg-amber-500/20 ring-2 ring-inset ring-amber-400 animate-pulse"
+                                    : "hover:bg-gray-800/20"
+                                }
+                              >
                                 <td className="px-3 py-3 text-sm text-gray-300">
                                   <span className="font-medium">{row.name}</span>
                                   <span className="block text-xs text-gray-500 truncate max-w-[220px]">
@@ -973,6 +1045,11 @@ const OCQctoTrackerPage = () => {
                   <span className="mx-1.5 text-gray-600">·</span>
                   {pmtModal.moduleName}
                 </p>
+                {pmtModal.highlightPending && (
+                  <p className="mt-2 text-xs text-amber-300">
+                    Highlighted rows still need assessment — open each in the assessor app.
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -1007,7 +1084,14 @@ const OCQctoTrackerPage = () => {
                         assessorReadOnly
                       );
                       return (
-                        <tr key={t.taskId} className="align-top">
+                        <tr
+                          key={t.taskId}
+                          className={`align-top ${
+                            pmtModal.highlightPending && t.submitted && !t.assessed
+                              ? "bg-amber-500/15 ring-1 ring-inset ring-amber-400/60"
+                              : ""
+                          }`}
+                        >
                           <td className="py-3 pr-3">{t.lectureName || "PMT task"}</td>
                           <td className="py-3 pr-2">
                             <span

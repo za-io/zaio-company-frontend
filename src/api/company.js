@@ -86,6 +86,182 @@ export const getAllModerators = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
+const companyAuthHeaders = () => {
+  const token = localStorage.getItem("TOKEN");
+  return token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+};
+
+export const getTeamMembers = () =>
+  axios
+    .get(`${BASE_URL}/company/team-members`, { headers: companyAuthHeaders() })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load team",
+    }));
+
+export const updateTeamMemberRatePerCredit = (memberId, ratePerCredit) =>
+  axios
+    .patch(
+      `${BASE_URL}/company/team-members/${memberId}/rate-per-credit`,
+      { ratePerCredit },
+      { headers: companyAuthHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update rate",
+    }));
+
+export const updateTeamMemberPassword = (memberId, password) =>
+  axios
+    .patch(
+      `${BASE_URL}/company/team-members/${memberId}/password`,
+      { password },
+      { headers: companyAuthHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update password",
+    }));
+
+export const getAssessorEarnings = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.mode) q.set("mode", params.mode);
+  if (params.month) q.set("month", params.month);
+  if (params.rangeStart) q.set("rangeStart", params.rangeStart);
+  if (params.rangeEnd) q.set("rangeEnd", params.rangeEnd);
+  if (params.cohortId) q.set("cohortId", params.cohortId);
+  if (params.allTime) q.set("allTime", "true");
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/company/assessor-earnings${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load earnings",
+    }));
+};
+
+export const getAssessorNotificationSettings = () =>
+  axios
+    .get(`${BASE_URL}/company/assessor-notification-settings`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load notification settings",
+    }));
+
+export const updateAssessorNotificationSettings = (notificationEmail) =>
+  axios
+    .patch(
+      `${BASE_URL}/company/assessor-notification-settings`,
+      { notificationEmail: notificationEmail.trim() || null },
+      { headers: companyAuthHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to save notification settings",
+    }));
+
+export const getModeratorEarnings = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.mode) q.set("mode", params.mode);
+  if (params.month) q.set("month", params.month);
+  if (params.rangeStart) q.set("rangeStart", params.rangeStart);
+  if (params.rangeEnd) q.set("rangeEnd", params.rangeEnd);
+  if (params.cohortId) q.set("cohortId", params.cohortId);
+  if (params.allTime) q.set("allTime", "true");
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/company/moderator-earnings${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load earnings",
+    }));
+};
+
+export const getAssessorEarningsFinanceSummary = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.mode) q.set("mode", params.mode);
+  if (params.month) q.set("month", params.month);
+  if (params.rangeStart) q.set("rangeStart", params.rangeStart);
+  if (params.rangeEnd) q.set("rangeEnd", params.rangeEnd);
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/company/assessor-earnings/finance-summary${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load assessor earnings",
+    }));
+};
+
+export const recordAssessorEarningPayment = (staffId, { amountZar, comments, paidAt, file, role }) => {
+  const formData = new FormData();
+  formData.append("amountZar", String(amountZar));
+  if (comments) formData.append("comments", comments);
+  if (paidAt) formData.append("paidAt", paidAt);
+  if (file) formData.append("file", file);
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const path =
+    role === "MODERATOR"
+      ? `${BASE_URL}/company/moderator-earnings/${staffId}/payments`
+      : `${BASE_URL}/company/assessor-earnings/${staffId}/payments`;
+  return axios
+    .post(path, formData, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to record payment",
+    }));
+};
+
+export const getAssessorEarningPaymentProofUrl = (paymentId) =>
+  axios
+    .get(`${BASE_URL}/company/assessor-earnings/payments/${paymentId}/proof-url`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load proof",
+    }));
+
+export const getAssessorPaymentsStatement = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.mode) q.set("mode", params.mode);
+  if (params.month) q.set("month", params.month);
+  if (params.rangeStart) q.set("rangeStart", params.rangeStart);
+  if (params.rangeEnd) q.set("rangeEnd", params.rangeEnd);
+  if (params.assessorId) q.set("assessorId", params.assessorId);
+  if (params.allTime) q.set("allTime", "true");
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/company/assessor-earnings/payments-statement${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load statement",
+    }));
+};
+
 export const getBootcampDetails = (bootcamp_id) =>
   axios
     .get(API_URL + `/details?bootcamp_id=${bootcamp_id}`)
@@ -293,6 +469,44 @@ export const getCohortQctoTracker = (cohortId, view = "km") => {
       console.log(err);
       throw err;
     });
+};
+
+/** Assessor queue: KM/PM submissions made after cohort deadline */
+export const getAssessorLateSubmissions = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.cohortId) q.set("cohortId", params.cohortId);
+  if (params.view) q.set("view", params.view);
+  if (params.pendingOnly === false) q.set("pendingOnly", "false");
+  if (params.countOnly) q.set("countOnly", "true");
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/oc-cohort/assessor/late-submissions${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load late submissions",
+    }));
+};
+
+/** Tutor queue: late KM/PM submissions needing tutor sign-off */
+export const getTutorLateVerifications = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.cohortId) q.set("cohortId", params.cohortId);
+  if (params.view) q.set("view", params.view);
+  if (params.pendingOnly === false) q.set("pendingOnly", "false");
+  if (params.countOnly) q.set("countOnly", "true");
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/oc-cohort/tutor/late-verifications${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load late verifications",
+    }));
 };
 
 /** --- Moderation sample batches (v1) --- */
