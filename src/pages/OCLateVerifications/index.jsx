@@ -82,7 +82,7 @@ const OCLateVerifications = () => {
   const filteredCount = useMemo(() => items.length, [items]);
 
   const openVerification = (row) => {
-    const url = buildQctoAssessorUrl(row.assessorRef, row.studentId, false);
+    const url = buildQctoAssessorUrl(row.assessorRef, row.studentId, true);
     if (url) {
       window.open(url, "_blank", "noopener,noreferrer");
     } else {
