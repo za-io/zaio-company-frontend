@@ -13,6 +13,7 @@ import {
 } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import AnalyticsTable from "./table";
+import CohortLifecycleBanner from "./CohortLifecycleBanner";
 import { useSearchParams } from "react-router-dom";
 import LPAnalyticsTable from "./learningpath.index";
 import CourseAnalyticsTable from "./course.index";
@@ -171,6 +172,13 @@ const StudentAnalytics = () => {
           </div>
         )}
       </div>
+
+      {searchType === "bootcamp" && bootcamp?.bootcamp?.bootcampDetails && (
+        <CohortLifecycleBanner
+          bootcampDetails={bootcamp.bootcamp.bootcampDetails}
+          onUpdated={getAnalytics}
+        />
+      )}
 
       {/* Add students modal */}
       {addStudentsOpen && user?.role !== "COMPANY_ADMIN" && (

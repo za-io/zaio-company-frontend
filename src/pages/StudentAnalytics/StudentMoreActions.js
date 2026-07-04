@@ -8,6 +8,8 @@ import {
   undoRevokeLPAndBootcampAccess,
   revokeLPAndBootcampAccess,
   updateStudentNumber,
+  updateBootcampEnrollmentStatus,
+  ENROLLMENT_STATUS_OPTIONS,
 } from "../../api/student";
 
 const inputClass =
@@ -27,6 +29,9 @@ export const StudentMoreActionsModal = ({
   const [studentNumberValue, setStudentNumberValue] = useState(showModal?.userid?.studentNumber ?? "");
   const [studentNumberSaving, setStudentNumberSaving] = useState(false);
   const [studentNumberMessage, setStudentNumberMessage] = useState(null);
+  const [enrollmentStatusValue, setEnrollmentStatusValue] = useState(showModal?.enrollmentStatus || "in_progress");
+  const [enrollmentStatusSaving, setEnrollmentStatusSaving] = useState(false);
+  const [enrollmentStatusMessage, setEnrollmentStatusMessage] = useState(null);
 
   const handleClose = () => {
     setShowModal(false);
@@ -37,8 +42,10 @@ export const StudentMoreActionsModal = ({
       setChangedTutor(showModal?.tutor?._id != null ? String(showModal.tutor._id) : "");
       setStudentNumberValue(showModal?.userid?.studentNumber ?? "");
       setStudentNumberMessage(null);
+      setEnrollmentStatusValue(showModal?.enrollmentStatus || "in_progress");
+      setEnrollmentStatusMessage(null);
     }
-  }, [showModal?.userid?._id, showModal?.tutor?._id, showModal?.userid?.studentNumber]);
+  }, [showModal?.userid?._id, showModal?.tutor?._id, showModal?.userid?.studentNumber, showModal?.enrollmentStatus]);
 
   const tutorSelectOptions = (() => {
     const allocated = Array.isArray(tutorsForAssignment) ? [...tutorsForAssignment] : [];
@@ -147,6 +154,28 @@ export const StudentMoreActionsModal = ({
       });
   };
 
+  const handleSaveEnrollmentStatus = () => {
+    const userId = showModal?.userid?._id;
+    if (!userId || !bootcampId) return;
+    setEnrollmentStatusSaving(true);
+    setEnrollmentStatusMessage(null);
+    updateBootcampEnrollmentStatus(bootcampId, userId, enrollmentStatusValue)
+      .then((res) => {
+        if (res?.success) {
+          setEnrollmentStatusMessage("Enrollment status saved.");
+          getAnalytics();
+        } else {
+          setEnrollmentStatusMessage(res?.message || "Failed to save.");
+        }
+      })
+      .catch((err) => {
+        setEnrollmentStatusMessage(err?.response?.data?.message || "Failed to save.");
+      })
+      .finally(() => {
+        setEnrollmentStatusSaving(false);
+      });
+  };
+
   const handleLinkStudentNumber = () => {
     const userId = showModal?.userid?._id;
     if (!userId) return;
@@ -242,6 +271,40 @@ export const StudentMoreActionsModal = ({
         </div>
 
         <div className="border-t border-gray-700 pt-6">
+          {/* Enrollment status */}
+          <div className="mb-6">
+            <p className="text-sm font-semibold text-white mb-1">Enrollment status</p>
+            <p className="text-sm text-gray-400 mb-2">
+              Current: {ENROLLMENT_STATUS_OPTIONS.find((o) => o.value === (showModal?.enrollmentStatus || "in_progress"))?.label || "In progress"}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                className={inputClass + " max-w-[220px]"}
+                value={enrollmentStatusValue}
+                onChange={(e) => setEnrollmentStatusValue(e.target.value)}
+              >
+                {ENROLLMENT_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleSaveEnrollmentStatus}
+                className="px-4 py-2 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:opacity-50"
+                disabled={enrollmentStatusSaving}
+              >
+                {enrollmentStatusSaving ? "Saving..." : "Save status"}
+              </button>
+            </div>
+            {enrollmentStatusMessage && (
+              <p className={`text-sm mt-2 ${enrollmentStatusMessage.includes("saved") ? "text-green-400" : "text-red-400"}`}>
+                {enrollmentStatusMessage}
+              </p>
+            )}
+          </div>
+
           {/* Link Student Number */}
           <div className="mb-6">
             <p className="text-sm font-semibold text-white mb-1">

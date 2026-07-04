@@ -337,7 +337,7 @@ const AssessorEarnings = () => {
                   </h2>
                   <p className="text-xs text-gray-500 mt-1">
                     {isModerator
-                      ? "Paid when a KM or PM moderation batch is fully completed."
+                      ? "Paid when a KM or PM moderation batch is fully completed: students × credits × rate per credit."
                       : "KM: paid when Learner Workbook and Summative are both Pass. PM: paid when all PMT tasks are Pass."}
                   </p>
                 </div>
@@ -361,6 +361,9 @@ const AssessorEarnings = () => {
                         <th className="px-4 py-3 font-medium">Cohort</th>
                         <th className="px-4 py-3 font-medium">Module</th>
                         <th className="px-4 py-3 font-medium">Type</th>
+                        {isModerator && (
+                          <th className="px-4 py-3 font-medium text-right">Students</th>
+                        )}
                         <th className="px-4 py-3 font-medium text-right">Credits</th>
                         <th className="px-4 py-3 font-medium text-right">Rate</th>
                         <th className="px-4 py-3 font-medium text-right">Amount</th>
@@ -376,6 +379,9 @@ const AssessorEarnings = () => {
                           <td className="px-4 py-3 text-gray-300">{row.cohortName || "—"}</td>
                           <td className="px-4 py-3 text-gray-300">{row.courseName || "—"}</td>
                           <td className="px-4 py-3 text-gray-400">{moduleTypeLabel(row.moduleType)}</td>
+                          {isModerator && (
+                            <td className="px-4 py-3 text-right text-gray-300">{row.studentCount ?? 1}</td>
+                          )}
                           <td className="px-4 py-3 text-right text-gray-300">{row.credits}</td>
                           <td className="px-4 py-3 text-right text-gray-300">{formatZar(row.ratePerCredit)}</td>
                           <td className="px-4 py-3 text-right text-emerald-400 font-medium">

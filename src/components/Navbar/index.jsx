@@ -233,7 +233,7 @@ const Navbar = () => {
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
                   {user?.company_username?.charAt(0)?.toUpperCase() || "U"}
                 </div>
-                <span className="text-gray-300 text-sm font-medium">
+                <span className="text-gray-300 text-xs font-medium truncate max-w-[120px]">
                   {user?.company_username}
                 </span>
               </div>
@@ -241,13 +241,13 @@ const Navbar = () => {
         </Link>
 
           {/* Right: Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {/* Management Dropdown */}
             {user?.email && canManagePrograms && !isCompanyAdmin && menuItems.length > 0 && (
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setShowDropdown(!showDropdown)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                     showDropdown
                       ? "bg-blue-600 text-white"
                       : "bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white"
@@ -299,7 +299,7 @@ const Navbar = () => {
                 <button
                   type="button"
                   onClick={() => navigate("/finance")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
                     location.pathname === "/finance"
                       ? "bg-emerald-600 text-white"
                       : "bg-gray-800 text-gray-300 hover:bg-emerald-600/20 hover:text-emerald-400"
@@ -309,36 +309,25 @@ const Navbar = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={() => navigate("/deferred-students")}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
+                    location.pathname === "/deferred-students"
+                      ? "bg-yellow-600 text-white"
+                      : "bg-gray-800 text-gray-300 hover:bg-yellow-600/20 hover:text-yellow-400"
+                  }`}
+                >
+                  Deferred Students
+                </button>
+                <button
+                  type="button"
                   onClick={() => navigate("/qcto-payments")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
                     location.pathname === "/qcto-payments"
                       ? "bg-teal-600 text-white"
                       : "bg-gray-800 text-gray-300 hover:bg-teal-600/20 hover:text-teal-400"
                   }`}
                 >
                   QCTO payments
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate("/roster-payment-check")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    location.pathname === "/roster-payment-check"
-                      ? "bg-violet-600 text-white"
-                      : "bg-gray-800 text-gray-300 hover:bg-violet-600/20 hover:text-violet-400"
-                  }`}
-                >
-                  Roster
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate("/roster-tasks")}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                    location.pathname.startsWith("/roster-tasks")
-                      ? "bg-amber-600 text-white"
-                      : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
-                  }`}
-                >
-                  Tasks
                 </button>
               </>
             )}
@@ -347,7 +336,7 @@ const Navbar = () => {
             {user?.email && user?.role === "SUPER_STUDENT_ADMIN" && (
               <button
                 onClick={() => navigate("/tutor-bookings-admin")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/tutor-bookings-admin"
                     ? "bg-amber-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
@@ -364,7 +353,7 @@ const Navbar = () => {
             {user?.email && canManageTeam && !isCompanyAdmin && (
               <button
                 onClick={() => navigate("/manage-team")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/manage-team"
                     ? "bg-indigo-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-indigo-600/20 hover:text-indigo-300"
@@ -381,7 +370,7 @@ const Navbar = () => {
             {user?.email && user?.role === "TUTOR" && (
               <button
                 onClick={() => navigate("/tutor/analytics")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname.startsWith("/tutor/analytics")
                     ? "bg-blue-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-blue-600/20 hover:text-blue-400"
@@ -398,7 +387,7 @@ const Navbar = () => {
             {user?.email && user?.role === "TUTOR" && (
               <button
                 onClick={() => navigate("/tutor-availability")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/tutor-availability"
                     ? "bg-amber-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
@@ -415,7 +404,7 @@ const Navbar = () => {
             {user?.email && user?.role === "TUTOR" && (
               <button
                 onClick={() => navigate("/my-bookings")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/my-bookings"
                     ? "bg-amber-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
@@ -432,7 +421,7 @@ const Navbar = () => {
             {user?.email && user?.role === "TUTOR" && (
               <button
                 onClick={() => navigate("/reviews")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/reviews"
                     ? "bg-amber-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
@@ -449,7 +438,7 @@ const Navbar = () => {
             {user?.email && user?.role === "TUTOR" && (
             <button
                 onClick={() => navigate("/tutor-settings")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/tutor-settings"
                     ? "bg-amber-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
@@ -467,7 +456,7 @@ const Navbar = () => {
             {user?.email && canViewOC && !isCompanyAdmin && (
             <button
               onClick={() => navigate("/oc-programs")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/oc-programs" ||
                   (location.pathname.startsWith("/oc-programs/") &&
                     !location.pathname.startsWith("/oc-programs/student/"))
@@ -487,7 +476,7 @@ const Navbar = () => {
                 onClick={() => navigate("/late-verifications")}
                 disabled={lateVerificationLoading}
                 aria-busy={lateVerificationLoading}
-                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:cursor-wait ${
+                className={`relative flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all disabled:cursor-wait ${
                   location.pathname === "/late-verifications"
                     ? "bg-amber-600 text-white"
                     : showLateVerificationBlink
@@ -543,7 +532,7 @@ const Navbar = () => {
                 onClick={() => navigate("/late-submissions")}
                 disabled={lateCountLoading}
                 aria-busy={lateCountLoading}
-                className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:cursor-wait ${
+                className={`relative flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all disabled:cursor-wait ${
                   location.pathname === "/late-submissions"
                     ? "bg-amber-600 text-white"
                     : showLateBlink
@@ -596,7 +585,7 @@ const Navbar = () => {
             {user?.email && user?.role === "ASSESSOR" && (
               <button
                 onClick={() => navigate("/assessor-earnings")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/assessor-earnings"
                     ? "bg-green-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-green-600/20 hover:text-green-400"
@@ -612,7 +601,7 @@ const Navbar = () => {
             {user?.email && user?.role === "ASSESSOR" && (
               <button
                 onClick={() => navigate("/assessor-settings")}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                   location.pathname === "/assessor-settings"
                     ? "bg-amber-600 text-white"
                     : "bg-gray-800 text-gray-300 hover:bg-amber-600/20 hover:text-amber-400"
@@ -629,7 +618,7 @@ const Navbar = () => {
             {user?.email && user?.role === "MODERATOR" && (
             <button
               onClick={() => navigate("/moderator-earnings")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                 location.pathname === "/moderator-earnings"
                   ? "bg-green-600 text-white"
                   : "bg-gray-800 text-gray-300 hover:bg-green-600/20 hover:text-green-400"
@@ -645,7 +634,7 @@ const Navbar = () => {
             {user?.email && user?.role === "MODERATOR" && (
             <button
               onClick={() => navigate("/moderation-queue")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
                 location.pathname.startsWith("/moderation-queue")
                   ? "bg-violet-600 text-white"
                   : "bg-gray-800 text-gray-300 hover:bg-violet-600/20 hover:text-violet-300"
@@ -657,6 +646,23 @@ const Navbar = () => {
               <span className="hidden md:inline">Moderation queue</span>
             </button>
           )}
+
+            {user?.email && user?.role === "MODERATOR" && (
+              <button
+                onClick={() => navigate("/moderator-settings")}
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  location.pathname === "/moderator-settings"
+                    ? "bg-violet-600 text-white"
+                    : "bg-gray-800 text-gray-300 hover:bg-violet-600/20 hover:text-violet-300"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="hidden md:inline">Settings</span>
+              </button>
+            )}
           
             {/* Divider */}
             {user?.email && (
@@ -667,7 +673,7 @@ const Navbar = () => {
           {user?.email && (
             <button
               onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all"
             >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

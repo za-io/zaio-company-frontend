@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
-import { addClassroomAssignmentBootcamp, getBootcampAssignment, getStudentGoogleClassroomAssignments, getUserBootcampAnalyticsCourseWise, markBootcampCompleted, markCourseCompleted, setBootcampFinalProjectMark } from "../../api/student";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getStudentGoogleClassroomAssignments, getUserBootcampAnalyticsCourseWise, markBootcampCompleted, markCourseCompleted, resyncStudentGoogleClassroomAssignments, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import "../../components/ActiveBootcamps/ActiveBootcampsTable.css";
 
@@ -141,6 +141,180 @@ const StudentSummary = () => {
   const [courseMark, setCourseMark] = useState(0);
   const [allAssignments, setAllAssignments] = useState([]);
   const [showWorking, setShowWorking] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+  const [gcLoading, setGcLoading] = useState(false);
+  const [gcSyncing, setGcSyncing] = useState(false);
+  const [gcSyncMessage, setGcSyncMessage] = useState(null);
+  const [gcSyncIsError, setGcSyncIsError] = useState(false);
+
+  // Check if an assignment is a Project/Capstone (for Project Mark, not Assignments avg)
+  const isProjectAssignment = (title) => {
+    if (!title || typeof title !== "string") return false;
+    const lower = title.toLowerCase();
+    return (
+      lower.includes("cstn") ||
+      lower.includes("capstone") ||
+      lower.includes("cap stone") ||
+      /\bcap\b/.test(lower) ||
+      lower.includes("final project") ||
+      /\bfinal\b/.test(lower)
+    );
+  };
+
+  const computeFinalMarks = (modules, projectMarkToUse, gcAssignmentAvgOverride = null) => {
+    if (!modules?.length) {
+      return {
+        finalModuleMark: 0,
+        finalMark: 0,
+        gcAssignmentAvg: 0,
+      };
+    }
+
+    const avgModuleMarks =
+      modules.reduce((acc, m) => acc + parseFloat(m?.moduleMark || 0), 0) / modules.length;
+    const defaultAssignmentAvg =
+      modules.reduce((acc, m) => acc + parseFloat(m?.assignmentAvg || 0), 0) / modules.length;
+    const gcAssignmentAvg =
+      gcAssignmentAvgOverride != null ? gcAssignmentAvgOverride : defaultAssignmentAvg;
+    const finalModuleMark = Math.min(
+      100,
+      parseFloat((avgModuleMarks * 0.5 + gcAssignmentAvg * 0.5).toFixed(2))
+    );
+    const finalMark = Math.min(
+      100,
+      Math.round(finalModuleMark * 0.6 + (Number(projectMarkToUse) || 0) * 0.4)
+    );
+
+    return { finalModuleMark, finalMark, gcAssignmentAvg };
+  };
+
+  const applyGoogleClassroomToMarks = (flat, modules, storedProjectMark) => {
+    if (!flat?.length) {
+      return {
+        projectMarkToUse: storedProjectMark || 0,
+        gcAssignmentAvg: null,
+        flat,
+      };
+    }
+
+    const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
+    const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
+    const finalProjectMarkFromGc =
+      projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
+        ? Number(projectAssignment.mark)
+        : null;
+
+    let gcAssignmentAvg = null;
+    if (regularAssignments.length > 0) {
+      const marks = regularAssignments.map((a) =>
+        a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0
+      );
+      gcAssignmentAvg = marks.reduce((acc, m) => acc + m, 0) / marks.length;
+    }
+
+    const projectMarkToUse =
+      finalProjectMarkFromGc != null && finalProjectMarkFromGc > 0
+        ? finalProjectMarkFromGc
+        : storedProjectMark || 0;
+
+    return { projectMarkToUse, gcAssignmentAvg, flat };
+  };
+
+  const loadGoogleClassroomAssignments = async (modules, storedProjectMark) => {
+    setGcLoading(true);
+    try {
+      const bootcampIdStr = String(bootcampId ?? "");
+      let flat = [];
+      let gcAssignmentAvg = null;
+      let projectMarkToUse = storedProjectMark || 0;
+
+      const gcRes = await getStudentGoogleClassroomAssignments(userid);
+      if (gcRes?.success && Array.isArray(gcRes.data)) {
+        const normalizeId = (id) => (id == null ? "" : id._id != null ? String(id._id) : String(id));
+        let forBootcamp = (gcRes.data || []).filter((d) => {
+          const dId = normalizeId(d.bootcampId);
+          return dId && bootcampIdStr && dId === bootcampIdStr;
+        });
+        if (forBootcamp.length === 0 && (gcRes.data || []).length > 0) {
+          forBootcamp = gcRes.data || [];
+        }
+        forBootcamp.forEach((d) => {
+          const courseName = d.googleClassroomCourseName || d.bootcampName || "Classroom";
+          (d.assignments || []).forEach((a) => {
+            flat.push({
+              courseName,
+              name: a.title || "—",
+              title: a.title,
+              dueDate: a.dueDate,
+              submittedAt: a.submittedAt,
+              graded: !!a.graded,
+              assignedGrade: a.assignedGrade,
+              draftGrade: a.draftGrade,
+              maxPoints: a.maxPoints,
+              courseWorkId: a.courseWorkId,
+              mark:
+                a.graded && (a.assignedGrade != null || a.draftGrade != null)
+                  ? a.maxPoints != null && a.maxPoints > 0
+                    ? Math.min(100, ((a.assignedGrade ?? a.draftGrade) / a.maxPoints) * 100)
+                    : Number(a.assignedGrade ?? a.draftGrade)
+                  : null,
+              source: "google_classroom",
+            });
+          });
+        });
+      }
+
+      if (flat.length === 0 && modules?.length) {
+        const assignmentResults = await Promise.all(
+          modules.map((m) =>
+            m.course?._id
+              ? getBootcampAssignment(userid, m.course._id).then((data) => {
+                  const raw = Array.isArray(data)
+                    ? []
+                    : data?.bootcampassignment ?? data?.data?.bootcampassignment ?? [];
+                  const list = (Array.isArray(raw) ? raw : [])
+                    .filter((a) => a.source === "google_classroom")
+                    .map((a) => ({
+                      courseName: m.coursename,
+                      name: a.name,
+                      title: a.name,
+                      dueDate: null,
+                      submittedAt: null,
+                      graded: a.mark != null,
+                      assignedGrade: a.mark,
+                      draftGrade: null,
+                      maxPoints: null,
+                      mark: a.mark,
+                      source: a.source || "google_classroom",
+                    }));
+                  return { list };
+                })
+              : Promise.resolve({ list: [] })
+          )
+        );
+        flat = assignmentResults.flatMap((r) => r.list || []);
+      }
+
+      const gcApplied = applyGoogleClassroomToMarks(flat, modules, storedProjectMark);
+      projectMarkToUse = gcApplied.projectMarkToUse;
+      gcAssignmentAvg = gcApplied.gcAssignmentAvg;
+      flat = gcApplied.flat;
+
+      const { finalModuleMark, finalMark } = computeFinalMarks(
+        modules,
+        projectMarkToUse,
+        gcAssignmentAvg
+      );
+      setModuleMarkAvg(finalModuleMark);
+      setFinalProjectMark(projectMarkToUse);
+      setCourseMark(finalMark);
+      setAllAssignments(flat);
+    } catch (_) {
+      // Module marks already shown; GC is optional enrichment
+    } finally {
+      setGcLoading(false);
+    }
+  };
 
   // Handler to save final project mark
   const handleSaveProjectMark = async () => {
@@ -181,160 +355,52 @@ const StudentSummary = () => {
 
 
   const fetchUserSummary = async () => {
+    setFetchError(null);
+    setLoading(true);
     try {
-      setLoading(true);
       const res = await getUserBootcampAnalyticsCourseWise(bootcampId, userid);
-      if (res.data && res.data.length) {
-        const userSummaryWithAvg = res.data.map((module) => {
-          const assignmentAvg = module.assignmentAvg != null ? module.assignmentAvg : 0;
-          const moduleMark = calculateModuleMark(module);
-          return {
-            ...module,
-            assignmentAvg,
-            moduleMark,
-            platformProgress: module.platformProgress != null ? module.platformProgress : undefined,
-          };
-        });
+      const rawModules = Array.isArray(res?.data) ? res.data : [];
 
-        // Final Module Mark = (Avg of all module marks × 0.5) + (Avg mark of all Assignments × 0.5)
-        const totalmodulemark = userSummaryWithAvg.reduce((acc, m) => acc + parseFloat(m?.moduleMark || 0), 0);
-        const avgModuleMarks = totalmodulemark / userSummaryWithAvg.length;
-        const avgAssignments = userSummaryWithAvg.length > 0
-          ? userSummaryWithAvg.reduce((acc, m) => acc + parseFloat(m?.assignmentAvg || 0), 0) / userSummaryWithAvg.length
-          : 0;
-        const finalModuleMark = Math.min(100, parseFloat((avgModuleMarks * 0.5 + avgAssignments * 0.5).toFixed(2)));
-
-        // Final Mark = Final Module Mark × 0.6 + Project mark × 0.4
-        const projectMark = Number(res.data[0]?.finalprojectmark) || 0;
-        const newFinalMark = Math.min(100, Math.round(finalModuleMark * 0.6 + projectMark * 0.4));
-
-        // Fetch Google Classroom assignments for this bootcamp and use for calculation + display
-        const bootcampIdStr = String(bootcampId ?? "");
-        let flat = [];
-        let gcAssignmentAvg = avgAssignments;
-        try {
-          const gcRes = await getStudentGoogleClassroomAssignments(userid);
-          if (gcRes?.success && Array.isArray(gcRes.data)) {
-            const normalizeId = (id) => (id == null ? "" : (id._id != null ? String(id._id) : String(id)));
-            let forBootcamp = (gcRes.data || []).filter((d) => {
-              const dId = normalizeId(d.bootcampId);
-              return dId && bootcampIdStr && dId === bootcampIdStr;
-            });
-            if (forBootcamp.length === 0 && (gcRes.data || []).length > 0) {
-              forBootcamp = gcRes.data || [];
-            }
-            forBootcamp.forEach((d) => {
-              const courseName = d.googleClassroomCourseName || d.bootcampName || "Classroom";
-              (d.assignments || []).forEach((a) => {
-                flat.push({
-                  courseName,
-                  name: a.title || "—",
-                  title: a.title,
-                  dueDate: a.dueDate,
-                  submittedAt: a.submittedAt,
-                  graded: !!a.graded,
-                  assignedGrade: a.assignedGrade,
-                  draftGrade: a.draftGrade,
-                  maxPoints: a.maxPoints,
-                  courseWorkId: a.courseWorkId,
-                  mark: a.graded && (a.assignedGrade != null || a.draftGrade != null)
-                    ? (a.maxPoints != null && a.maxPoints > 0
-                      ? Math.min(100, ((a.assignedGrade ?? a.draftGrade) / a.maxPoints) * 100)
-                      : Number(a.assignedGrade ?? a.draftGrade))
-                    : null,
-                  source: "google_classroom",
-                });
-              });
-            });
-            // Separate project assignment (CSTN, capstone, final, etc.) from regular assignments
-            const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
-            const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
-            
-            console.log("🔍 [First Pass] Assignment Breakdown:");
-            console.log("  Total assignments:", flat.length);
-            console.log("  Project assignment:", projectAssignment ? (projectAssignment.title || projectAssignment.name) : "None found");
-            console.log("  Regular assignments count:", regularAssignments.length);
-            
-            // Project Mark from the identified project assignment (overrides stored finalprojectmark)
-            const finalProjectMarkFromGc = projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
-              ? Number(projectAssignment.mark)
-              : null;
-            
-            // Assignments average only from regular assignments (exclude project)
-            if (regularAssignments.length > 0) {
-              const marks = regularAssignments.map((a) => a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0);
-              const sum = marks.reduce((acc, m) => acc + m, 0);
-              gcAssignmentAvg = sum / regularAssignments.length;
-              console.log("  [First Pass] Regular marks:", marks);
-              console.log("  [First Pass] Average:", gcAssignmentAvg);
-            }
-          }
-        } catch (_) {}
-        if (flat.length === 0) {
-          const assignmentPromises = userSummaryWithAvg.map((m) =>
-            m.course?._id
-              ? getBootcampAssignment(userid, m.course._id).then((data) => {
-                  const raw = Array.isArray(data) ? [] : (data?.bootcampassignment ?? data?.data?.bootcampassignment ?? []);
-                  const list = (Array.isArray(raw) ? raw : [])
-                    .filter((a) => a.source === "google_classroom")
-                    .map((a) => ({ courseName: m.coursename, name: a.name, title: a.name, dueDate: null, submittedAt: null, graded: a.mark != null, assignedGrade: a.mark, draftGrade: null, maxPoints: null, mark: a.mark, source: a.source || "google_classroom" }));
-                  return { list };
-                })
-              : Promise.resolve({ list: [] })
-          );
-          const assignmentResults = await Promise.all(assignmentPromises);
-          flat = assignmentResults.flatMap((r) => r.list || []);
-        }
-
-        // Final determination of project mark from GC or stored value (after all fetching)
-        let projectMarkToUse = res.data[0]?.finalprojectmark || 0;
-        if (flat.length > 0) {
-          const projectAssignment = flat.find((a) => isProjectAssignment(a.title || a.name));
-          const regularAssignments = flat.filter((a) => !isProjectAssignment(a.title || a.name));
-          
-          console.log("🔍 Assignment Breakdown:");
-          console.log("  Total assignments:", flat.length);
-          console.log("  All assignment titles:", flat.map(a => a.title || a.name));
-          console.log("  Project assignment:", projectAssignment ? (projectAssignment.title || projectAssignment.name) : "None found");
-          console.log("  Regular assignments:", regularAssignments.length);
-          console.log("  Regular assignment titles:", regularAssignments.map(a => a.title || a.name));
-          
-          const finalProjectMarkFromGc = projectAssignment?.mark != null && !Number.isNaN(Number(projectAssignment.mark))
-            ? Number(projectAssignment.mark)
-            : null;
-          
-          if (regularAssignments.length > 0) {
-            const marks = regularAssignments.map((a) => a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0);
-            const sum = marks.reduce((acc, m) => acc + m, 0);
-            gcAssignmentAvg = sum / regularAssignments.length;
-            console.log("  Regular assignment marks:", marks);
-            console.log("  Sum:", sum);
-            console.log("  Average (gcAssignmentAvg):", gcAssignmentAvg);
-          }
-          
-          if (projectAssignment) {
-            console.log("  Project assignment mark:", projectAssignment.mark);
-          }
-          
-          if (finalProjectMarkFromGc != null && finalProjectMarkFromGc > 0) {
-            projectMarkToUse = finalProjectMarkFromGc;
-            console.log("  Using GC project mark:", projectMarkToUse);
-          } else {
-            console.log("  Using stored project mark:", projectMarkToUse);
-          }
-        }
-
-        const finalModuleMarkWithGc = Math.min(100, parseFloat((avgModuleMarks * 0.5 + gcAssignmentAvg * 0.5).toFixed(2)));
-        const newFinalMarkWithGc = Math.min(100, Math.round(finalModuleMarkWithGc * 0.6 + (Number(projectMarkToUse) || 0) * 0.4));
-
-        setModuleMarkAvg(finalModuleMarkWithGc);
-        setUserSummary(userSummaryWithAvg);
-        setFinalProjectMark(projectMarkToUse);
-        setCourseMark(newFinalMarkWithGc);
-        setAllAssignments(flat);
+      if (!rawModules.length) {
+        setUserSummary([]);
+        setAllAssignments([]);
+        setModuleMarkAvg(0);
+        setFinalProjectMark(0);
+        setCourseMark(0);
+        setFetchError(
+          res?.message ||
+            "No module data found for this student. Check they are enrolled in this bootcamp."
+        );
+        return;
       }
+
+      const userSummaryWithAvg = rawModules.map((module) => {
+        const assignmentAvg = module.assignmentAvg != null ? module.assignmentAvg : 0;
+        const moduleMark = calculateModuleMark(module);
+        return {
+          ...module,
+          assignmentAvg,
+          moduleMark,
+          platformProgress: module.platformProgress != null ? module.platformProgress : undefined,
+        };
+      });
+
+      const storedProjectMark = Number(rawModules[0]?.finalprojectmark) || 0;
+      const { finalModuleMark, finalMark } = computeFinalMarks(
+        userSummaryWithAvg,
+        storedProjectMark
+      );
+
+      setUserSummary(userSummaryWithAvg);
+      setModuleMarkAvg(finalModuleMark);
+      setFinalProjectMark(storedProjectMark);
+      setCourseMark(finalMark);
+
+      // Show module table immediately; enrich marks from Google Classroom in background
+      loadGoogleClassroomAssignments(userSummaryWithAvg, storedProjectMark);
     } catch (error) {
-      setLoading(`${error?.message} || Error getting list`);
+      setFetchError(`${error?.message || "Error getting student summary"}`);
+      setUserSummary([]);
     } finally {
       setLoading(false);
     }
@@ -342,22 +408,33 @@ const StudentSummary = () => {
 
   const handleRefresh = async () => {
     await fetchUserSummary();
-  }
-  
-  // Check if an assignment is a Project/Capstone (for Project Mark, not Assignments avg)
-  const isProjectAssignment = (title) => {
-    if (!title || typeof title !== "string") return false;
-    const lower = title.toLowerCase();
-    return (
-      lower.includes("cstn") ||
-      lower.includes("capstone") ||
-      lower.includes("cap stone") ||
-      /\bcap\b/.test(lower) ||
-      lower.includes("final project") ||
-      /\bfinal\b/.test(lower)
-    );
   };
-  
+
+  const handleGoogleClassroomSync = async () => {
+    if (!userid) return;
+    setGcSyncMessage(null);
+    setGcSyncIsError(false);
+    setGcSyncing(true);
+    try {
+      const res = await resyncStudentGoogleClassroomAssignments(userid);
+      if (!res?.success) {
+        throw new Error(res?.message || "Failed to sync Google Classroom assignments");
+      }
+      setGcSyncIsError(false);
+      setGcSyncMessage(res.message || "Google Classroom assignments synced.");
+      if (userSummary.length > 0) {
+        const storedProjectMark =
+          Number(userSummary[0]?.finalprojectmark) || Number(finalProjectMark) || 0;
+        await loadGoogleClassroomAssignments(userSummary, storedProjectMark);
+      }
+    } catch (error) {
+      setGcSyncIsError(true);
+      setGcSyncMessage(error?.message || "Failed to sync Google Classroom assignments");
+    } finally {
+      setGcSyncing(false);
+    }
+  };
+
   // MCQ % = actual marks (e.g. 79%), not completion (14/14). Same for challenges: use averageMarks.
   const getMcqPercent = (module) => {
     const t = module.averageMarks?.mcq?.total;
@@ -496,8 +573,11 @@ const StudentSummary = () => {
                 disabled={!!loading}
                 className="px-4 py-2 rounded bg-gray-700 text-white hover:bg-gray-600 transition text-sm disabled:opacity-50"
               >
-                Refresh
+                {loading ? "Loading…" : "Refresh"}
         </button>
+        {gcLoading && (
+          <span className="text-xs text-amber-300">Loading Google Classroom marks…</span>
+        )}
         <button
                 type="button"
           onClick={handlePassBootcamp}
@@ -550,6 +630,9 @@ const StudentSummary = () => {
               <h3 className="text-lg font-semibold text-white mt-4">
                 Final Mark: {courseMark}% (Final Module Mark × 0.6 + Project × 0.4)
               </h3>
+              {fetchError && (
+                <p className="mt-3 text-sm text-red-300">{fetchError}</p>
+              )}
               <button
                 type="button"
                 onClick={() => setShowWorking((v) => !v)}
@@ -645,7 +728,13 @@ const StudentSummary = () => {
                       <tr>
                         <td colSpan="6" className="active-bootcamps-loading">
                           <Loader size={32} />
-                          {typeof loading === "string" ? loading : "Fetching summary…"}
+                          Fetching summary…
+                        </td>
+                      </tr>
+                    ) : userSummary.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="active-bootcamps-loading text-gray-400">
+                          {fetchError || "No module progress to display."}
                         </td>
                       </tr>
                     ) : (
@@ -658,7 +747,11 @@ const StudentSummary = () => {
                           <td>
                             {module.completed.challenge}/{module.total.challenge} ({module.averageMarks?.challenge?.total > 0 ? Math.ceil((module.averageMarks.challenge.marks / module.averageMarks.challenge.total) * 100) : 0}%)
                       </td>
-                          <td>{module.platformProgress != null && module.platformProgress !== "" ? `${module.platformProgress}%` : "—"}</td>
+                          <td>
+                            {module.platformProgress != null && module.platformProgress !== ""
+                              ? `${Math.min(100, Math.round(Number(module.platformProgress) || 0))}%`
+                              : "—"}
+                          </td>
                           <td>
                             {module.moduleMark}%
                             <button
@@ -684,7 +777,22 @@ const StudentSummary = () => {
 
             {/* Google Classroom assignments section – always visible */}
             <div className="max-w-7xl w-full mt-6">
-              <h3 className="active-bootcamps-title mb-3">Assignments (Google Classroom)</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h3 className="active-bootcamps-title mb-0">Assignments (Google Classroom)</h3>
+                <button
+                  type="button"
+                  onClick={handleGoogleClassroomSync}
+                  disabled={gcSyncing || gcLoading}
+                  className="px-4 py-2 rounded bg-blue-700 text-white hover:bg-blue-600 transition text-sm disabled:opacity-50"
+                >
+                  {gcSyncing ? "Syncing…" : "Sync Google Classroom"}
+                </button>
+              </div>
+              {gcSyncMessage && (
+                <p className={`text-sm mb-3 ${gcSyncIsError ? "text-red-300" : "text-green-400"}`}>
+                  {gcSyncMessage}
+                </p>
+              )}
               {allAssignments.length > 0 ? (
                 <div className="active-bootcamps-table-wrap overflow-x-auto">
                   <table className="active-bootcamps-table">
@@ -724,7 +832,7 @@ const StudentSummary = () => {
         </div>
               ) : (
                 <p className="text-gray-400 text-sm py-4">
-                  No Google Classroom assignments for this bootcamp. If the student has linked a classroom, they can refresh assignments on their Google Classroom page.
+                  No Google Classroom assignments for this bootcamp yet. Use &quot;Sync Google Classroom&quot; to pull the latest grades from the student&apos;s linked classroom.
                 </p>
               )}
             </div>

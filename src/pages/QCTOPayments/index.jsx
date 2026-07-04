@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import {
   getAssessorEarningsFinanceSummary,
   recordAssessorEarningPayment,
   getAssessorPaymentsStatement,
   getAssessorEarningPaymentProofUrl,
+  updateTeamMemberLinkedFinanceStaff,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
@@ -42,6 +43,7 @@ function buildPeriodParams(mode, monthValue, rangeStart, rangeEnd) {
 function roleLabel(role) {
   if (role === "MODERATOR") return "Moderator";
   if (role === "ASSESSOR") return "Assessor";
+  if (role === "ASSESSOR_MODERATOR") return "Assessor + Moderator";
   return role || "—";
 }
 
@@ -62,12 +64,21 @@ const QCTOPayments = () => {
   const [error, setError] = useState(null);
   const [assessorEarnings, setAssessorEarnings] = useState(null);
   const [paymentModal, setPaymentModal] = useState(null);
-  const [paymentForm, setPaymentForm] = useState({ amountZar: "", comments: "", paidAt: "", file: null });
+  const [paymentForm, setPaymentForm] = useState({
+    amountZar: "",
+    comments: "",
+    paidAt: "",
+    file: null,
+    targetStaffId: "",
+    targetRole: "",
+  });
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [statementModal, setStatementModal] = useState(null);
   const [statementLoading, setStatementLoading] = useState(false);
   const [statementError, setStatementError] = useState(null);
   const [proofLoadingId, setProofLoadingId] = useState(null);
+  const [linkModal, setLinkModal] = useState(null);
+  const [linkSaving, setLinkSaving] = useState(false);
 
   const canAccess = QCTO_PAYMENTS_ROLES.includes(user?.role);
 
@@ -92,19 +103,50 @@ const QCTOPayments = () => {
     if (canAccess) load();
   }, [canAccess, load]);
 
+  const staffRows = assessorEarnings?.staff || assessorEarnings?.assessors || [];
+
+  const linkableStaffOptions = useMemo(() => {
+    if (!linkModal) return [];
+    const linkedIds = new Set(
+      staffRows
+        .filter((row) => row.isFinanceGroup)
+        .flatMap((row) => row.linkedStaffIds || [])
+    );
+    const targetRole = linkModal.role === "ASSESSOR" ? "MODERATOR" : "ASSESSOR";
+    return staffRows
+      .filter((row) => !row.isFinanceGroup && row.role === targetRole)
+      .flatMap((row) =>
+        (row.linkedAccounts?.length ? row.linkedAccounts : [{ staffId: row.staffId || row.assessorId, role: row.role, name: row.name, email: row.email }])
+          .filter((acct) => acct.role === targetRole && !linkedIds.has(String(acct.staffId)))
+      );
+  }, [linkModal, staffRows]);
+
   const openPaymentModal = (row) => {
+    const accounts = row.linkedAccounts?.length
+      ? row.linkedAccounts
+      : [{ staffId: row.staffId || row.assessorId, role: row.role, name: row.name }];
+    const defaultAccount = accounts[0];
     setPaymentModal(row);
     setPaymentForm({
       amountZar: row.outstandingZar > 0 ? String(row.outstandingZar) : "",
       comments: "",
       paidAt: new Date().toISOString().slice(0, 10),
       file: null,
+      targetStaffId: String(defaultAccount.staffId),
+      targetRole: defaultAccount.role,
     });
   };
 
   const closePaymentModal = () => {
     setPaymentModal(null);
-    setPaymentForm({ amountZar: "", comments: "", paidAt: "", file: null });
+    setPaymentForm({
+      amountZar: "",
+      comments: "",
+      paidAt: "",
+      file: null,
+      targetStaffId: "",
+      targetRole: "",
+    });
   };
 
   const handlePaymentSubmit = async (e) => {
@@ -115,13 +157,15 @@ const QCTOPayments = () => {
       alert("Enter a valid payment amount");
       return;
     }
+    const staffId = paymentForm.targetStaffId || paymentModal.assessorId;
+    const role = paymentForm.targetRole || paymentModal.role;
     setPaymentSaving(true);
-    const res = await recordAssessorEarningPayment(paymentModal.assessorId, {
+    const res = await recordAssessorEarningPayment(staffId, {
       amountZar: amount,
       comments: paymentForm.comments,
       paidAt: paymentForm.paidAt || undefined,
       file: paymentForm.file || undefined,
-      role: paymentModal.role,
+      role,
     });
     setPaymentSaving(false);
     if (!res?.success) {
@@ -132,11 +176,17 @@ const QCTOPayments = () => {
     await load();
   };
 
-  const openStatement = async ({ assessorId = null, assessorName = null, allTime = false } = {}) => {
+  const openStatement = async ({
+    assessorId = null,
+    assessorName = null,
+    allTime = false,
+    showPaymentRoles = false,
+  } = {}) => {
     setStatementModal({
       title: assessorName ? `Payment statement — ${assessorName}` : "Payment statement — all QCTO staff",
       assessorId,
       allTime,
+      showPaymentRoles,
     });
     setStatementLoading(true);
     setStatementError(null);
@@ -171,9 +221,51 @@ const QCTOPayments = () => {
     }
   };
 
+  const openLinkModal = (row) => {
+    const account = row.linkedAccounts?.[0] || {
+      staffId: row.staffId || row.assessorId,
+      role: row.role,
+      name: row.name,
+    };
+    setLinkModal({
+      staffId: account.staffId,
+      role: account.role,
+      name: account.name,
+      isFinanceGroup: row.isFinanceGroup,
+    });
+  };
+
+  const closeLinkModal = () => setLinkModal(null);
+
+  const handleLinkSubmit = async (linkedStaffId) => {
+    if (!linkModal) return;
+    setLinkSaving(true);
+    const res = await updateTeamMemberLinkedFinanceStaff(linkModal.staffId, linkedStaffId);
+    setLinkSaving(false);
+    if (!res?.success) {
+      alert(res?.message || "Could not update finance link");
+      return;
+    }
+    closeLinkModal();
+    await load();
+  };
+
+  const handleUnlink = async () => {
+    if (!linkModal) return;
+    if (!window.confirm(`Unlink finance accounts for ${linkModal.name}?`)) return;
+    await handleLinkSubmit(null);
+  };
+
   if (!canAccess) {
     return <Navigate to="/" replace />;
   }
+
+  const paymentAccounts =
+    paymentModal?.linkedAccounts?.length > 0
+      ? paymentModal.linkedAccounts
+      : paymentModal
+        ? [{ staffId: paymentModal.staffId || paymentModal.assessorId, role: paymentModal.role, name: paymentModal.name }]
+        : [];
 
   return (
     <div className="min-h-screen bg-[#0D1117] text-white p-4 md:p-8">
@@ -185,8 +277,8 @@ const QCTOPayments = () => {
             </Link>
             <h1 className="text-2xl font-bold text-white mt-2">QCTO payments</h1>
             <p className="text-gray-400 text-sm mt-1 max-w-2xl">
-              Assessor and moderator payouts from completed KM/PM work. Record bank payments with comments and proof —
-              staff see these on their Earnings page.
+              Assessor and moderator payouts from completed KM/PM work. Link accounts when the same person
+              holds both roles — finance sees one combined balance; staff still see role-specific earnings.
             </p>
           </div>
         </div>
@@ -315,25 +407,56 @@ const QCTOPayments = () => {
                   </tr>
                 </thead>
                 <tbody className="text-gray-200">
-                  {(assessorEarnings?.staff || assessorEarnings?.assessors || []).length === 0 ? (
+                  {staffRows.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="px-3 py-8 text-center text-gray-500">
                         No assessors or moderators found.
                       </td>
                     </tr>
                   ) : (
-                    (assessorEarnings.staff || assessorEarnings.assessors || []).map((row) => (
-                      <tr key={row.assessorId} className="border-b border-white/5 hover:bg-white/[0.02]">
-                        <td className="px-3 py-2 text-gray-400">{roleLabel(row.role)}</td>
+                    staffRows.map((row) => (
+                      <tr key={row.payeeId || row.assessorId} className="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td className="px-3 py-2 text-gray-400">
+                          <div>{roleLabel(row.role)}</div>
+                          {row.isFinanceGroup && (
+                            <div className="text-[10px] text-cyan-500/80 mt-0.5">Linked accounts</div>
+                          )}
+                        </td>
                         <td className="px-3 py-2 font-medium text-white">{row.name || "—"}</td>
                         <td className="px-3 py-2">
-                          <CopyableEmailCell email={row.email} />
+                          {(row.emails?.length ? row.emails : [row.email].filter(Boolean)).map((email) => (
+                            <div key={email}>
+                              <CopyableEmailCell email={email} />
+                            </div>
+                          ))}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {row.ratePerCredit != null ? formatZarPlain(row.ratePerCredit) : "—"}
+                          {row.isFinanceGroup ? (
+                            <div className="space-y-0.5">
+                              {row.linkedAccounts.map((acct) => (
+                                <div key={acct.staffId} className="text-[10px] text-gray-400">
+                                  {roleLabel(acct.role)}:{" "}
+                                  {acct.ratePerCredit != null ? formatZarPlain(acct.ratePerCredit) : "—"}
+                                </div>
+                              ))}
+                            </div>
+                          ) : row.ratePerCredit != null ? (
+                            formatZarPlain(row.ratePerCredit)
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="px-3 py-2 text-right text-emerald-400 tabular-nums">
                           {formatZarPlain(row.totalEarnedZar)}
+                          {row.isFinanceGroup && (
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              {row.linkedAccounts.map((acct) => (
+                                <div key={acct.staffId}>
+                                  {roleLabel(acct.role)}: {formatZarPlain(acct.totalEarnedZar)}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatZarPlain(row.totalPaidZar)}</td>
                         <td className="px-3 py-2 text-right text-amber-400 tabular-nums">
@@ -347,9 +470,10 @@ const QCTOPayments = () => {
                               type="button"
                               onClick={() =>
                                 openStatement({
-                                  assessorId: row.assessorId,
+                                  assessorId: row.payeeId || row.assessorId,
                                   assessorName: row.name,
                                   allTime: true,
+                                  showPaymentRoles: row.isFinanceGroup,
                                 })
                               }
                               className="text-cyan-400 hover:text-cyan-300"
@@ -363,6 +487,13 @@ const QCTOPayments = () => {
                             >
                               Record payment
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => openLinkModal(row)}
+                              className="text-violet-400 hover:text-violet-300"
+                            >
+                              {row.isFinanceGroup ? "Manage link" : "Link account"}
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -370,6 +501,61 @@ const QCTOPayments = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {linkModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#161B22] p-5 space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">
+                  {linkModal.isFinanceGroup ? "Manage finance link" : "Link finance account"}
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  {linkModal.name} ({roleLabel(linkModal.role)}) — combine assessor and moderator balances for
+                  finance admin.
+                </p>
+              </div>
+              {linkModal.isFinanceGroup ? (
+                <button
+                  type="button"
+                  onClick={handleUnlink}
+                  disabled={linkSaving}
+                  className="w-full px-4 py-2 rounded-lg bg-red-900/50 text-red-200 text-sm hover:bg-red-900/70 disabled:opacity-50"
+                >
+                  {linkSaving ? "Saving…" : "Unlink accounts"}
+                </button>
+              ) : linkableStaffOptions.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No available {roleLabel(linkModal.role === "ASSESSOR" ? "MODERATOR" : "ASSESSOR")} accounts to
+                  link.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {linkableStaffOptions.map((option) => (
+                    <button
+                      key={option.staffId}
+                      type="button"
+                      onClick={() => handleLinkSubmit(option.staffId)}
+                      disabled={linkSaving}
+                      className="w-full text-left px-3 py-2 rounded-lg border border-white/10 hover:bg-white/5 disabled:opacity-50"
+                    >
+                      <div className="text-sm text-white">{option.name || "—"}</div>
+                      <div className="text-xs text-gray-500">{option.email || ""}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={closeLinkModal}
+                  className="px-4 py-2 rounded-lg text-sm text-gray-300 hover:bg-white/5"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -411,7 +597,7 @@ const QCTOPayments = () => {
                     <thead>
                       <tr className="text-gray-400 border-b border-gray-700">
                         <th className="px-2 py-2 font-medium">Date</th>
-                        {!statementModal.assessorId && (
+                        {(!statementModal.assessorId || statementModal.showPaymentRoles) && (
                           <>
                             <th className="px-2 py-2 font-medium">Role</th>
                             <th className="px-2 py-2 font-medium">Staff</th>
@@ -427,7 +613,7 @@ const QCTOPayments = () => {
                       {(statementModal.data.payments || []).map((p) => (
                         <tr key={p._id} className="border-b border-gray-800/80">
                           <td className="px-2 py-2 whitespace-nowrap">{formatDate(p.paidAt)}</td>
-                          {!statementModal.assessorId && (
+                          {(!statementModal.assessorId || statementModal.showPaymentRoles) && (
                             <>
                               <td className="px-2 py-2 text-gray-400">{roleLabel(p.role || p.staffRole)}</td>
                               <td className="px-2 py-2">
@@ -472,13 +658,37 @@ const QCTOPayments = () => {
               className="w-full max-w-md rounded-2xl border border-white/10 bg-[#161B22] p-5 space-y-4"
             >
               <div>
-                <h3 className="text-lg font-semibold text-white">
-                  Record {roleLabel(paymentModal.role).toLowerCase()} payment
-                </h3>
+                <h3 className="text-lg font-semibold text-white">Record payment</h3>
                 <p className="text-xs text-gray-400 mt-1">
-                  {paymentModal.name} · Outstanding {formatZarPlain(paymentModal.outstandingZar)}
+                  {paymentModal.name} · Combined outstanding {formatZarPlain(paymentModal.outstandingZar)}
                 </p>
               </div>
+              {paymentAccounts.length > 1 && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Record against account</label>
+                  <select
+                    value={paymentForm.targetStaffId}
+                    onChange={(e) => {
+                      const selected = paymentAccounts.find((a) => String(a.staffId) === e.target.value);
+                      setPaymentForm((f) => ({
+                        ...f,
+                        targetStaffId: e.target.value,
+                        targetRole: selected?.role || f.targetRole,
+                      }));
+                    }}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-600 bg-[#0D1117] text-white text-sm"
+                  >
+                    {paymentAccounts.map((acct) => (
+                      <option key={acct.staffId} value={String(acct.staffId)}>
+                        {roleLabel(acct.role)} — {acct.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Payment is tagged by role for staff statements; combined balance updates either way.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Amount (ZAR)</label>
                 <input

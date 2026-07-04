@@ -31,7 +31,7 @@ const PingStudent = ({ showModal, setShowModal, bootcampId, getAnalytics }) => {
 
 I hope you're doing well!
 
-I wanted to check in and encourage you to keep pushing through the bootcamp. As a deferred student, remember that you still have access to all the tutors and lectures on Google Classroom until ${formatDate(showModal?.bootcampEndDate)}.
+I wanted to check in and encourage you to keep pushing through the bootcamp. You still have access to all the tutors and lectures on Google Classroom until ${formatDate(showModal?.bootcampEndDate)}.
 
 If you complete any assignments or the capstone project on Classroom and need them marked, please notify one of the tutors allocated to your bootcamp. If for some reason you don't receive a response from the tutors, feel free to email me directly at suhana@zaio.io, and I'll arrange for a tutor to mark your work.
 

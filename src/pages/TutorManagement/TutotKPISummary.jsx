@@ -32,10 +32,11 @@ export default function TutorKPISummary() {
           bootcampId
         );
       }
-      const deferredList = response?.bootcamp?.analytics?.filter(
-        (student) =>
-          student?.deferredDetails && student?.deferredDetails?.studentDeferred
-      );
+      const deferredList = response?.bootcamp?.analytics?.filter((student) => {
+        const status = student?.enrollmentStatus;
+        if (["deferred", "deferred_optin", "in_grace_period"].includes(status)) return true;
+        return student?.deferredDetails?.studentDeferred;
+      });
       setDeferred(deferredList);
       setBootcamps(response);
 

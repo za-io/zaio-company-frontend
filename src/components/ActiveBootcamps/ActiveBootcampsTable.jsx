@@ -245,11 +245,14 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
   const [config, setConfig] = useState({
     bootcampName: "",
     startDate: "",
+    completionDate: "",
     commitedMins: 360,
     selectedWeekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
     linkedGoogleClassroomCourseId: "",
   });
+  const [calendarLastDate, setCalendarLastDate] = useState("");
   const [linkingClassroom, setLinkingClassroom] = useState(false);
+  const [savingEndDate, setSavingEndDate] = useState(false);
   const [holidayRanges, setHolidayRanges] = useState([]);
   const [message, setMessage] = useState(null);
 
@@ -271,6 +274,8 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     return holidayRanges.map(r => `"${r.start}"-"${r.end}"`).join(", ");
   };
 
+  const toDateInput = (value) => (value ? String(value).split("T")[0] : "");
+
   useEffect(() => {
     if (isOpen && bootcampId) {
       setLoading(true);
@@ -280,9 +285,12 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
           setCanEdit(res.canEdit);
           setEnrolledCount(res.enrolledCount);
           const bc = res.bootcamp;
+          const calendarDefault = toDateInput(res.calendarLastDate);
+          setCalendarLastDate(calendarDefault);
           setConfig({
             bootcampName: bc.bootcampName || "",
-            startDate: bc.startDate ? bc.startDate.split("T")[0] : "",
+            startDate: toDateInput(bc.startDate),
+            completionDate: toDateInput(bc.completionDate) || calendarDefault,
             commitedMins: bc.commitedMins || 360,
             selectedWeekdays: bc.selectedWeekdays || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
             linkedGoogleClassroomCourseId: bc.googleClassroom || bc.linkedGoogleClassroomCourseId || "",
@@ -302,6 +310,7 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     const configToSave = {
       bootcampName: config.bootcampName,
       startDate: config.startDate,
+      completionDate: config.completionDate || null,
       commitedMins: Number(config.commitedMins),
       holidays: formatHolidaysString(),
       selectedWeekdays: config.selectedWeekdays,
@@ -336,6 +345,21 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
       onSave();
     } else {
       setMessage({ type: "error", text: result.message || "Failed to save" });
+    }
+  };
+
+  const handleSaveEndDateOnly = async () => {
+    setSavingEndDate(true);
+    setMessage(null);
+    const result = await editBootcampConfig(bootcampId, {
+      completionDate: config.completionDate || null,
+    });
+    setSavingEndDate(false);
+    if (result.success) {
+      setMessage({ type: "success", text: "Bootcamp end date saved successfully!" });
+      onSave();
+    } else {
+      setMessage({ type: "error", text: result.message || "Failed to save end date" });
     }
   };
 
@@ -377,10 +401,10 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
               <p>This bootcamp has <strong>{enrolledCount} student(s)</strong> enrolled.</p>
               <p>Configuration cannot be changed once students are enrolled.</p>
               <p>
-                <strong>Google Classroom invite link</strong> can still be updated below (SUPER_ADMIN, SUPER_STUDENT_ADMIN, COMPANY_ADMIN).
+                <strong>Google Classroom invite link</strong> and <strong>bootcamp end date</strong> can still be updated below (SUPER_ADMIN, SUPER_STUDENT_ADMIN, COMPANY_ADMIN).
               </p>
             </div>
-            <div className="edit-modal-config-view" style={{ marginTop: "16px", padding: "16px", background: "#f8f9fa", borderRadius: "8px" }}>
+            <div className="edit-modal-config-view" style={{ marginTop: "16px", padding: "16px", background: "#f8f9fa", borderRadius: "8px", color: "#0f172a" }}>
               <div className="edit-form-group" style={{ marginBottom: "12px" }}>
                 <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Bootcamp Name</label>
                 <span>{config.bootcampName || "—"}</span>
@@ -388,6 +412,15 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
               <div className="edit-form-group" style={{ marginBottom: "12px" }}>
                 <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Start Date</label>
                 <span>{config.startDate || "—"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Bootcamp End Date</label>
+                <span>{config.completionDate || calendarLastDate || "—"}</span>
+                {calendarLastDate && (
+                  <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                    Calendar default (last scheduled day): {calendarLastDate}
+                  </p>
+                )}
               </div>
               <div className="edit-form-group" style={{ marginBottom: "12px" }}>
                 <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Daily Committed Minutes</label>
@@ -400,6 +433,39 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
               <div className="edit-form-group" style={{ marginBottom: "12px" }}>
                 <label style={{ fontWeight: 600, marginBottom: "4px", display: "block" }}>Holiday Periods</label>
                 <span>{holidayRanges.length > 0 ? holidayRanges.map(r => `${r.start} – ${r.end}`).join(", ") : "None"}</span>
+              </div>
+              <div className="edit-form-group" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+                <label style={{ fontWeight: 600, marginBottom: "8px", display: "block" }}>Bootcamp End Date</label>
+                <p style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>
+                  Used for completion and deferred-program rules. Defaults to the last day on the student calendar
+                  {calendarLastDate ? ` (${calendarLastDate})` : ""}.
+                </p>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <MiniCalendarPicker
+                      selectedDate={config.completionDate}
+                      onDateSelect={(date) => setConfig({ ...config, completionDate: date })}
+                    />
+                  </div>
+                  {calendarLastDate && (
+                    <button
+                      type="button"
+                      className="edit-modal-cancel"
+                      onClick={() => setConfig({ ...config, completionDate: calendarLastDate })}
+                    >
+                      Use calendar date
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="edit-modal-save"
+                    onClick={handleSaveEndDateOnly}
+                    disabled={savingEndDate || !config.completionDate}
+                    style={{ flexShrink: 0, minWidth: 80 }}
+                  >
+                    {savingEndDate ? "Saving..." : "Save end date"}
+                  </button>
+                </div>
               </div>
               <div className="edit-form-group" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
                 <label style={{ fontWeight: 600, marginBottom: "8px", display: "block" }}>Google Classroom</label>
@@ -449,6 +515,27 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
                 selectedDate={config.startDate}
                 onDateSelect={(date) => setConfig({ ...config, startDate: date })}
               />
+            </div>
+
+            <div className="edit-form-group">
+              <label>Bootcamp End Date</label>
+              <MiniCalendarPicker
+                selectedDate={config.completionDate}
+                onDateSelect={(date) => setConfig({ ...config, completionDate: date })}
+              />
+              {calendarLastDate && (
+                <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                  Calendar default (last scheduled day): {calendarLastDate}.{" "}
+                  <button
+                    type="button"
+                    className="edit-modal-cancel"
+                    style={{ display: "inline", padding: "2px 8px", marginLeft: 4 }}
+                    onClick={() => setConfig({ ...config, completionDate: calendarLastDate })}
+                  >
+                    Use calendar date
+                  </button>
+                </p>
+              )}
             </div>
 
             <div className="edit-form-group">
@@ -1468,13 +1555,22 @@ function ActiveBootcampsTable() {
                   <td>{formatBootcampDate(b.startDate)}</td>
                   <td>{formatBootcampDate(b.endDate)}</td>
                   <td>
-                    <span className={`status-badge ${
-                      b.status === "Completed" ? "status-completed" : 
-                      b.status === "Deferred" ? "status-deferred" : 
-                      "status-on-going"
-                    }`}>
-                      {b.status || "On Going"}
-                    </span>
+                    <div className="status-cell">
+                      <span className={`status-badge ${
+                        b.status === "Completed" ? "status-completed" :
+                        b.status === "Deferred" ? "status-deferred" :
+                        b.status === "Resolve" ? "status-resolve" :
+                        b.status === "2 Month Grace Period" ? "status-grace-period" :
+                        "status-on-going"
+                      }`}>
+                        {b.status || "On Going"}
+                      </span>
+                      {b.status === "2 Month Grace Period" && b.gracePeriodEndDate && (
+                        <span className="status-grace-end">
+                          Ends {formatBootcampDate(b.gracePeriodEndDate)}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {b.totalSections > 0 ? (

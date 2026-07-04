@@ -216,20 +216,6 @@ export default function TutorStudents() {
                                     <RxCheckCircled className="w-5 h-5" />
                                   </span>
                                 )}
-                                {isDeferred && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/defer-student/goals?learningpath=${student?.learningpath}&email=${student?.userid?.email}`,
-                                        { state: student }
-                                      )
-                                    }
-                                    className="text-blue-400 hover:underline cursor-pointer text-sm"
-                                  >
-                                    View Goals
-                                  </button>
-                                )}
                               </div>
                             </td>
                           </tr>

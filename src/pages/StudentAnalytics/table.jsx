@@ -1,10 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
-import { blockUser, unblockUser, updateTutor } from "../../api/student";
+import { blockUser, unblockUser, updateTutor, updateBootcampEnrollmentStatus, ENROLLMENT_STATUS_OPTIONS } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
-import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
 import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors } from "../../api/company";
@@ -59,6 +58,50 @@ const getAuthMethodStyle = (method) => {
   }
 };
 
+const ENROLLMENT_STATUS_LABELS = {
+  in_progress: "In progress",
+  in_grace_period: "Grace period",
+  pass: "Pass",
+  supp: "Supp",
+  transfer_pending: "Transfer-pending",
+  transfer_complete: "Transfer-complete",
+  deferred: "Deferred",
+  deferred_optin: "Deferred-optin",
+  dropped_off: "Dropped off",
+};
+
+const getEnrollmentStatusDisplay = (status) => {
+  const key = status || "in_progress";
+  const label = ENROLLMENT_STATUS_LABELS[key] || "In progress";
+  const className =
+    key === "deferred_pass"
+      ? "bg-emerald-600/20 text-emerald-300"
+      : key === "deferred_optin"
+      ? "bg-cyan-600/20 text-cyan-300"
+      : key === "pass"
+      ? "bg-green-600/20 text-green-400"
+      : key === "supp"
+      ? "bg-purple-600/20 text-purple-300"
+      : key === "transfer_pending"
+      ? "bg-indigo-600/20 text-indigo-300"
+      : key === "transfer_complete"
+      ? "bg-slate-600/20 text-slate-300"
+      : key === "in_grace_period"
+      ? "bg-orange-600/20 text-orange-400"
+      : key === "deferred"
+      ? "bg-yellow-600/20 text-yellow-400"
+      : key === "dropped_off"
+      ? "bg-red-600/20 text-red-400"
+      : "bg-blue-600/20 text-blue-400";
+  return { label, className };
+};
+
+const DEFERRED_ENROLLMENT_STATUSES = new Set(["deferred", "deferred_optin", "in_grace_period"]);
+
+const isDeferredEnrollment = (ba) =>
+  DEFERRED_ENROLLMENT_STATUSES.has(ba?.enrollmentStatus) ||
+  Boolean(ba?.deferredDetails?.studentDeferred);
+
 const AnalyticsTable = ({
   data,
   total,
@@ -69,6 +112,7 @@ const AnalyticsTable = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
+  const [enrollmentStatusSaving, setEnrollmentStatusSaving] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
   const copyToClipboard = (text, id) => {
@@ -78,11 +122,32 @@ const AnalyticsTable = ({
       setTimeout(() => setCopiedId(null), 1500);
     });
   };
+
+  const handleEnrollmentStatusChange = async (event, ba) => {
+    event.stopPropagation();
+    const bootcampId = data?.bootcampDetails?._id;
+    const userId = ba?.userid?._id;
+    const nextStatus = event.target.value;
+    if (!bootcampId || !userId || !nextStatus || nextStatus === ba?.enrollmentStatus) return;
+
+    setEnrollmentStatusSaving(String(userId));
+    try {
+      const res = await updateBootcampEnrollmentStatus(bootcampId, userId, nextStatus);
+      if (res?.success) {
+        getAnalytics();
+      } else {
+        alert(res?.message || "Failed to update enrollment status");
+      }
+    } catch {
+      alert("Failed to update enrollment status");
+    } finally {
+      setEnrollmentStatusSaving(null);
+    }
+  };
+
   const [sortBy, setSortBy] = useState(SORTING.PROGRESS_DESC);
   const [showMoreActionsModal, setShowMoreActionsModal] = useState(null);
 
-  const [studentDeferredModalConfig, setStudentDeferredModalConfig] =
-    useState(null);
   const [studentPingModalConfig, setStudentPingModalConfig] = useState(null);
   /** Full tutor directory (for “Add to bootcamp” picker only). */
   const [allTutorsCatalog, setAllTutorsCatalog] = useState([]);
@@ -213,10 +278,10 @@ const AnalyticsTable = ({
         return aTotalProgress - bTotalProgress;
       }
       if (sortBy === SORTING.DEFERRED_ASC) {
-        return Boolean(b?.deferredDetails?.studentDeferred) - Boolean(a?.deferredDetails?.studentDeferred);
+        return Number(isDeferredEnrollment(b)) - Number(isDeferredEnrollment(a));
       }
       if (sortBy === SORTING.DEFERRED_DESC) {
-        return Boolean(a?.deferredDetails?.studentDeferred) - Boolean(b?.deferredDetails?.studentDeferred);
+        return Number(isDeferredEnrollment(a)) - Number(isDeferredEnrollment(b));
       }
       return 0;
     });
@@ -302,9 +367,7 @@ const AnalyticsTable = ({
 
   if (loading) return <></>;
 
-  const deferredCount = data?.analytics?.filter(
-    (ba) => ba?.deferredDetails?.studentDeferred
-  )?.length || 0;
+  const deferredCount = data?.analytics?.filter(isDeferredEnrollment)?.length || 0;
   const totalStudents = data?.analytics?.length || 0;
 
   return (
@@ -317,12 +380,6 @@ const AnalyticsTable = ({
         getAnalytics={getAnalytics}
       />
 
-      <StudentDeferredModal
-        bootcampId={data?.bootcampDetails?._id}
-        showModal={studentDeferredModalConfig}
-        setShowModal={setStudentDeferredModalConfig}
-        getAnalytics={getAnalytics}
-      />
       <StudentPingModal
         bootcampId={data?.bootcampDetails?._id}
         showModal={studentPingModalConfig}
@@ -559,6 +616,9 @@ const AnalyticsTable = ({
                     Progress
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Enrollment
+                  </th>
+                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Tutor
                   </th>
                   {searchType === "bootcamp" && (
@@ -574,9 +634,6 @@ const AnalyticsTable = ({
                       Status
                     </th>
                   )}
-                  <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                    Defer Status
-                  </th>
                   {!["TUTOR"]?.includes(user?.role) && (
                     <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                       Ping
@@ -593,7 +650,7 @@ const AnalyticsTable = ({
                 {filteredSortedAnalytics.map((ba) => {
                     const totalProgress = ba?.isbootCampPassed ? 100 : (ba?.completedPercentage || 0);
                     const isCompleted = ba?.completedPercentage === 100 || ba?.isbootCampPassed;
-                    const isDeferred = ba?.deferredDetails?.studentDeferred;
+                    const isDeferred = isDeferredEnrollment(ba);
                     const isBlocked = ba?.userid?.accBlocked;
 
                     const rowUserId = ba?.userid?._id != null ? String(ba.userid._id) : "";
@@ -732,6 +789,34 @@ const AnalyticsTable = ({
                           </div>
                         </td>
 
+                        {/* Enrollment lifecycle status */}
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          {searchType === "bootcamp" && !["TUTOR"]?.includes(user?.role) ? (
+                            <select
+                              value={ba?.enrollmentStatus || "in_progress"}
+                              onChange={(e) => handleEnrollmentStatusChange(e, ba)}
+                              disabled={enrollmentStatusSaving === String(ba?.userid?._id)}
+                              className="min-w-[160px] px-2 py-1.5 rounded-lg text-xs font-medium border border-gray-600 bg-[#0D1117] text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                              title="Change enrollment status"
+                            >
+                              {ENROLLMENT_STATUS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            (() => {
+                              const { label, className } = getEnrollmentStatusDisplay(ba?.enrollmentStatus);
+                              return (
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${className}`}>
+                                  {label}
+                                </span>
+                              );
+                            })()
+                          )}
+                        </td>
+
                         {/* Tutor */}
                         <td className="px-4 py-4">
                           <span className={`text-sm ${
@@ -818,29 +903,6 @@ const AnalyticsTable = ({
                             </div>
                           </td>
                         )}
-
-                        {/* Defer Status */}
-                        <td className="px-4 py-4 text-center">
-                          <span
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setStudentDeferredModalConfig(ba);
-                            }}
-                            className="cursor-pointer"
-                          >
-                            {isDeferred ? (
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-600/20 text-yellow-400">
-                                Deferred
-                              </span>
-                            ) : !["TUTOR"]?.includes(user?.role) ? (
-                              <button className="px-3 py-1.5 bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 rounded-lg text-xs font-medium transition-colors">
-                                Defer
-                              </button>
-                            ) : (
-                              <span className="text-gray-500 text-xs">Active</span>
-                            )}
-                          </span>
-                        </td>
 
                         {/* Ping Student */}
                         {!["TUTOR"]?.includes(user?.role) && (

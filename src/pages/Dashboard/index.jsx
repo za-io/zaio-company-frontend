@@ -504,6 +504,15 @@ const Dashboard = () => {
                   Finance
                 </Link>
                 <Link
+                  to="/deferred-students"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-yellow-600/70 to-amber-600/70 hover:from-yellow-500 hover:to-amber-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Deferred Students
+                </Link>
+                <Link
                   to="/roster-payment-check"
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600/80 to-indigo-600/80 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
                 >

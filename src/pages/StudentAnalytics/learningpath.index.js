@@ -160,15 +160,15 @@ const LPAnalyticsTable = ({
                       } else if (sortBy === SORTING.PROGRESS_ASC) {
                         return a?.lpProgress - b?.lpProgress;
                       } else if (sortBy === SORTING.DEFERRED_ASC) {
-                        return (
-                          Boolean(b?.deferredDetails?.studentDeferred) -
-                          Boolean(a?.deferredDetails?.studentDeferred)
-                        );
+                        const isDeferred = (row) =>
+                          ["deferred", "deferred_optin", "in_grace_period"].includes(row?.enrollmentStatus) ||
+                          Boolean(row?.deferredDetails?.studentDeferred);
+                        return Number(isDeferred(b)) - Number(isDeferred(a));
                       } else if (sortBy === SORTING.DEFERRED_DESC) {
-                        return (
-                          Boolean(a?.deferredDetails?.studentDeferred) -
-                          Boolean(b?.deferredDetails?.studentDeferred)
-                        );
+                        const isDeferred = (row) =>
+                          ["deferred", "deferred_optin", "in_grace_period"].includes(row?.enrollmentStatus) ||
+                          Boolean(row?.deferredDetails?.studentDeferred);
+                        return Number(isDeferred(a)) - Number(isDeferred(b));
                       }
                     })
                     ?.map((ba) => {

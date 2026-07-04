@@ -13,6 +13,20 @@ export const getCourseItemDetails = (courseId, userId, type) =>
       return { success: false, items: [] };
     });
 
+/** List deferred bootcamp students (admin). Optional q to filter by name/email/cohort. */
+export const getDeferredStudents = (params = {}) => {
+  const q = new URLSearchParams();
+  if (params.q) q.set("q", params.q);
+  const qs = q.toString();
+  return axios
+    .get(API_URL + `/deferred-students${qs ? `?${qs}` : ""}`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, students: [], message: err?.response?.data?.message || "Failed to load deferred students" };
+    });
+};
+
 // Search for students by email/name or student number. type: "email" | "student_number"
 export const searchStudents = (query, type = "email") =>
   axios
@@ -577,7 +591,11 @@ export const getUserBootcampAnalyticsCourseWise = async (
     return response.data;
   } catch (error) {
     console.log(error);
-    return [];
+    return {
+      success: false,
+      data: [],
+      message: error?.response?.data?.message || error.message || "Failed to load summary",
+    };
   }
 };
 
@@ -623,6 +641,34 @@ export const markBootcampCompleted = async (bootcampid, userid) => {
   }
 };
 
+export const updateBootcampEnrollmentStatus = async (bootcampid, userid, enrollmentStatus) => {
+  try {
+    const response = await axios.put(
+      API_URL + `/${bootcampid}/enrollment-status/${userid}`,
+      { enrollmentStatus }
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return {
+      success: false,
+      message: error?.response?.data?.message || "Failed to update enrollment status",
+    };
+  }
+};
+
+export const ENROLLMENT_STATUS_OPTIONS = [
+  { value: "in_progress", label: "In progress" },
+  { value: "in_grace_period", label: "Grace period" },
+  { value: "pass", label: "Pass" },
+  { value: "supp", label: "Supp" },
+  { value: "transfer_pending", label: "Transfer-pending" },
+  { value: "transfer_complete", label: "Transfer-complete" },
+  { value: "deferred_optin", label: "Deferred-optin" },
+  { value: "deferred", label: "Deferred" },
+  { value: "dropped_off", label: "Dropped off" },
+];
+
 export const getBootcampAssignment = async (userid, courseid) => {
   try {
     const response = await axios.get(
@@ -645,6 +691,26 @@ export const getStudentGoogleClassroomAssignments = async (userid) => {
   } catch (error) {
     console.log(error);
     return { success: false, data: [] };
+  }
+};
+
+/** Tutor/admin: re-sync Google Classroom assignments for a student (uses their stored refresh token) */
+export const resyncStudentGoogleClassroomAssignments = async (userid) => {
+  try {
+    const response = await axios.post(
+      API_URL + `/student/${userid}/google-classroom/resync`
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return {
+      success: false,
+      message:
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to sync Google Classroom assignments",
+      data: [],
+    };
   }
 };
 
@@ -770,25 +836,6 @@ export const undoRevokeLPAndBootcampAccess = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const fetchStudentGoals = (payload) =>
-  axios
-    .get(
-      `${BASE_URL}/defer-student/all-goals/${payload?.userid}/${payload.bootcampid}`
-    )
-    .then((res) => res.data)
-    .catch((err) => console.log(err));
-
-export const addStudentGoals = (payload) =>
-  axios
-    .post(`${BASE_URL}/defer-student/add-goal`, payload)
-    .then((res) => res.data)
-    .catch((err) => console.log(err));
-
-export const deleteStudentGoal = (payload) =>
-  axios
-    .post(`${BASE_URL}/defer-student/delete-goal`, payload)
-    .then((res) => res.data)
-    .catch((err) => console.log(err));
 
 export const saveTutorProgress = (payload) =>
   axios

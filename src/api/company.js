@@ -115,6 +115,19 @@ export const updateTeamMemberRatePerCredit = (memberId, ratePerCredit) =>
       message: err?.response?.data?.message || err?.message || "Failed to update rate",
     }));
 
+export const updateTeamMemberLinkedFinanceStaff = (memberId, linkedStaffId) =>
+  axios
+    .patch(
+      `${BASE_URL}/company/team-members/${memberId}/linked-finance-staff`,
+      { linkedStaffId },
+      { headers: companyAuthHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update finance link",
+    }));
+
 export const updateTeamMemberPassword = (memberId, password) =>
   axios
     .patch(
@@ -163,6 +176,30 @@ export const updateAssessorNotificationSettings = (notificationEmail) =>
   axios
     .patch(
       `${BASE_URL}/company/assessor-notification-settings`,
+      { notificationEmail: notificationEmail.trim() || null },
+      { headers: companyAuthHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to save notification settings",
+    }));
+
+export const getModeratorNotificationSettings = () =>
+  axios
+    .get(`${BASE_URL}/company/moderator-notification-settings`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load notification settings",
+    }));
+
+export const updateModeratorNotificationSettings = (notificationEmail) =>
+  axios
+    .patch(
+      `${BASE_URL}/company/moderator-notification-settings`,
       { notificationEmail: notificationEmail.trim() || null },
       { headers: companyAuthHeaders() }
     )
@@ -369,11 +406,6 @@ export const sendWarningEmail = (payload) =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const deferStudent = (payload) =>
-  axios
-    .post(`${BASE_URL}/bootcamp/defer-student`, payload)
-    .then((res) => res.data)
-    .catch((err) => console.log(err));
 
 export const pingStudent = (payload) =>
   axios
@@ -1205,6 +1237,19 @@ export const editBootcampConfig = (bootcampId, config) => {
       console.log(err);
       return { success: false, message: "Failed to update bootcamp config" };
     });
+};
+
+export const updateCohortLifecycleStatus = (bootcampId, status) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+
+  return axios
+    .put(`${BASE_URL}/bootcamp/${bootcampId}/cohort-lifecycle-status`, { status }, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to update cohort status",
+    }));
 };
 
 // ----- Tutor booking / availability (tutor dashboard) -----

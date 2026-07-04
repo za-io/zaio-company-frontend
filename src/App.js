@@ -29,7 +29,6 @@ import TutorStudents from "./pages/TutorManagement/TutorStudents";
 import TutorStudentSummary from "./pages/TutorManagement/TutorStudentSummary";
 import TutorKPISummary from "./pages/TutorManagement/TutotKPISummary";
 import TutorKPIStudentSummary from "./pages/TutorManagement/TutorKPIStudentSummary";
-import SetGoal from "./pages/Goals";
 import AllTutors from "./pages/Stu_Success_Manager/AllTutors";
 import { ViewTutor } from "./pages/Stu_Success_Manager/ViewTutor";
 import { ViewTutorBootcampAnalytics } from "./pages/Stu_Success_Manager/TutorBootcampAnalytics";
@@ -51,11 +50,13 @@ import OCModeratorQueuePage from "./pages/OCModeratorQueue";
 import ManageTeam from "./pages/ManageTeam";
 import AssessorEarnings from "./pages/AssessorEarnings";
 import AssessorSettings from "./pages/AssessorSettings";
+import ModeratorSettings from "./pages/ModeratorSettings";
 import OCLateSubmissions from "./pages/OCLateSubmissions";
 import OCLateVerifications from "./pages/OCLateVerifications";
 import QCTOPayments from "./pages/QCTOPayments";
 import Finance from "./pages/Finance";
 import FinancePasswordGate from "./components/FinancePasswordGate";
+import DeferredStudents from "./pages/DeferredStudents";
 import RosterPaymentCheck from "./pages/RosterPaymentCheck";
 import RosterTasksList from "./pages/RosterTasksList";
 import RosterTaskDetail from "./pages/RosterTaskDetail";
@@ -255,6 +256,12 @@ const AppHelper = () => {
           }
         />
         <Route
+          path="/moderator-settings"
+          element={
+            <ProtectedRoute path="/moderator-settings" component={<ModeratorSettings />} />
+          }
+        />
+        <Route
           path="/late-submissions"
           element={
             <ProtectedRoute path="/late-submissions" component={<OCLateSubmissions />} />
@@ -438,15 +445,7 @@ const AppHelper = () => {
           }
         />
 
-        <Route
-          path="/defer-student/goals"
-          element={
-            <ProtectedRoute
-              path="/defer-student/goals/"
-              component={<SetGoal />}
-            />
-          }
-        />
+
         <Route
           path="/support-sessions"
           element={
@@ -467,6 +466,12 @@ const AppHelper = () => {
                 </FinancePasswordGate>
               }
             />
+          }
+        />
+        <Route
+          path="/deferred-students"
+          element={
+            <ProtectedRoute path="/deferred-students" component={<DeferredStudents />} />
           }
         />
         <Route
