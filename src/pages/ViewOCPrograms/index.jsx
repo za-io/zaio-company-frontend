@@ -22,6 +22,7 @@ import {
   downloadPoeIdCopiesZip,
   getOCCohortDetails,
   updateOCCohortModuleDeadlines,
+  updateOCCohortNonQctoModuleDeadlines,
 } from "../../api/company";
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
@@ -71,6 +72,39 @@ function buildQctoDeadlineTimetableRows(cohort) {
       learnerWorkbookDue: d.learnerWorkbookDue ?? null,
       summativeDue: d.summativeDue ?? null,
       pmModuleDue: d.pmModuleDue ?? null,
+    });
+  }
+  return rows;
+}
+
+/** Bootcamp learning path courses (non QCTO) with optional due dates. */
+function buildNonQctoDeadlineTimetableRows(cohort) {
+  const courses = cohort?.nonQctoLearningPath?.learningpathcourses;
+  if (!courses?.length) return [];
+  const byCourseId = new Map(
+    (cohort.nonQctoModuleDeadlines || []).map((d) => {
+      const id =
+        d.courseId != null && typeof d.courseId.toString === "function"
+          ? d.courseId.toString()
+          : String(d.courseId);
+      return [id, d];
+    })
+  );
+  const rows = [];
+  for (const course of courses) {
+    if (!course) continue;
+    const ct = course.coursetype;
+    if (ct === "QCTO-KM" || ct === "QCTO-PM") continue;
+    const id =
+      course._id != null && typeof course._id.toString === "function"
+        ? course._id.toString()
+        : String(course._id);
+    const d = byCourseId.get(id) || {};
+    rows.push({
+      courseId: id,
+      courseName: course.coursename || "",
+      courseType: ct || "",
+      courseDue: d.courseDue ?? null,
     });
   }
   return rows;
@@ -134,6 +168,11 @@ const ViewOCPrograms = () => {
   const [deadlineFormByCourseId, setDeadlineFormByCourseId] = useState({});
   const [deadlineSaveMessage, setDeadlineSaveMessage] = useState(null);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [nonQctoDeadlineFormByCourseId, setNonQctoDeadlineFormByCourseId] = useState({});
+  const [nonQctoDeadlineSaveMessage, setNonQctoDeadlineSaveMessage] = useState(null);
+  const [nonQctoDeadlineSaving, setNonQctoDeadlineSaving] = useState(false);
+  const [qctoDeadlinesOpen, setQctoDeadlinesOpen] = useState(false);
+  const [bootcampDeadlinesOpen, setBootcampDeadlinesOpen] = useState(false);
   const DEFAULT_LIVE_CLASS_THUMBNAIL =
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='120'%3E%3Crect fill='%23212a34' width='200' height='120'/%3E%3Ctext x='100' y='65' fill='%236b7280' font-size='14' text-anchor='middle' font-family='system-ui'%3ELive Class%3C/text%3E%3C/svg%3E";
 
@@ -493,6 +532,10 @@ const ViewOCPrograms = () => {
       setCohortDeadlineDetail(null);
       setDeadlineFormByCourseId({});
       setDeadlineSaveMessage(null);
+      setNonQctoDeadlineFormByCourseId({});
+      setNonQctoDeadlineSaveMessage(null);
+      setQctoDeadlinesOpen(false);
+      setBootcampDeadlinesOpen(false);
       return;
     }
     let cancelled = false;
@@ -533,6 +576,21 @@ const ViewOCPrograms = () => {
       };
     }
     setDeadlineFormByCourseId(next);
+  }, [cohortDeadlineDetail]);
+
+  useEffect(() => {
+    if (!cohortDeadlineDetail) {
+      setNonQctoDeadlineFormByCourseId({});
+      return;
+    }
+    const rows = buildNonQctoDeadlineTimetableRows(cohortDeadlineDetail);
+    const next = {};
+    for (const r of rows) {
+      next[r.courseId] = {
+        courseDue: dateToDatetimeLocal(r.courseDue),
+      };
+    }
+    setNonQctoDeadlineFormByCourseId(next);
   }, [cohortDeadlineDetail]);
 
   const handleViewStudentDetails = (student) => {
@@ -929,7 +987,56 @@ const ViewOCPrograms = () => {
     }
   };
 
+  const updateNonQctoDeadlineField = (courseId, value) => {
+    setNonQctoDeadlineFormByCourseId((prev) => ({
+      ...prev,
+      [courseId]: { courseDue: value },
+    }));
+  };
+
+  const handleSaveNonQctoDeadlines = async () => {
+    if (!selectedProgram?._id || !canEditOcDeadlines || !cohortDeadlineDetail) return;
+    const rows = buildNonQctoDeadlineTimetableRows(cohortDeadlineDetail);
+    if (rows.length === 0) return;
+    const deadlines = rows.map((r) => {
+      const f = nonQctoDeadlineFormByCourseId[r.courseId] || {};
+      return {
+        courseId: r.courseId,
+        courseDue: datetimeLocalToIso(f.courseDue),
+      };
+    });
+    setNonQctoDeadlineSaving(true);
+    setNonQctoDeadlineSaveMessage(null);
+    try {
+      const res = await updateOCCohortNonQctoModuleDeadlines(selectedProgram._id, deadlines);
+      if (!res?.success) {
+        setNonQctoDeadlineSaveMessage({
+          type: "error",
+          text: res?.message || "Could not save bootcamp path deadlines.",
+        });
+        return;
+      }
+      setNonQctoDeadlineSaveMessage({ type: "success", text: "Bootcamp path deadlines saved." });
+      const refreshed = await getOCCohortDetails(selectedProgram._id);
+      if (refreshed?.status === 200 && refreshed?.success && refreshed.data) {
+        setCohortDeadlineDetail(refreshed.data);
+      }
+    } catch (err) {
+      setNonQctoDeadlineSaveMessage({
+        type: "error",
+        text: err?.response?.data?.message || err?.message || "Could not save bootcamp path deadlines.",
+      });
+    } finally {
+      setNonQctoDeadlineSaving(false);
+    }
+  };
+
   const ocDeadlineTimetableRows = cohortDeadlineDetail ? buildQctoDeadlineTimetableRows(cohortDeadlineDetail) : [];
+  const nonQctoDeadlineTimetableRows = cohortDeadlineDetail
+    ? buildNonQctoDeadlineTimetableRows(cohortDeadlineDetail)
+    : [];
+  const bootcampLearningPathName =
+    cohortDeadlineDetail?.nonQctoLearningPath?.learningpathname || "Bootcamp learning path";
 
   return (
     <div className="min-h-screen bg-[#0f1419] px-4 sm:px-6 lg:px-8 py-10">
@@ -1051,6 +1158,10 @@ const ViewOCPrograms = () => {
                   setCohortDeadlineDetail(null);
                   setDeadlineFormByCourseId({});
                   setDeadlineSaveMessage(null);
+                  setNonQctoDeadlineFormByCourseId({});
+                  setNonQctoDeadlineSaveMessage(null);
+                  setQctoDeadlinesOpen(false);
+                  setBootcampDeadlinesOpen(false);
                 }}
                 className="bg-gray-600/80 hover:bg-gray-600 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
               >
@@ -1060,17 +1171,44 @@ const ViewOCPrograms = () => {
           </div>
 
           {/* QCTO module deadlines — cohort-wide timetable (same as KM/PM tracker deadlines) */}
-          <div className="mb-10 rounded-xl border border-gray-700/50 bg-gray-800/25 p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-              <div>
-                <h3 className="text-base font-medium text-gray-200">QCTO module deadlines</h3>
+          <div className="mb-10 rounded-xl border border-gray-700/50 bg-gray-800/25 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setQctoDeadlinesOpen((open) => !open)}
+              className="w-full flex items-start justify-between gap-4 p-6 text-left hover:bg-gray-800/40 transition-colors"
+              aria-expanded={qctoDeadlinesOpen}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-medium text-gray-200">QCTO module deadlines</h3>
+                  {ocDeadlineTimetableRows.length > 0 && (
+                    <span className="text-xs font-medium text-gray-500 bg-gray-900/60 px-2 py-0.5 rounded-full">
+                      {ocDeadlineTimetableRows.length} module{ocDeadlineTimetableRows.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-500 mt-1 max-w-3xl">
-                  Full timetable in learning-path order for this cohort. Dates apply to every learner enrolled here.
-                  {canEditOcDeadlines
-                    ? " Edit fields below, then save."
-                    : " Only tutors and super student admins can edit deadlines."}
+                  {qctoDeadlinesOpen
+                    ? "Full timetable in learning-path order for this cohort. Dates apply to every learner enrolled here."
+                    : "Click to expand and edit workbook, summative, and PM module due dates."}
                 </p>
               </div>
+              <svg
+                className={`w-5 h-5 text-gray-400 shrink-0 mt-0.5 transition-transform duration-200 ${
+                  qctoDeadlinesOpen ? "rotate-180" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {qctoDeadlinesOpen && (
+              <div className="px-6 pb-6 pt-0 border-t border-gray-700/40">
+            <div className="flex flex-wrap items-center justify-end gap-4 mb-4 pt-4">
               {canEditOcDeadlines && (
                 <button
                   type="button"
@@ -1196,6 +1334,126 @@ const ViewOCPrograms = () => {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+              </div>
+            )}
+          </div>
+
+          {/* Bootcamp learning path deadlines (OC companion path only) */}
+          <div className="mb-10 rounded-xl border border-gray-700/50 bg-gray-800/25 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setBootcampDeadlinesOpen((open) => !open)}
+              className="w-full flex items-start justify-between gap-4 p-6 text-left hover:bg-gray-800/40 transition-colors"
+              aria-expanded={bootcampDeadlinesOpen}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-medium text-gray-200">Bootcamp learning path deadlines</h3>
+                  {nonQctoDeadlineTimetableRows.length > 0 && (
+                    <span className="text-xs font-medium text-gray-500 bg-gray-900/60 px-2 py-0.5 rounded-full">
+                      {nonQctoDeadlineTimetableRows.length} course{nonQctoDeadlineTimetableRows.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1 max-w-3xl">
+                  {bootcampDeadlinesOpen ? (
+                    <>
+                      Per-course due dates for{" "}
+                      <span className="text-gray-400">{bootcampLearningPathName}</span>. Shown on learner
+                      course tiles for OC cohort students only.
+                    </>
+                  ) : (
+                    <>Click to expand and set due dates for {bootcampLearningPathName}.</>
+                  )}
+                </p>
+              </div>
+              <svg
+                className={`w-5 h-5 text-gray-400 shrink-0 mt-0.5 transition-transform duration-200 ${
+                  bootcampDeadlinesOpen ? "rotate-180" : ""
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {bootcampDeadlinesOpen && (
+              <div className="px-6 pb-6 pt-0 border-t border-gray-700/40">
+            <div className="flex flex-wrap items-center justify-end gap-4 mb-4 pt-4">
+              {canEditOcDeadlines && nonQctoDeadlineTimetableRows.length > 0 && (
+                <button
+                  type="button"
+                  disabled={nonQctoDeadlineSaving || cohortDeadlineLoading}
+                  onClick={handleSaveNonQctoDeadlines}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-violet-600/90 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-all duration-200"
+                >
+                  {nonQctoDeadlineSaving ? "Saving…" : "Save bootcamp deadlines"}
+                </button>
+              )}
+            </div>
+            {nonQctoDeadlineSaveMessage && (
+              <p
+                className={`text-sm mb-4 ${
+                  nonQctoDeadlineSaveMessage.type === "error" ? "text-red-400/90" : "text-emerald-400/90"
+                }`}
+              >
+                {nonQctoDeadlineSaveMessage.text}
+              </p>
+            )}
+            {cohortDeadlineLoading ? (
+              <div className="flex items-center gap-2 text-gray-500 py-6">
+                <Loader />
+                <span>Loading deadlines…</span>
+              </div>
+            ) : !cohortDeadlineDetail?.nonQctoLearningPath ? (
+              <p className="text-gray-500 text-[15px] py-4">
+                This cohort has no bootcamp learning path configured.
+              </p>
+            ) : nonQctoDeadlineTimetableRows.length === 0 ? (
+              <p className="text-gray-500 text-[15px] py-4">
+                No courses on the bootcamp learning path.
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-gray-700/40">
+                <table className="min-w-full text-sm text-left">
+                  <thead className="bg-gray-900/40 text-gray-400 uppercase text-xs tracking-wide">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Course</th>
+                      <th className="px-4 py-3 font-medium">Type</th>
+                      <th className="px-4 py-3 font-medium">Due date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700/40">
+                    {nonQctoDeadlineTimetableRows.map((row) => {
+                      const f = nonQctoDeadlineFormByCourseId[row.courseId] || {};
+                      return (
+                        <tr key={row.courseId} className="hover:bg-gray-800/30">
+                          <td className="px-4 py-3 text-gray-200">{row.courseName || "—"}</td>
+                          <td className="px-4 py-3 text-gray-500">{row.courseType || "—"}</td>
+                          <td className="px-4 py-3">
+                            {canEditOcDeadlines ? (
+                              <input
+                                type="datetime-local"
+                                value={f.courseDue || ""}
+                                onChange={(e) => updateNonQctoDeadlineField(row.courseId, e.target.value)}
+                                className="bg-gray-900/60 border border-gray-600/50 rounded-lg px-2 py-1.5 text-gray-200 text-sm"
+                              />
+                            ) : (
+                              <span className="text-gray-400">{formatDeadlineDisplay(row.courseDue)}</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
               </div>
             )}
           </div>

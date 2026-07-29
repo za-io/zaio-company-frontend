@@ -772,6 +772,22 @@ export const viewModerationReport = async (batchId) => {
   }
 };
 
+/** Tutor + super student admin. `deadlines`: [{ courseId, courseDue? }] for OC bootcamp learning path */
+export const updateOCCohortNonQctoModuleDeadlines = (cohortId, deadlines) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "auth-token": token } : {}),
+  };
+  return axios
+    .patch(`${BASE_URL}/oc-cohort/${cohortId}/non-qcto-module-deadlines`, { deadlines }, { headers })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
+};
+
 /** Tutor + super student admin. `deadlines`: [{ courseId, learnerWorkbookDue?, summativeDue?, pmModuleDue? }] */
 export const updateOCCohortModuleDeadlines = (cohortId, deadlines) => {
   const token = localStorage.getItem("TOKEN");
