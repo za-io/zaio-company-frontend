@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
+import { filterGoogleClassroomForBootcamp } from "../../utils/googleClassroomFilter";
 import { addClassroomAssignmentBootcamp, getBootcampAssignment, getStudentGoogleClassroomAssignments, getUserBootcampAnalyticsCourseWise, markBootcampCompleted, markCourseCompleted, resyncStudentGoogleClassroomAssignments, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
+import FinalMarkPredictor from "../../components/FinalMarkPredictor/FinalMarkPredictor";
 import "../../components/ActiveBootcamps/ActiveBootcampsTable.css";
 
 
@@ -230,14 +232,13 @@ const StudentSummary = () => {
 
       const gcRes = await getStudentGoogleClassroomAssignments(userid);
       if (gcRes?.success && Array.isArray(gcRes.data)) {
-        const normalizeId = (id) => (id == null ? "" : id._id != null ? String(id._id) : String(id));
-        let forBootcamp = (gcRes.data || []).filter((d) => {
-          const dId = normalizeId(d.bootcampId);
-          return dId && bootcampIdStr && dId === bootcampIdStr;
-        });
-        if (forBootcamp.length === 0 && (gcRes.data || []).length > 0) {
-          forBootcamp = gcRes.data || [];
-        }
+        const linkedGcCourseId =
+          summaryStateResolved?.linkedGoogleClassroomCourseId || null;
+        const forBootcamp = filterGoogleClassroomForBootcamp(
+          gcRes.data,
+          bootcampIdStr,
+          linkedGcCourseId
+        );
         forBootcamp.forEach((d) => {
           const courseName = d.googleClassroomCourseName || d.bootcampName || "Classroom";
           (d.assignments || []).forEach((a) => {
@@ -641,6 +642,14 @@ const StudentSummary = () => {
                 {showWorking ? "Hide working" : "Show working"}
               </button>
             </div>
+
+            {userSummary.length > 0 && (
+              <FinalMarkPredictor
+                userSummary={userSummary}
+                allAssignments={allAssignments}
+                finalProjectMark={finalProjectMark}
+              />
+            )}
 
             {/* Step-by-step working (student's actual marks) */}
             {showWorking && userSummary.length > 0 && (() => {
