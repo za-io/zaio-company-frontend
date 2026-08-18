@@ -6,7 +6,7 @@ import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
-import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors } from "../../api/company";
+import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors, syncStudentToAthena } from "../../api/company";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
 import { RxCheckCircled } from "react-icons/rx";
 import { HiOutlineClipboardDocument } from "react-icons/hi2";
@@ -56,6 +56,33 @@ const getAuthMethodStyle = (method) => {
     default:
       return "text-gray-400";
   }
+};
+
+const getAthenaSyncStatus = (row) => {
+  if (row?.athenaSyncedAt) {
+    return {
+      label: "Synced",
+      className: "text-emerald-400",
+      title: row?.athenaUserId
+        ? `Synced to Athena (${row.athenaUserId})`
+        : `Synced ${formatDate(row.athenaSyncedAt)}`,
+      needsEnroll: false,
+    };
+  }
+  if (row?.athenaSyncError) {
+    return {
+      label: "Failed",
+      className: "text-red-400",
+      title: row.athenaSyncError,
+      needsEnroll: true,
+    };
+  }
+  return {
+    label: "Not synced",
+    className: "text-gray-500",
+    title: "Not added to Athena cohort yet",
+    needsEnroll: true,
+  };
 };
 
 const ENROLLMENT_STATUS_LABELS = {
@@ -113,6 +140,7 @@ const AnalyticsTable = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [rowLoading, setRowLoading] = useState(false);
   const [enrollmentStatusSaving, setEnrollmentStatusSaving] = useState(null);
+  const [athenaSyncSaving, setAthenaSyncSaving] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
   const copyToClipboard = (text, id) => {
@@ -121,6 +149,27 @@ const AnalyticsTable = ({
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 1500);
     });
+  };
+
+  const handleAthenaSync = async (event, ba) => {
+    event.stopPropagation();
+    const bootcampId = data?.bootcampDetails?._id;
+    const userId = ba?.userid?._id;
+    if (!bootcampId || !userId) return;
+
+    setAthenaSyncSaving(String(userId));
+    try {
+      const res = await syncStudentToAthena({ bootcampId, userId });
+      if (res?.success) {
+        getAnalytics();
+      } else {
+        alert(res?.message || "Failed to enroll in Athena");
+      }
+    } catch {
+      alert("Failed to enroll in Athena");
+    } finally {
+      setAthenaSyncSaving(null);
+    }
   };
 
   const handleEnrollmentStatusChange = async (event, ba) => {
@@ -213,6 +262,9 @@ const AnalyticsTable = ({
 
   const showBootcampTutorManage =
     searchType === "bootcamp" && user?.role !== "TUTOR" && Boolean(data?.bootcampDetails?._id);
+
+  const showAthenaColumn = searchType === "bootcamp" && Boolean(data?.bootcampDetails?.athenaEnabled);
+  const canManageAthena = showAthenaColumn && !["TUTOR"]?.includes(user?.role);
 
   const tutorsAvailableToAdd = useMemo(() => {
     const alloc = new Set(tutorsForAssignment.map((t) => String(t._id)));
@@ -402,6 +454,11 @@ const AnalyticsTable = ({
                   {deferredCount > 0 && (
                     <span className="text-yellow-500 ml-2">
                       ({deferredCount} deferred)
+                    </span>
+                  )}
+                  {showAthenaColumn && data?.bootcampDetails?.athenaCohortName && (
+                    <span className="text-emerald-500 ml-2">
+                      · Athena: {data.bootcampDetails.athenaCohortName}
                     </span>
                   )}
                 </p>
@@ -626,6 +683,11 @@ const AnalyticsTable = ({
                       Classroom
                     </th>
                   )}
+                  {showAthenaColumn && (
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Athena
+                    </th>
+                  )}
                   <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
                     Calendar
                   </th>
@@ -839,6 +901,36 @@ const AnalyticsTable = ({
                                 </span>
                               );
                             })()}
+                          </td>
+                        )}
+
+                        {showAthenaColumn && (
+                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col gap-1.5 items-start">
+                              {(() => {
+                                const status = getAthenaSyncStatus(ba);
+                                return (
+                                  <span
+                                    className={`text-sm font-medium ${status.className}`}
+                                    title={status.title}
+                                  >
+                                    {status.label}
+                                  </span>
+                                );
+                              })()}
+                              {canManageAthena && getAthenaSyncStatus(ba).needsEnroll && (
+                                <button
+                                  type="button"
+                                  className="px-2.5 py-1 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                  disabled={athenaSyncSaving === String(ba?.userid?._id)}
+                                  onClick={(e) => handleAthenaSync(e, ba)}
+                                >
+                                  {athenaSyncSaving === String(ba?.userid?._id)
+                                    ? "Enrolling…"
+                                    : "Enroll in Athena"}
+                                </button>
+                              )}
+                            </div>
                           </td>
                         )}
 

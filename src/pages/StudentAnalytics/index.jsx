@@ -14,6 +14,7 @@ import {
 import Loader from "../../components/loader/loader";
 import AnalyticsTable from "./table";
 import CohortLifecycleBanner from "./CohortLifecycleBanner";
+import QctoSpBootcampConfigModal from "../../components/QctoSpBootcampConfig/QctoSpBootcampConfigModal";
 import { useSearchParams } from "react-router-dom";
 import LPAnalyticsTable from "./learningpath.index";
 import CourseAnalyticsTable from "./course.index";
@@ -58,6 +59,7 @@ const StudentAnalytics = () => {
   const [addSingleStudentNumber, setAddSingleStudentNumber] = useState("");
   const [addSingleStudentMessage, setAddSingleStudentMessage] = useState(null);
   const [addSingleStudentSubmitting, setAddSingleStudentSubmitting] = useState(false);
+  const [qctoSpConfigOpen, setQctoSpConfigOpen] = useState(false);
   const { user } = useUserStore();
 
   const fetchDropdownData = async () => {
@@ -145,7 +147,22 @@ const StudentAnalytics = () => {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold text-white">Student Analytics</h1>
         {searchType === "bootcamp" && bootcampId && !["TUTOR", "COMPANY_ADMIN"]?.includes(user?.role) && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <a
+              href={`/student/analytics/qcto-sp?bootcamp=${bootcampId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-lg font-semibold bg-amber-600 hover:bg-amber-700 text-white transition-colors inline-block"
+            >
+              QCTO SP
+            </a>
+            <button
+              type="button"
+              onClick={() => setQctoSpConfigOpen(true)}
+              className="px-4 py-2 rounded-lg font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-colors"
+            >
+              Configure QCTO Skills Programme
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -179,6 +196,13 @@ const StudentAnalytics = () => {
           onUpdated={getAnalytics}
         />
       )}
+
+      <QctoSpBootcampConfigModal
+        isOpen={qctoSpConfigOpen}
+        onClose={() => setQctoSpConfigOpen(false)}
+        bootcampId={bootcampId}
+        onSuccess={() => getAnalytics()}
+      />
 
       {/* Add students modal */}
       {addStudentsOpen && user?.role !== "COMPANY_ADMIN" && (

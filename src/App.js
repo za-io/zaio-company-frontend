@@ -13,6 +13,7 @@ import Loader from "./components/loader/loader";
 import StudentBootcamp from "./pages/StudentBootcamp";
 import StudentLearningPath from "./pages/StudentLearningPath";
 import StudentAnalytics from "./pages/StudentAnalytics";
+import QctoSpRegistrations from "./pages/StudentAnalytics/QctoSpRegistrations";
 import StudentProfile from "./pages/StudentProfile";
 import StudentMCQ from "./pages/StudentMCQ";
 import StudentChallenges from "./pages/StudentChallenges";
@@ -386,6 +387,15 @@ const AppHelper = () => {
             <ProtectedRoute
               path="/student/analytics"
               component={<StudentAnalytics />}
+            />
+          }
+        />
+        <Route
+          path="/student/analytics/qcto-sp"
+          element={
+            <ProtectedRoute
+              path="/student/analytics/qcto-sp"
+              component={<QctoSpRegistrations />}
             />
           }
         />

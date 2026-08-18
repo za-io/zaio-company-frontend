@@ -779,6 +779,8 @@ export const AddProgram = () => {
   const [holidayRanges, setHolidayRanges] = useState([]); // Array of {start, end} objects
   const [googleClassroom, setGoogleClassroom] = useState("");
   const [commitedMins, setCommitedMins] = useState("");
+  const [athenaEnabled, setAthenaEnabled] = useState(false);
+  const [athenaDojoRefTokens, setAthenaDojoRefTokens] = useState("");
 
   // Convert holiday ranges to string format for API
   const getHolidaysString = () => {
@@ -812,6 +814,12 @@ export const AddProgram = () => {
   useEffect(() => {
     fetchTutors();
   }, []);
+
+  useEffect(() => {
+    if (selectedProgramType === "cybersecurity") {
+      setAthenaEnabled(true);
+    }
+  }, [selectedProgramType]);
 
   useEffect(() => {
     const init = () => {
@@ -875,9 +883,22 @@ export const AddProgram = () => {
       tutors: selectedTutors,
       selectedWeekdays,
       bootcampType,
+      athenaEnabled,
+      athenaDojoRefTokens: athenaDojoRefTokens.trim() || undefined,
     })
       .then((res) => {
         if (res.status === 200) {
+          const athenaSuffix = (() => {
+            if (!res.athena) return "";
+            if (res.athena.provisionError) {
+              return ` Athena provisioning failed: ${res.athena.provisionError}`;
+            }
+            if (res.athena.cohortId) {
+              return ` Athena cohort "${res.athena.cohortName || res.athena.cohortId}" created.`;
+            }
+            return " Athena integration enabled.";
+          })();
+
           // For auto-enrollment, store the API details before resetting
           if (res.bootcampType === "auto" && res.apiKey) {
             setCreatedBootcampData({
@@ -885,10 +906,14 @@ export const AddProgram = () => {
               apiKey: res.apiKey,
               autoEnrollEndpoint: res.autoEnrollEndpoint,
               bootcampName: programName,
+              athena: res.athena || null,
             });
-            showMessage("Auto-enrollment bootcamp created successfully! See API details below.", "success");
+            showMessage(
+              `Auto-enrollment bootcamp created successfully! See API details below.${athenaSuffix}`,
+              res.athena?.provisionError ? "error" : "success"
+            );
           } else {
-            showMessage("Bootcamp created successfully!", "success");
+            showMessage(`Bootcamp created successfully!${athenaSuffix}`, res.athena?.provisionError ? "error" : "success");
             setCreatedBootcampData(null);
           }
           
@@ -908,6 +933,8 @@ export const AddProgram = () => {
           setHolidayRanges([]);
           setGoogleClassroom("");
           setCommitedMins("");
+          setAthenaEnabled(false);
+          setAthenaDojoRefTokens("");
           setSelectedLP(null);
           setBootcampType("manual");
           setSelectedWeekdays(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
@@ -1109,6 +1136,21 @@ export const AddProgram = () => {
                 </label>
                 <p className="text-white font-medium">{createdBootcampData.bootcampName}</p>
               </div>
+
+              {createdBootcampData.athena && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+                    Athena Cohort
+                  </label>
+                  {createdBootcampData.athena.provisionError ? (
+                    <p className="text-red-400 text-sm">{createdBootcampData.athena.provisionError}</p>
+                  ) : (
+                    <p className="text-emerald-400 font-medium">
+                      {createdBootcampData.athena.cohortName || createdBootcampData.athena.cohortId || "Provisioned"}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
@@ -1403,6 +1445,44 @@ export const AddProgram = () => {
                   <p className="mt-1 text-xs text-gray-500">
                     Connects this bootcamp to Google Classroom so tutors can view and mark submissions. Paste the course link or numeric ID.
                   </p>
+                </div>
+
+                {/* Athena Dojos */}
+                <div className="rounded-xl border border-gray-700 bg-[#0D1117]/50 p-4 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={athenaEnabled}
+                      onChange={(e) => setAthenaEnabled(e.target.checked)}
+                      className="mt-1 w-4 h-4 rounded border-gray-600 bg-[#0D1117] text-emerald-600 focus:ring-emerald-500 focus:ring-offset-0"
+                    />
+                    <div>
+                      <span className="text-sm font-medium text-gray-200">
+                        Enable Athena Dojos
+                      </span>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Creates an Athena cohort for this bootcamp, syncs student enrollments, and binds cyber dojo scenarios.
+                      </p>
+                    </div>
+                  </label>
+
+                  {athenaEnabled && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Dojo ref tokens <span className="text-gray-500 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="SC-07, SC-08 (comma-separated)"
+                        value={athenaDojoRefTokens}
+                        onChange={(e) => setAthenaDojoRefTokens(e.target.value)}
+                        className="w-full bg-[#0D1117] text-white border border-gray-700 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder-gray-500 font-mono text-sm"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Scenario ref tokens to bind to the cohort. Leave empty to bind dojos from the learning path only.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Committed Minutes */}
@@ -1730,6 +1810,23 @@ export const AddProgram = () => {
                       {selectedWeekdays.length} days selected
                     </p>
                   </div>
+
+                  {athenaEnabled && (
+                    <div className="col-span-2 p-4 rounded-xl border bg-emerald-500/10 border-emerald-500/30">
+                      <div className="flex items-center gap-2 mb-1">
+                        <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        <span className="font-medium text-emerald-400">Athena Dojos</span>
+                      </div>
+                      <p className="text-sm text-emerald-400/70">
+                        Enabled
+                        {athenaDojoRefTokens.trim()
+                          ? ` — binding ref tokens: ${athenaDojoRefTokens.trim()}`
+                          : " — dojos from learning path will be bound"}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Create Button */}

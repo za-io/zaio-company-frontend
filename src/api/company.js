@@ -45,11 +45,17 @@ export const getAllCompanyAdmins = () =>
     .then((res) => res.data)
     .catch((err) => console.log(err));
 
-export const getAllLPs = (qctoOnly = false) =>
-  axios
-    .get(API_URL + `/all/learningpaths`, qctoOnly ? { params: { qctoOnly: "true" } } : {})
+export const getAllLPs = (qctoOnly = false, qctospOnly = false) => {
+  const params = {};
+  if (qctoOnly) params.qctoOnly = "true";
+  if (qctospOnly) params.qctospOnly = "true";
+  return axios
+    .get(API_URL + `/all/learningpaths`, Object.keys(params).length ? { params } : {})
     .then((res) => res.data)
     .catch((err) => console.log(err));
+};
+
+export const getQctoSpLearningPaths = () => getAllLPs(false, true);
 
 export const getAllTutors = () =>
   axios
@@ -71,6 +77,19 @@ export const updateBootcampAllocatedTutors = ({ bootcampId, tutorIds }) => {
     .catch((err) => ({
       success: false,
       message: err?.response?.data?.message || err?.message || "Failed to update tutors",
+    }));
+};
+
+/** Sync one enrolled student to the bootcamp's Athena cohort. */
+export const syncStudentToAthena = ({ bootcampId, userId }) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return axios
+    .post(`${API_URL}/${bootcampId}/athena/sync-student`, { userId }, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to sync to Athena",
     }));
 };
 
@@ -1253,6 +1272,66 @@ export const editBootcampConfig = (bootcampId, config) => {
       console.log(err);
       return { success: false, message: "Failed to update bootcamp config" };
     });
+};
+
+export const closeBootcampSpRegistration = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/close`, {}, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to close registration",
+    }));
+};
+
+export const reopenBootcampSpRegistration = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/reopen`, {}, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to reopen registration",
+    }));
+};
+
+export const getBootcampSpRegistrationList = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/list`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to load registration list",
+    }));
+};
+
+export const exportBootcampQctoSpStage = (bootcampId, stage, exportSettings = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/export/${stage}`, exportSettings, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to export QCTO workbook",
+    }));
+};
+
+export const configureQctoSpBootcampAndEnroll = (bootcampId, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/configure-and-enroll`, payload, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to configure Skills Programme",
+    }));
 };
 
 export const updateCohortLifecycleStatus = (bootcampId, status) => {

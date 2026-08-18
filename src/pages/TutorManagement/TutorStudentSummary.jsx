@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import moment from 'moment';
 import { RxCross1 } from "react-icons/rx";
 import { filterGoogleClassroomForBootcamp } from "../../utils/googleClassroomFilter";
-import { addClassroomAssignmentBootcamp, getBootcampAssignment, getStudentGoogleClassroomAssignments, getUserBootcampAnalyticsCourseWise, markBootcampCompleted, markCourseCompleted, resyncStudentGoogleClassroomAssignments, setBootcampFinalProjectMark } from "../../api/student";
+import { addClassroomAssignmentBootcamp, getBootcampAssignment, getStudentAthenaAssessments, getStudentGoogleClassroomAssignments, getUserBootcampAnalyticsCourseWise, markBootcampCompleted, markCourseCompleted, resyncStudentAthenaAssessments, resyncStudentGoogleClassroomAssignments, setBootcampFinalProjectMark } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import FinalMarkPredictor from "../../components/FinalMarkPredictor/FinalMarkPredictor";
 import "../../components/ActiveBootcamps/ActiveBootcampsTable.css";
@@ -148,6 +148,33 @@ const StudentSummary = () => {
   const [gcSyncing, setGcSyncing] = useState(false);
   const [gcSyncMessage, setGcSyncMessage] = useState(null);
   const [gcSyncIsError, setGcSyncIsError] = useState(false);
+  const [athenaEnabled, setAthenaEnabled] = useState(false);
+  const [athenaSyncing, setAthenaSyncing] = useState(false);
+  const [athenaSyncMessage, setAthenaSyncMessage] = useState(null);
+  const [athenaSyncIsError, setAthenaSyncIsError] = useState(false);
+  const [athenaLastSyncedAt, setAthenaLastSyncedAt] = useState(null);
+
+  const flattenAthenaAssessments = (athenaDoc) => {
+    if (!athenaDoc?.assessments?.length) return [];
+    const cohortLabel = athenaDoc.athenaCohortName || athenaDoc.bootcampName || "Athena";
+    return athenaDoc.assessments.map((a) => ({
+      courseName: cohortLabel,
+      name: a.title || "—",
+      title: a.title || "—",
+      mark: a.grade != null && !Number.isNaN(Number(a.grade)) ? Number(a.grade) : null,
+      source: "athena_assessment",
+      graded: a.grade != null,
+      releasedAt: a.releasedAt,
+      submittedAt: a.submittedAt,
+      scenarioId: a.scenarioId,
+    }));
+  };
+
+  const formatSourceLabel = (source) => {
+    if (source === "athena_assessment") return "Athena";
+    if (source === "google_classroom") return "Google Classroom";
+    return source || "—";
+  };
 
   // Check if an assignment is a Project/Capstone (for Project Mark, not Assignments avg)
   const isProjectAssignment = (title) => {
@@ -301,6 +328,30 @@ const StudentSummary = () => {
       gcAssignmentAvg = gcApplied.gcAssignmentAvg;
       flat = gcApplied.flat;
 
+      let athenaOn = false;
+      try {
+        const athenaRes = await getStudentAthenaAssessments(userid, bootcampIdStr);
+        athenaOn = Boolean(athenaRes?.athenaEnabled);
+        setAthenaEnabled(athenaOn);
+        if (athenaOn && athenaRes?.data) {
+          setAthenaLastSyncedAt(athenaRes.data.lastSyncedAt || null);
+          const athenaFlat = flattenAthenaAssessments(athenaRes.data);
+          if (athenaFlat.length) {
+            flat = [...flat, ...athenaFlat];
+            const regular = flat.filter((a) => !isProjectAssignment(a.title || a.name));
+            if (regular.length > 0) {
+              const sum = regular.reduce(
+                (acc, a) => acc + (a.mark != null && !Number.isNaN(Number(a.mark)) ? Number(a.mark) : 0),
+                0
+              );
+              gcAssignmentAvg = sum / regular.length;
+            }
+          }
+        }
+      } catch (_) {
+        // Athena is optional enrichment
+      }
+
       const { finalModuleMark, finalMark } = computeFinalMarks(
         modules,
         projectMarkToUse,
@@ -433,6 +484,31 @@ const StudentSummary = () => {
       setGcSyncMessage(error?.message || "Failed to sync Google Classroom assignments");
     } finally {
       setGcSyncing(false);
+    }
+  };
+
+  const handleAthenaSync = async () => {
+    if (!userid || !bootcampId) return;
+    setAthenaSyncMessage(null);
+    setAthenaSyncIsError(false);
+    setAthenaSyncing(true);
+    try {
+      const res = await resyncStudentAthenaAssessments(userid, bootcampId);
+      if (!res?.success) {
+        throw new Error(res?.message || "Failed to re-sync Athena assessments");
+      }
+      setAthenaSyncIsError(false);
+      setAthenaSyncMessage(res.message || "Athena assessments synced.");
+      if (userSummary.length > 0) {
+        const storedProjectMark =
+          Number(userSummary[0]?.finalprojectmark) || Number(finalProjectMark) || 0;
+        await loadGoogleClassroomAssignments(userSummary, storedProjectMark);
+      }
+    } catch (error) {
+      setAthenaSyncIsError(true);
+      setAthenaSyncMessage(error?.message || "Failed to re-sync Athena assessments");
+    } finally {
+      setAthenaSyncing(false);
     }
   };
 
@@ -784,22 +860,46 @@ const StudentSummary = () => {
               </div>
             </div>
 
-            {/* Google Classroom assignments section – always visible */}
+            {/* Assignments: Google Classroom + Athena (when enabled) */}
             <div className="max-w-7xl w-full mt-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                <h3 className="active-bootcamps-title mb-0">Assignments (Google Classroom)</h3>
-                <button
-                  type="button"
-                  onClick={handleGoogleClassroomSync}
-                  disabled={gcSyncing || gcLoading}
-                  className="px-4 py-2 rounded bg-blue-700 text-white hover:bg-blue-600 transition text-sm disabled:opacity-50"
-                >
-                  {gcSyncing ? "Syncing…" : "Sync Google Classroom"}
-                </button>
+                <h3 className="active-bootcamps-title mb-0">
+                  {athenaEnabled ? "Assignments (Google Classroom + Athena)" : "Assignments (Google Classroom)"}
+                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  {athenaEnabled && athenaLastSyncedAt && (
+                    <span className="text-gray-400 text-xs">
+                      Athena synced: {moment(athenaLastSyncedAt).format("D MMM YYYY HH:mm")}
+                    </span>
+                  )}
+                  {athenaEnabled && (
+                    <button
+                      type="button"
+                      onClick={handleAthenaSync}
+                      disabled={athenaSyncing || gcLoading}
+                      className="px-4 py-2 rounded bg-emerald-700 text-white hover:bg-emerald-600 transition text-sm disabled:opacity-50"
+                    >
+                      {athenaSyncing ? "Syncing…" : "Sync Athena"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleGoogleClassroomSync}
+                    disabled={gcSyncing || gcLoading}
+                    className="px-4 py-2 rounded bg-blue-700 text-white hover:bg-blue-600 transition text-sm disabled:opacity-50"
+                  >
+                    {gcSyncing ? "Syncing…" : "Sync Google Classroom"}
+                  </button>
+                </div>
               </div>
               {gcSyncMessage && (
                 <p className={`text-sm mb-3 ${gcSyncIsError ? "text-red-300" : "text-green-400"}`}>
                   {gcSyncMessage}
+                </p>
+              )}
+              {athenaSyncMessage && (
+                <p className={`text-sm mb-3 ${athenaSyncIsError ? "text-red-300" : "text-green-400"}`}>
+                  {athenaSyncMessage}
                 </p>
               )}
               {allAssignments.length > 0 ? (
@@ -807,9 +907,10 @@ const StudentSummary = () => {
                   <table className="active-bootcamps-table">
                     <thead>
                       <tr>
-                        <th>Classroom</th>
+                        {athenaEnabled && <th>Source</th>}
+                        <th>{athenaEnabled ? "Course / Cohort" : "Classroom"}</th>
                         <th>Assignment</th>
-                        <th>Due date</th>
+                        <th>{athenaEnabled ? "Due / Released" : "Due date"}</th>
                         <th>Submitted date</th>
                         <th>Grade</th>
                       </tr>
@@ -818,13 +919,20 @@ const StudentSummary = () => {
                       {allAssignments.map((a, idx) => {
                         const formatDate = (d) => (d ? moment(d).format("D MMM YYYY") : "—");
                         return (
-                          <tr key={a.courseWorkId || idx} className="active-bootcamps-row">
+                          <tr key={a.courseWorkId || a.scenarioId || idx} className="active-bootcamps-row">
+                            {athenaEnabled && <td>{formatSourceLabel(a.source)}</td>}
                             <td>{a.courseName || "—"}</td>
                             <td>{a.title || a.name || "—"}</td>
-                            <td>{formatDate(a.dueDate)}</td>
+                            <td>{formatDate(a.dueDate || a.releasedAt)}</td>
                             <td>{formatDate(a.submittedAt)}</td>
                             <td>
-                              {a.graded && (a.assignedGrade != null || a.draftGrade != null) ? (
+                              {a.source === "athena_assessment" ? (
+                                typeof a.mark === "number" ? (
+                                  <span className="text-green-400">{a.mark.toFixed(0)}%</span>
+                                ) : (
+                                  <span className="text-gray-500">—</span>
+                                )
+                              ) : a.graded && (a.assignedGrade != null || a.draftGrade != null) ? (
                                 <span className="text-green-400">
                                   {a.assignedGrade != null ? a.assignedGrade : a.draftGrade}
                                   {a.maxPoints != null ? ` / ${a.maxPoints}` : ""}
@@ -841,7 +949,9 @@ const StudentSummary = () => {
         </div>
               ) : (
                 <p className="text-gray-400 text-sm py-4">
-                  No Google Classroom assignments for this bootcamp yet. Use &quot;Sync Google Classroom&quot; to pull the latest grades from the student&apos;s linked classroom.
+                  {athenaEnabled
+                    ? "No assignments yet. Use Sync Google Classroom or Sync Athena to pull the latest grades."
+                    : "No Google Classroom assignments for this bootcamp yet. Use \"Sync Google Classroom\" to pull the latest grades from the student\u2019s linked classroom."}
                 </p>
               )}
             </div>

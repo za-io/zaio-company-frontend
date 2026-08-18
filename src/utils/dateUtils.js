@@ -8,5 +8,12 @@ const options = {
 export const formatDate = (date) =>
   new Date(date)?.toLocaleDateString("en-US", options);
 
+export const formatDateTime = (date) =>
+  new Date(date)?.toLocaleString("en-US", {
+    ...options,
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
 export const formatTime = (date) =>
   new Date(date)?.toLocaleTimeString("en-US", options);

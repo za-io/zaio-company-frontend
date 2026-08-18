@@ -6,6 +6,9 @@ import {
   archiveManyBootcamps,
   getBootcampConfig,
   editBootcampConfig,
+  closeBootcampSpRegistration,
+  reopenBootcampSpRegistration,
+  getQctoSpLearningPaths,
   provisionBootcampDiscord,
   saveBootcampDiscordLinks,
   getBootcampLiveClasses,
@@ -249,10 +252,18 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
     commitedMins: 360,
     selectedWeekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
     linkedGoogleClassroomCourseId: "",
+    skillsProgramId: "",
+    skillsProgramName: "",
+    spRegistrationDeadline: "",
+    spRegistrationClosed: false,
   });
   const [calendarLastDate, setCalendarLastDate] = useState("");
   const [linkingClassroom, setLinkingClassroom] = useState(false);
   const [savingEndDate, setSavingEndDate] = useState(false);
+  const [savingSpSettings, setSavingSpSettings] = useState(false);
+  const [closingSpRegistration, setClosingSpRegistration] = useState(false);
+  const [spLearningPaths, setSpLearningPaths] = useState([]);
+  const [selectedSpLpId, setSelectedSpLpId] = useState("");
   const [holidayRanges, setHolidayRanges] = useState([]);
   const [message, setMessage] = useState(null);
 
@@ -276,17 +287,52 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
 
   const toDateInput = (value) => (value ? String(value).split("T")[0] : "");
 
+  const matchSpLpSelection = (paths, { skillsProgramId, bootcampLpId }) => {
+    if (!paths?.length) return "";
+    if (skillsProgramId) {
+      const byId = paths.find((lp) => (lp.skillsProgramId || "").trim() === skillsProgramId.trim());
+      if (byId) return String(byId._id);
+    }
+    if (bootcampLpId) {
+      const byLp = paths.find((lp) => String(lp._id) === String(bootcampLpId));
+      if (byLp) return String(byLp._id);
+    }
+    return "";
+  };
+
+  const handleSpLpSelect = (lpId) => {
+    setSelectedSpLpId(lpId);
+    if (!lpId) {
+      setConfig((c) => ({ ...c, skillsProgramId: "", skillsProgramName: "" }));
+      return;
+    }
+    const lp = spLearningPaths.find((item) => String(item._id) === String(lpId));
+    if (lp) {
+      setConfig((c) => ({
+        ...c,
+        skillsProgramId: (lp.skillsProgramId || c.skillsProgramId || "").trim(),
+        skillsProgramName: (lp.skillsProgramName || lp.learningpathname || "").trim(),
+      }));
+    }
+  };
+
   useEffect(() => {
     if (isOpen && bootcampId) {
       setLoading(true);
       setMessage(null);
-      getBootcampConfig(bootcampId).then((res) => {
+      Promise.all([getBootcampConfig(bootcampId), getQctoSpLearningPaths()]).then(([res, spRes]) => {
+        const paths = spRes?.status === 200 && Array.isArray(spRes.allLps) ? spRes.allLps : [];
+        setSpLearningPaths(paths);
+
         if (res.success) {
           setCanEdit(res.canEdit);
           setEnrolledCount(res.enrolledCount);
           const bc = res.bootcamp;
           const calendarDefault = toDateInput(res.calendarLastDate);
           setCalendarLastDate(calendarDefault);
+          const bootcampLpId = bc.learningpath?._id || bc.learningpath || "";
+          const skillsProgramId = bc.skillsProgramId || "";
+          const skillsProgramName = bc.skillsProgramName || "";
           setConfig({
             bootcampName: bc.bootcampName || "",
             startDate: toDateInput(bc.startDate),
@@ -294,7 +340,12 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
             commitedMins: bc.commitedMins || 360,
             selectedWeekdays: bc.selectedWeekdays || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
             linkedGoogleClassroomCourseId: bc.googleClassroom || bc.linkedGoogleClassroomCourseId || "",
+            skillsProgramId,
+            skillsProgramName,
+            spRegistrationDeadline: toDateInput(bc.spRegistrationDeadline),
+            spRegistrationClosed: !!bc.spRegistrationClosed,
           });
+          setSelectedSpLpId(matchSpLpSelection(paths, { skillsProgramId, bootcampLpId }));
           setHolidayRanges(parseHolidaysString(bc.holidays));
         } else {
           setMessage({ type: "error", text: res.message });
@@ -303,6 +354,13 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
       });
     }
   }, [isOpen, bootcampId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedSpLpId("");
+      setSpLearningPaths([]);
+    }
+  }, [isOpen]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -315,6 +373,10 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
       holidays: formatHolidaysString(),
       selectedWeekdays: config.selectedWeekdays,
       googleClassroom: (config.linkedGoogleClassroomCourseId || "").trim(),
+      skillsProgramId: (config.skillsProgramId || "").trim(),
+      skillsProgramName: (config.skillsProgramName || "").trim(),
+      spRegistrationDeadline: config.spRegistrationDeadline || null,
+      programmeType: (config.skillsProgramId || "").trim() ? "qctosp" : "standard",
     };
     const configResult = await editBootcampConfig(bootcampId, configToSave);
     setSaving(false);
@@ -362,6 +424,139 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
       setMessage({ type: "error", text: result.message || "Failed to save end date" });
     }
   };
+
+  const handleSaveSpSettings = async () => {
+    setSavingSpSettings(true);
+    setMessage(null);
+    const result = await editBootcampConfig(bootcampId, {
+      skillsProgramId: (config.skillsProgramId || "").trim(),
+      skillsProgramName: (config.skillsProgramName || "").trim(),
+      spRegistrationDeadline: config.spRegistrationDeadline || null,
+      programmeType: (config.skillsProgramId || "").trim() ? "qctosp" : "standard",
+    });
+    setSavingSpSettings(false);
+    if (result.success) {
+      setMessage({ type: "success", text: "QCTO Skills Programme settings saved!" });
+      onSave();
+    } else {
+      setMessage({ type: "error", text: result.message || "Failed to save SP settings" });
+    }
+  };
+
+  const handleCloseSpRegistration = async () => {
+    if (!window.confirm("Close QCTO registration for this bootcamp? Learners will no longer be able to register.")) {
+      return;
+    }
+    setClosingSpRegistration(true);
+    setMessage(null);
+    const result = await closeBootcampSpRegistration(bootcampId);
+    setClosingSpRegistration(false);
+    if (result.success) {
+      setConfig((c) => ({ ...c, spRegistrationClosed: true }));
+      setMessage({ type: "success", text: "QCTO registration closed." });
+      onSave();
+    } else {
+      setMessage({ type: "error", text: result.message || "Failed to close registration" });
+    }
+  };
+
+  const handleReopenSpRegistration = async () => {
+    setClosingSpRegistration(true);
+    setMessage(null);
+    const result = await reopenBootcampSpRegistration(bootcampId);
+    setClosingSpRegistration(false);
+    if (result.success) {
+      setConfig((c) => ({ ...c, spRegistrationClosed: false }));
+      setMessage({ type: "success", text: "QCTO registration reopened." });
+      onSave();
+    } else {
+      setMessage({ type: "error", text: result.message || "Failed to reopen registration" });
+    }
+  };
+
+  const renderSpRegistrationSection = (showSaveButton = false) => (
+    <div className="edit-form-group" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #e2e8f0" }}>
+      <label style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>QCTO Skills Programme</label>
+      <p style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
+        Select a Skills Programme learning path. Registration deadline is a soft cutoff (late registrations still allowed until you close registration).
+      </p>
+      <div style={{ display: "grid", gap: 12 }}>
+        <div>
+          <label style={{ display: "block", marginBottom: 4, fontSize: 13 }}>Skills Programme</label>
+          <select
+            value={selectedSpLpId}
+            onChange={(e) => handleSpLpSelect(e.target.value)}
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+          >
+            <option value="">— Select Skills Programme —</option>
+            {spLearningPaths.map((lp) => (
+              <option key={lp._id} value={lp._id}>
+                {lp.skillsProgramName || lp.learningpathname}
+              </option>
+            ))}
+          </select>
+          {spLearningPaths.length === 0 && (
+            <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+              No qctosp learning paths found. Mark a learning path as qctosp first (e.g. HTML Programmer).
+            </p>
+          )}
+        </div>
+        {config.skillsProgramName && (
+          <div>
+            <label style={{ display: "block", marginBottom: 4, fontSize: 13 }}>Programme name (QCTO)</label>
+            <input
+              type="text"
+              value={config.skillsProgramName}
+              readOnly
+              style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f1f5f9" }}
+            />
+          </div>
+        )}
+        <div>
+          <label style={{ display: "block", marginBottom: 4, fontSize: 13 }}>QCTO Skills Programme ID</label>
+          <input
+            type="text"
+            value={config.skillsProgramId}
+            onChange={(e) => setConfig({ ...config, skillsProgramId: e.target.value })}
+            placeholder="Enter your QCTO-registered Skills Programme ID"
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #cbd5e1" }}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", marginBottom: 4, fontSize: 13 }}>Registration deadline</label>
+          <MiniCalendarPicker
+            selectedDate={config.spRegistrationDeadline}
+            onDateSelect={(date) => setConfig({ ...config, spRegistrationDeadline: date })}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>
+            Registration: {config.spRegistrationClosed ? "Closed" : "Open"}
+          </span>
+          {config.spRegistrationClosed ? (
+            <button type="button" className="edit-modal-cancel" onClick={handleReopenSpRegistration} disabled={closingSpRegistration}>
+              {closingSpRegistration ? "Working…" : "Reopen registration for QCTO"}
+            </button>
+          ) : (
+            <button type="button" className="edit-modal-cancel" onClick={handleCloseSpRegistration} disabled={closingSpRegistration || !config.skillsProgramId?.trim()}>
+              {closingSpRegistration ? "Working…" : "Close registration for QCTO"}
+            </button>
+          )}
+        </div>
+      </div>
+      {showSaveButton && (
+        <button
+          type="button"
+          className="edit-modal-save"
+          style={{ marginTop: 12 }}
+          onClick={handleSaveSpSettings}
+          disabled={savingSpSettings}
+        >
+          {savingSpSettings ? "Saving…" : "Save SP settings"}
+        </button>
+      )}
+    </div>
+  );
 
   const toggleWeekday = (day) => {
     if (config.selectedWeekdays.includes(day)) {
@@ -467,6 +662,7 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
                   </button>
                 </div>
               </div>
+              {renderSpRegistrationSection(true)}
               <div className="edit-form-group" style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
                 <label style={{ fontWeight: 600, marginBottom: "8px", display: "block" }}>Google Classroom</label>
                 <p style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>You can add or update the Google Classroom link even when students are enrolled.</p>
@@ -571,6 +767,8 @@ const EditConfigModal = ({ isOpen, onClose, bootcampId, onSave }) => {
                 setHolidayRanges={setHolidayRanges}
               />
             </div>
+
+            {renderSpRegistrationSection(false)}
 
             <div className="edit-form-group">
               <label>Google Classroom</label>

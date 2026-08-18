@@ -694,6 +694,41 @@ export const getStudentGoogleClassroomAssignments = async (userid) => {
   }
 };
 
+/** Tutor/admin: get a student's Athena ASSESSMENT grades for transcript (athenaEnabled bootcamps only) */
+export const getStudentAthenaAssessments = async (userid, bootcampId) => {
+  try {
+    const response = await axios.get(
+      API_URL + `/student/${userid}/athena/assessments`,
+      { params: { bootcampId } }
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return { success: false, athenaEnabled: false, data: null };
+  }
+};
+
+/** Tutor/admin: re-sync Athena assessments for a student */
+export const resyncStudentAthenaAssessments = async (userid, bootcampId) => {
+  try {
+    const response = await axios.post(
+      API_URL + `/student/${userid}/athena/resync`,
+      { bootcampId },
+      { params: { bootcampId } }
+    );
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    return {
+      success: false,
+      message:
+        error?.response?.data?.message ||
+        error.message ||
+        "Failed to re-sync Athena assessments",
+    };
+  }
+};
+
 /** Tutor/admin: re-sync Google Classroom assignments for a student (uses their stored refresh token) */
 export const resyncStudentGoogleClassroomAssignments = async (userid) => {
   try {
