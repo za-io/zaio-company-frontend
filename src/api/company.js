@@ -1310,6 +1310,19 @@ export const getBootcampSpRegistrationList = (bootcampId) => {
     }));
 };
 
+/** POE documents per SP bootcamp learner (signed URLs). Requires auth-token. */
+export const getBootcampSpLearnerPoeDocuments = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/learner-poe-documents`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to load POE documents",
+    }));
+};
+
 export const exportBootcampQctoSpStage = (bootcampId, stage, exportSettings = {}) => {
   const token = localStorage.getItem("TOKEN");
   const headers = token ? { "auth-token": token } : {};

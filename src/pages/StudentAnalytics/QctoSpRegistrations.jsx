@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FiEye } from "react-icons/fi";
-import { getBootcampSpRegistrationList, exportBootcampQctoSpStage } from "../../api/company";
+import { getBootcampSpRegistrationList, getBootcampSpLearnerPoeDocuments, exportBootcampQctoSpStage, closeBootcampSpRegistration, reopenBootcampSpRegistration } from "../../api/company";
 import { formatDate, formatDateTime } from "../../utils/dateUtils";
 import Loader from "../../components/loader/loader";
 import QctoSpEnrollmentViewModal from "./QctoSpEnrollmentViewModal";
@@ -28,7 +28,7 @@ const StatusBadge = ({ row }) => {
   if (row.registrationComplete) {
     return (
       <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-600/20 text-emerald-300">
-        Registered
+        Form submitted
         {row.isLateEnrollment ? " (late)" : ""}
       </span>
     );
@@ -36,14 +36,76 @@ const StatusBadge = ({ row }) => {
   if (row.isOverdue) {
     return (
       <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-600/20 text-red-300">
-        Not registered · overdue
+        Form not submitted · overdue
       </span>
     );
   }
   return (
     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-600/20 text-amber-300">
-      Not registered
+      Form not submitted
     </span>
+  );
+};
+
+const PoeStatusBadge = ({ row }) => {
+  if (!row.registrationComplete) {
+    return <span className="text-xs text-gray-500">—</span>;
+  }
+  if (row.poeDocumentsComplete) {
+    return (
+      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-600/20 text-emerald-300">
+        Complete
+      </span>
+    );
+  }
+  const uploaded = row.poeDocumentsUploaded || {};
+  const count = [uploaded.certifiedIdCopy, uploaded.cv, uploaded.highestQualifications].filter(Boolean).length;
+  if (count > 0) {
+    return (
+      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-600/20 text-amber-300">
+        Partial ({count}/3)
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-600/20 text-red-300">
+      Not uploaded
+    </span>
+  );
+};
+
+const POE_DOC_LABELS = {
+  certifiedIdCopy: "Certified ID copy",
+  cv: "CV",
+  highestQualifications: "Highest qualifications",
+};
+
+const PoeDocumentCell = ({ doc, label }) => {
+  if (!doc?.hasFile || !doc.signedUrl) {
+    return (
+      <div className="text-gray-500 text-sm">
+        <span className="sr-only">{label}: </span>—
+      </div>
+    );
+  }
+  const dateStr = doc.uploadedAt ? formatDate(doc.uploadedAt) : null;
+  return (
+    <div className="space-y-1">
+      <a
+        href={doc.signedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-violet-400 hover:text-violet-300 text-sm font-medium underline-offset-2 hover:underline"
+      >
+        Open
+      </a>
+      {doc.fileName && (
+        <p className="text-xs text-gray-500 truncate max-w-[200px]" title={doc.fileName}>
+          {doc.fileName}
+        </p>
+      )}
+      {dateStr && <p className="text-xs text-gray-600">{dateStr}</p>}
+    </div>
   );
 };
 
@@ -69,6 +131,25 @@ export default function QctoSpRegistrations() {
   const [exportMessage, setExportMessage] = useState(null);
   const [exportSettings, setExportSettings] = useState(defaultExportSettings);
   const [viewRow, setViewRow] = useState(null);
+  const [poeLoading, setPoeLoading] = useState(false);
+  const [poeError, setPoeError] = useState(null);
+  const [poeData, setPoeData] = useState(null);
+  const [closingRegistration, setClosingRegistration] = useState(false);
+  const [registrationMessage, setRegistrationMessage] = useState(null);
+
+  const loadPoeDocuments = useCallback(async () => {
+    if (!bootcampId) return;
+    setPoeLoading(true);
+    setPoeError(null);
+    const res = await getBootcampSpLearnerPoeDocuments(bootcampId);
+    if (res?.success && res.data) {
+      setPoeData(res.data);
+    } else {
+      setPoeData(null);
+      setPoeError(res?.message || "Failed to load POE documents");
+    }
+    setPoeLoading(false);
+  }, [bootcampId]);
 
   const load = useCallback(async () => {
     if (!bootcampId) {
@@ -101,7 +182,14 @@ export default function QctoSpRegistrations() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (bootcampId && data && !error) {
+      loadPoeDocuments();
+    }
+  }, [bootcampId, data, error, loadPoeDocuments]);
+
   const rows = data?.rows || [];
+  const poeLearners = poeData?.learners || [];
   const summary = data?.summary;
   const bootcamp = data?.bootcamp;
   const exports = data?.exports || [];
@@ -131,6 +219,45 @@ export default function QctoSpRegistrations() {
 
   const formatExportStage = (stage) => (stage === "stage2" ? "Stage 2 (FISA)" : "Stage 1 (Enrolment)");
 
+  const handleToggleRegistration = async () => {
+    if (!bootcampId || !bootcamp) return;
+    const isClosed = !!bootcamp.spRegistrationClosed;
+    const confirmMsg = isClosed
+      ? "Reopen registration so learners can submit or update their QCTO enrollment form?"
+      : "Close registration? Learners will no longer be able to submit new QCTO enrollment forms.";
+    if (!window.confirm(confirmMsg)) return;
+
+    setClosingRegistration(true);
+    setRegistrationMessage(null);
+    const res = isClosed
+      ? await reopenBootcampSpRegistration(bootcampId)
+      : await closeBootcampSpRegistration(bootcampId);
+
+    if (res?.success) {
+      setRegistrationMessage({
+        type: "success",
+        text: isClosed ? "Registration reopened." : "Registration closed.",
+      });
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              bootcamp: {
+                ...prev.bootcamp,
+                spRegistrationClosed: !isClosed,
+              },
+            }
+          : prev
+      );
+    } else {
+      setRegistrationMessage({
+        type: "error",
+        text: res?.message || "Could not update registration status.",
+      });
+    }
+    setClosingRegistration(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#0D1117] px-6 md:px-12 lg:px-24 xl:px-36 py-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -151,11 +278,40 @@ export default function QctoSpRegistrations() {
           {bootcamp?.spRegistrationDeadline && (
             <p className="text-xs text-gray-500 mt-1">
               Registration deadline: {formatDate(bootcamp.spRegistrationDeadline)}
-              {bootcamp.spRegistrationClosed ? " · Closed" : ""}
+            </p>
+          )}
+          {bootcamp && (
+            <p className="text-xs mt-1">
+              Registration status:{" "}
+              <span
+                className={
+                  bootcamp.spRegistrationClosed ? "text-red-400 font-medium" : "text-emerald-400 font-medium"
+                }
+              >
+                {bootcamp.spRegistrationClosed ? "Closed" : "Open"}
+              </span>
             </p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {bootcamp && (
+            <button
+              type="button"
+              onClick={handleToggleRegistration}
+              disabled={closingRegistration || loading || !!error}
+              className={`px-4 py-2 rounded-lg font-semibold disabled:opacity-50 transition-colors ${
+                bootcamp.spRegistrationClosed
+                  ? "bg-emerald-700 hover:bg-emerald-600 text-white"
+                  : "bg-red-700 hover:bg-red-600 text-white"
+              }`}
+            >
+              {closingRegistration
+                ? "Working…"
+                : bootcamp.spRegistrationClosed
+                  ? "Reopen registration"
+                  : "Close registration"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleExport("stage1")}
@@ -174,7 +330,10 @@ export default function QctoSpRegistrations() {
           </button>
           <button
             type="button"
-            onClick={load}
+            onClick={() => {
+              load();
+              loadPoeDocuments();
+            }}
             disabled={loading}
             className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
@@ -182,6 +341,18 @@ export default function QctoSpRegistrations() {
           </button>
         </div>
       </div>
+
+      {registrationMessage && (
+        <div
+          className={`mb-6 rounded-lg border px-4 py-3 text-sm ${
+            registrationMessage.type === "error"
+              ? "border-red-700/50 bg-red-950/30 text-red-200"
+              : "border-emerald-700/50 bg-emerald-950/30 text-emerald-200"
+          }`}
+        >
+          {registrationMessage.text}
+        </div>
+      )}
 
       {exportMessage && (
         <div
@@ -219,25 +390,38 @@ export default function QctoSpRegistrations() {
       {!loading && !error && data && (
         <>
           {summary && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
               <div className="rounded-xl bg-[#161B22] border border-gray-800 p-4">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Enrolled</p>
                 <p className="text-2xl font-semibold text-white mt-1">{summary.total}</p>
               </div>
               <div className="rounded-xl bg-[#161B22] border border-gray-800 p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Registered</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Form submitted</p>
                 <p className="text-2xl font-semibold text-emerald-400 mt-1">{summary.registered}</p>
               </div>
               <div className="rounded-xl bg-[#161B22] border border-gray-800 p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Not registered</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Form pending</p>
                 <p className="text-2xl font-semibold text-amber-400 mt-1">{summary.notRegistered}</p>
               </div>
               <div className="rounded-xl bg-[#161B22] border border-gray-800 p-4">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Overdue</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">POE complete</p>
+                <p className="text-2xl font-semibold text-emerald-400 mt-1">{summary.poeComplete ?? 0}</p>
+              </div>
+              <div className="rounded-xl bg-[#161B22] border border-gray-800 p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">POE pending</p>
+                <p className="text-2xl font-semibold text-amber-400 mt-1">{summary.poePending ?? 0}</p>
+              </div>
+              <div className="rounded-xl bg-[#161B22] border border-gray-800 p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Form overdue</p>
                 <p className="text-2xl font-semibold text-red-400 mt-1">{summary.overdue}</p>
               </div>
             </div>
           )}
+
+          <p className="text-sm text-gray-500 mb-8 -mt-4">
+            <strong className="text-gray-400">Registered</strong> in QCTO exports means the enrollment form was submitted.
+            POE documents (ID, CV, qualifications) are uploaded separately and must be complete before learners can start courses.
+          </p>
 
           <div className="rounded-xl border border-gray-800 bg-[#161B22] p-6 mb-8">
             <h2 className="text-lg font-semibold text-white mb-1">Export settings</h2>
@@ -401,22 +585,23 @@ export default function QctoSpRegistrations() {
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#161B22]">
+          <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#161B22] mb-8">
             <table className="w-full text-sm text-left">
               <thead className="bg-[#0D1117] text-gray-400 uppercase text-xs">
                 <tr>
                   <th className="px-4 py-3 font-medium">Student</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium">Student #</th>
-                  <th className="px-4 py-3 font-medium">Registration</th>
-                  <th className="px-4 py-3 font-medium">Registered on</th>
+                  <th className="px-4 py-3 font-medium">Enrollment form</th>
+                  <th className="px-4 py-3 font-medium">POE docs</th>
+                  <th className="px-4 py-3 font-medium">Submitted on</th>
                   <th className="px-4 py-3 font-medium w-16">Form</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
                       No learners enrolled in this bootcamp.
                     </td>
                   </tr>
@@ -432,6 +617,9 @@ export default function QctoSpRegistrations() {
                         <td className="px-4 py-3">
                           <StatusBadge row={row} />
                         </td>
+                        <td className="px-4 py-3">
+                          <PoeStatusBadge row={row} />
+                        </td>
                         <td className="px-4 py-3 text-gray-400">
                           {row.registeredAt ? formatDate(row.registeredAt) : "—"}
                         </td>
@@ -443,7 +631,7 @@ export default function QctoSpRegistrations() {
                             title={
                               row.registrationComplete
                                 ? "View submitted QCTO registration form"
-                                : "Registration not completed yet"
+                                : "Registration form not completed yet"
                             }
                             className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-gray-400 hover:text-violet-300 hover:bg-violet-500/10 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors"
                           >
@@ -456,6 +644,93 @@ export default function QctoSpRegistrations() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="rounded-xl border border-gray-800 bg-[#161B22] p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-lg font-semibold text-white">POE documents</h2>
+                <p className="text-sm text-gray-400 mt-1">
+                  Certified ID copy, CV, and highest qualifications uploaded by learners for this Skills Programme.
+                  Download links are time-limited.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadPoeDocuments}
+                disabled={poeLoading}
+                className="px-3 py-2 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 text-sm transition-colors"
+              >
+                {poeLoading ? "Loading…" : "Refresh POE"}
+              </button>
+            </div>
+
+            {poeLoading && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader />
+                <p className="mt-4 text-gray-400 text-sm">Loading POE documents…</p>
+              </div>
+            )}
+
+            {!poeLoading && poeError && (
+              <div className="rounded-lg border border-red-700/50 bg-red-950/30 px-4 py-3 text-sm text-red-200">
+                {poeError}
+              </div>
+            )}
+
+            {!poeLoading && !poeError && poeLearners.length === 0 && (
+              <p className="text-sm text-gray-500">No learners enrolled in this bootcamp.</p>
+            )}
+
+            {!poeLoading && !poeError && poeLearners.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[900px]">
+                  <thead className="text-gray-400 uppercase text-xs border-b border-gray-800">
+                    <tr>
+                      <th className="py-3 pr-4 font-medium">Learner</th>
+                      <th className="py-3 pr-4 font-medium">Email</th>
+                      <th className="py-3 pr-4 font-medium">POE status</th>
+                      <th className="py-3 pr-4 font-medium">{POE_DOC_LABELS.certifiedIdCopy}</th>
+                      <th className="py-3 pr-4 font-medium">{POE_DOC_LABELS.cv}</th>
+                      <th className="py-3 pr-4 font-medium">{POE_DOC_LABELS.highestQualifications}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    {poeLearners.map((learner) => {
+                      const row = rows.find((r) => String(r.studentId) === String(learner.studentId));
+                      return (
+                        <tr key={learner.studentId || learner.email} className="hover:bg-[#0D1117]/60">
+                          <td className="py-3 pr-4 text-white font-medium">{learner.name}</td>
+                          <td className="py-3 pr-4 text-gray-300">{learner.email || "—"}</td>
+                          <td className="py-3 pr-4">
+                            {row ? <PoeStatusBadge row={row} /> : (
+                              <span className="text-xs text-gray-500">
+                                {learner.poeDocumentsComplete ? "Complete" : "Incomplete"}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 pr-4 align-top">
+                            <PoeDocumentCell
+                              doc={learner.documents?.certifiedIdCopy}
+                              label={POE_DOC_LABELS.certifiedIdCopy}
+                            />
+                          </td>
+                          <td className="py-3 pr-4 align-top">
+                            <PoeDocumentCell doc={learner.documents?.cv} label={POE_DOC_LABELS.cv} />
+                          </td>
+                          <td className="py-3 pr-4 align-top">
+                            <PoeDocumentCell
+                              doc={learner.documents?.highestQualifications}
+                              label={POE_DOC_LABELS.highestQualifications}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <QctoSpEnrollmentViewModal row={viewRow} onClose={() => setViewRow(null)} />
