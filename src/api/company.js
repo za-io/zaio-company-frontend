@@ -1322,15 +1322,17 @@ export const getBootcampSpModuleDeadlines = (bootcampId) => {
     }));
 };
 
-/** `deadlines`: [{ courseId, learnerWorkbookDue?, summativeDue?, pmModuleDue? }] */
-export const updateBootcampSpModuleDeadlines = (bootcampId, deadlines) => {
+/** `payload`: { deadlines, scheduleStartDate? } */
+export const updateBootcampSpModuleDeadlines = (bootcampId, payload) => {
   const token = localStorage.getItem("TOKEN");
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { "auth-token": token } : {}),
   };
+  const body =
+    Array.isArray(payload) ? { deadlines: payload } : payload || { deadlines: [] };
   return axios
-    .patch(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/module-deadlines`, { deadlines }, { headers })
+    .patch(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/module-deadlines`, body, { headers })
     .then((res) => res.data)
     .catch((err) => ({
       success: false,

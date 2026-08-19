@@ -3,6 +3,13 @@ import {
   getBootcampSpModuleDeadlines,
   updateBootcampSpModuleDeadlines,
 } from "../../api/company";
+import {
+  SP_SCHEDULE_TOTAL_DAYS,
+  dateInputToIsoStart,
+  formatScheduleEndDate,
+  generateSpModuleDeadlineForm,
+  isoToDateInput,
+} from "./qctoSpScheduleGenerator";
 
 function dateToDatetimeLocal(iso) {
   if (!iso) return "";
@@ -18,13 +25,6 @@ function datetimeLocalToIso(val) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function formatDeadlineDisplay(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-}
-
 export default function QctoSpModuleDeadlines({ bootcampId }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,6 +32,7 @@ export default function QctoSpModuleDeadlines({ bootcampId }) {
   const [meta, setMeta] = useState(null);
   const [rows, setRows] = useState([]);
   const [formByCourseId, setFormByCourseId] = useState({});
+  const [scheduleStartDate, setScheduleStartDate] = useState("");
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
@@ -43,15 +44,18 @@ export default function QctoSpModuleDeadlines({ bootcampId }) {
         if (res?.success && res?.data) {
           setMeta(res.data);
           setRows(res.data.rows || []);
+          setScheduleStartDate(isoToDateInput(res.data.scheduleStartDate));
         } else {
           setMeta(null);
           setRows([]);
+          setScheduleStartDate("");
           setMessage({ type: "error", text: res?.message || "Could not load module deadlines." });
         }
       })
       .catch(() => {
         setMeta(null);
         setRows([]);
+        setScheduleStartDate("");
         setMessage({ type: "error", text: "Could not load module deadlines." });
       })
       .finally(() => setLoading(false));
@@ -76,6 +80,49 @@ export default function QctoSpModuleDeadlines({ bootcampId }) {
     }));
   };
 
+  const applyGeneratedSchedule = (startDate) => {
+    const generated = generateSpModuleDeadlineForm(rows, startDate, SP_SCHEDULE_TOTAL_DAYS);
+    if (!generated) {
+      setMessage({ type: "error", text: "Pick a valid programme start date first." });
+      return false;
+    }
+    setFormByCourseId((prev) => {
+      const next = { ...prev };
+      rows.forEach((row) => {
+        next[row.courseId] = {
+          learnerWorkbookDue: generated[row.courseId]?.learnerWorkbookDue || "",
+          summativeDue: generated[row.courseId]?.summativeDue || "",
+          pmModuleDue: generated[row.courseId]?.pmModuleDue || "",
+        };
+      });
+      return next;
+    });
+    return true;
+  };
+
+  const handleGenerateSchedule = () => {
+    if (!scheduleStartDate) {
+      setMessage({ type: "error", text: "Select a programme start date first." });
+      return;
+    }
+    if (applyGeneratedSchedule(scheduleStartDate)) {
+      setMessage({
+        type: "success",
+        text: `Generated ${SP_SCHEDULE_TOTAL_DAYS}-day schedule from ${scheduleStartDate} through ${formatScheduleEndDate(scheduleStartDate)}. Click Save deadlines to apply.`,
+      });
+    }
+  };
+
+  const handleStartDateChange = (value) => {
+    setScheduleStartDate(value);
+    if (!value || !rows.length) return;
+    applyGeneratedSchedule(value);
+    setMessage({
+      type: "success",
+      text: `Dates updated for start ${value} (ends ${formatScheduleEndDate(value)}). Click Save deadlines to persist.`,
+    });
+  };
+
   const handleSave = async () => {
     if (!bootcampId || !rows.length) return;
     setSaving(true);
@@ -89,15 +136,23 @@ export default function QctoSpModuleDeadlines({ bootcampId }) {
         pmModuleDue: datetimeLocalToIso(form.pmModuleDue),
       };
     });
-    const res = await updateBootcampSpModuleDeadlines(bootcampId, deadlines);
+    const res = await updateBootcampSpModuleDeadlines(bootcampId, {
+      deadlines,
+      scheduleStartDate: scheduleStartDate ? dateInputToIsoStart(scheduleStartDate) : null,
+    });
     setSaving(false);
     if (res?.success) {
       setMessage({ type: "success", text: res.message || "Module deadlines saved." });
       setRows(res.data?.rows || rows);
+      if (res.data?.scheduleStartDate) {
+        setScheduleStartDate(isoToDateInput(res.data.scheduleStartDate));
+      }
     } else {
       setMessage({ type: "error", text: res?.message || "Could not save module deadlines." });
     }
   };
+
+  const scheduleEndLabel = scheduleStartDate ? formatScheduleEndDate(scheduleStartDate) : "";
 
   return (
     <div className="mb-8 rounded-xl border border-gray-700 bg-[#161B22] overflow-hidden">
@@ -136,12 +191,42 @@ export default function QctoSpModuleDeadlines({ bootcampId }) {
             </p>
           ) : (
             <>
-              <div className="flex justify-end mt-4">
+              <div className="mt-4 flex flex-wrap items-end gap-4 p-4 rounded-lg border border-gray-700 bg-[#0D1117]">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Programme start date
+                  </label>
+                  <input
+                    type="date"
+                    value={scheduleStartDate}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
+                    className="px-3 py-2 rounded-lg border border-gray-600 bg-[#161B22] text-white"
+                  />
+                </div>
+                <div className="text-sm text-gray-400 pb-2">
+                  {scheduleStartDate ? (
+                    <>
+                      <span className="text-gray-300">{SP_SCHEDULE_TOTAL_DAYS}-day programme</span>
+                      {" · "}
+                      ends <span className="text-gray-200">{scheduleEndLabel}</span>
+                    </>
+                  ) : (
+                    "Pick a start date — all module deadlines will shift automatically."
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={!scheduleStartDate}
+                  onClick={handleGenerateSchedule}
+                  className="px-4 py-2 rounded-lg font-semibold border border-violet-500 text-violet-300 hover:bg-violet-950/40 disabled:opacity-50"
+                >
+                  Regenerate {SP_SCHEDULE_TOTAL_DAYS}-day schedule
+                </button>
                 <button
                   type="button"
                   disabled={saving}
                   onClick={handleSave}
-                  className="px-4 py-2 rounded-lg font-semibold bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg font-semibold bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50 ml-auto"
                 >
                   {saving ? "Saving…" : "Save deadlines"}
                 </button>
