@@ -1310,6 +1310,34 @@ export const getBootcampSpRegistrationList = (bootcampId) => {
     }));
 };
 
+export const getBootcampSpModuleDeadlines = (bootcampId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/module-deadlines`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to load module deadlines",
+    }));
+};
+
+/** `deadlines`: [{ courseId, learnerWorkbookDue?, summativeDue?, pmModuleDue? }] */
+export const updateBootcampSpModuleDeadlines = (bootcampId, deadlines) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "auth-token": token } : {}),
+  };
+  return axios
+    .patch(`${BASE_URL}/bootcamp/${bootcampId}/qcto-sp-registration/module-deadlines`, { deadlines }, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err.message || "Failed to save module deadlines",
+    }));
+};
+
 /** POE documents per SP bootcamp learner (signed URLs). Requires auth-token. */
 export const getBootcampSpLearnerPoeDocuments = (bootcampId) => {
   const token = localStorage.getItem("TOKEN");

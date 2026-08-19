@@ -5,6 +5,7 @@ import { getBootcampSpRegistrationList, getBootcampSpLearnerPoeDocuments, export
 import { formatDate, formatDateTime } from "../../utils/dateUtils";
 import Loader from "../../components/loader/loader";
 import QctoSpEnrollmentViewModal from "./QctoSpEnrollmentViewModal";
+import QctoSpModuleDeadlines from "../../components/QctoSpModuleDeadlines/QctoSpModuleDeadlines";
 
 const studentLabel = (student) =>
   student?.username || student?.name || student?.email || "—";
@@ -364,6 +365,10 @@ export default function QctoSpRegistrations() {
         >
           {exportMessage.text}
         </div>
+      )}
+
+      {bootcampId && !loading && !error && (
+        <QctoSpModuleDeadlines bootcampId={bootcampId} />
       )}
 
       {loading && (

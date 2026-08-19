@@ -45,7 +45,12 @@ export default function QctoSpBootcampConfigModal({ isOpen, onClose, bootcampId,
         setSpLearningPaths(paths);
         if (configRes?.success && configRes?.bootcamp) {
           const bc = configRes.bootcamp;
-          const bootcampLpId = bc.learningpath?._id || bc.learningpath || "";
+          const bootcampLpId =
+            bc.skillsProgramLearningPath?._id ||
+            bc.skillsProgramLearningPath ||
+            bc.learningpath?._id ||
+            bc.learningpath ||
+            "";
           const spId = bc.skillsProgramId || "";
           const spName = bc.skillsProgramName || "";
           setSkillsProgramId(spId);
