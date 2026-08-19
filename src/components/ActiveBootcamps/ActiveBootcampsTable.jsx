@@ -1499,6 +1499,14 @@ const BootcampLiveClassesModal = ({ isOpen, onClose, bootcampId, bootcampName, o
 /** Per-page row count (server max 50; larger pages need async + poll to avoid Heroku timeout). */
 const BOOTCAMPS_PAGE_SIZE = 12;
 
+const BOOTCAMP_TRACK_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "fs", label: "FS" },
+  { id: "fsai", label: "FSAI" },
+  { id: "cyber", label: "Cyber" },
+  { id: "data-sci", label: "Data Sci" },
+];
+
 function ActiveBootcampsTable() {
   const navigate = useNavigate();
   const { user } = useUserStore();
@@ -1507,6 +1515,7 @@ function ActiveBootcampsTable() {
   const [loading, setLoading] = useState(true);
   const [loadHint, setLoadHint] = useState("");
   const [page, setPage] = useState(1);
+  const [trackFilter, setTrackFilter] = useState("all");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -1529,12 +1538,12 @@ function ActiveBootcampsTable() {
 
   const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
 
-  const fetchBootcamps = (pageNum = page) => {
+  const fetchBootcamps = (pageNum = page, track = trackFilter) => {
     setLoading(true);
     setLoadHint("");
     let pollHintSet = false;
     getEnrolledBootcampsWithPolling(
-      { page: pageNum, limit: BOOTCAMPS_PAGE_SIZE },
+      { page: pageNum, limit: BOOTCAMPS_PAGE_SIZE, track },
       {
         onPoll: () => {
           if (!pollHintSet) {
@@ -1562,8 +1571,14 @@ function ActiveBootcampsTable() {
   };
 
   useEffect(() => {
-    fetchBootcamps(page);
-  }, [page]);
+    fetchBootcamps(page, trackFilter);
+  }, [page, trackFilter]);
+
+  const handleTrackFilterChange = (nextTrack) => {
+    setTrackFilter(nextTrack);
+    setPage(1);
+    setSelectedIds([]);
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1710,6 +1725,22 @@ function ActiveBootcampsTable() {
           </div>
         )}
       </div>
+
+      <div className="bootcamp-track-filters" role="tablist" aria-label="Filter bootcamps by programme">
+        {BOOTCAMP_TRACK_FILTERS.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            role="tab"
+            aria-selected={trackFilter === filter.id}
+            className={`bootcamp-track-filter-btn ${trackFilter === filter.id ? "active" : ""}`}
+            onClick={() => handleTrackFilterChange(filter.id)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
       <div className="active-bootcamps-table-wrap">
         <table className="active-bootcamps-table">
           <thead>
@@ -1851,7 +1882,11 @@ function ActiveBootcampsTable() {
                     <svg style={{ width: "48px", height: "48px", margin: "0 auto 12px", opacity: 0.3 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
-                    <p>No bootcamps found</p>
+                    <p>
+                      {trackFilter === "all"
+                        ? "No bootcamps found"
+                        : `No ${BOOTCAMP_TRACK_FILTERS.find((f) => f.id === trackFilter)?.label || ""} bootcamps found`}
+                    </p>
                   </div>
                 </td>
               </tr>
