@@ -338,10 +338,18 @@ export function sumCollectionArrearsCents(cases) {
 }
 
 function normalizeJourneyNote(event) {
+  const type = event?.type ?? null;
+  const isSystemNotification =
+    type === "miss_notification_sent" ||
+    type === "second_miss_notification_sent" ||
+    type === "miss_notification_draft_ready" ||
+    type === "account_blocked" ||
+    type === "cycle_cleared" ||
+    type === "manual_cancellation_initiated";
   return {
     id: event?.id == null ? null : String(event.id),
-    kind: "note",
-    type: event?.type ?? null,
+    kind: isSystemNotification ? "system" : "note",
+    type,
     summary: event?.summary ?? null,
     occurredAt: event?.occurredAt ?? null,
     actorName: event?.actorName ?? null,

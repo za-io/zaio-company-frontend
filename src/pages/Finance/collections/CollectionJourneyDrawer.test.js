@@ -7,7 +7,7 @@ import {
   formatCollectionsMoney,
 } from "./collectionsViewModel";
 import CollectionJourneyDrawer from "./CollectionJourneyDrawer";
-import { postFinanceCollectionEvent } from "../../../api/company";
+import { postFinanceCollectionEvent, postFinanceCollectionEmailSentManually } from "../../../api/company";
 
 jest.mock("../../../api/company", () => ({
   postFinanceCollectionEvent: jest.fn(),
@@ -15,6 +15,7 @@ jest.mock("../../../api/company", () => ({
   patchFinanceCollectionEmailDraft: jest.fn(),
   postFinanceCollectionCancel: jest.fn(),
   postFinanceCollectionSendEmail: jest.fn(),
+  postFinanceCollectionEmailSentManually: jest.fn(),
 }));
 
 function stageLabel(stage) {
@@ -588,5 +589,52 @@ describe("CollectionJourneyDrawer", () => {
     });
     expect(onEventCreated).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText(/call note/i)).toHaveValue("");
+  });
+
+  it("logs a manually sent miss email and updates the journey", async () => {
+    postFinanceCollectionEmailSentManually.mockResolvedValue({
+      success: true,
+      event: {
+        id: "evt-manual",
+        type: "miss_notification_sent",
+        summary: "Miss notification sent via manual to student@example.com",
+        occurredAt: "2026-09-03T12:00:00.000Z",
+      },
+      missCycle: { pendingEmailDraft: null, notificationSentAt: "2026-09-03T12:00:00.000Z" },
+    });
+
+    const onEmailSent = jest.fn();
+    renderDrawer({
+      collectionCase: makeCase({
+        missCycle: {
+          active: true,
+          cycleKind: "first_miss",
+          status: "active",
+          pendingEmailDraft: {
+            emailKind: "first_miss",
+            subject: "Action Required: Overdue Payment",
+            bodyText: "Dear Student,\n\nPlease pay.",
+          },
+        },
+      }),
+      onEmailSent,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /email sent manually/i }));
+
+    await waitFor(() => {
+      expect(postFinanceCollectionEmailSentManually).toHaveBeenCalledWith("u1", "CUSTOM-aaa", {
+        subject: "Action Required: Overdue Payment",
+        bodyText: "Dear Student,\n\nPlease pay.",
+        studentEmail: "alice@example.com",
+        arrearsCents: 640000,
+      });
+      expect(onEmailSent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          event: expect.objectContaining({ type: "miss_notification_sent" }),
+        })
+      );
+    });
   });
 });

@@ -1976,6 +1976,23 @@ export const postFinanceCollectionSendEmail = (userId, planCode, payload) => {
     }));
 };
 
+/** Log that finance sent the miss email outside Gmail (updates journey + closes draft). */
+export const postFinanceCollectionEmailSentManually = (userId, planCode, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/email-sent-manually`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to log manually sent email",
+    }));
+};
+
 /** Pending account-check reminders. Params: { preset: today|tomorrow, date, from, to } */
 export const getFinanceCollectionReminders = (params = {}) => {
   const token = localStorage.getItem("TOKEN");

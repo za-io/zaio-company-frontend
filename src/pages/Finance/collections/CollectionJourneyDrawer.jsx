@@ -7,6 +7,7 @@ import {
   postFinanceCollectionEvent,
   postFinanceCollectionReminder,
   postFinanceCollectionSendEmail,
+  postFinanceCollectionEmailSentManually,
 } from "../../../api/company";
 import {
   canInitiateManualCancel,
@@ -307,6 +308,7 @@ function MissEmailDraftPanel({
   const [bodyText, setBodyText] = useState(draft?.bodyText ?? "");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [loggingManual, setLoggingManual] = useState(false);
   const [error, setError] = useState("");
   const caseKey = collectionCaseKey(collectionCase);
 
@@ -326,8 +328,10 @@ function MissEmailDraftPanel({
   const trimmedSubject = subject.trim();
   const trimmedBody = bodyText.trim();
   const trimmedCc = cc.trim();
-  const canSave = Boolean(trimmedSubject && trimmedBody) && !saving && !sending && !disabled;
-  const canSend = canSave && gmailConnected && Boolean(studentEmail) && !sending && !saving && !disabled;
+  const canSave = Boolean(trimmedSubject && trimmedBody) && !saving && !sending && !loggingManual && !disabled;
+  const canSend = canSave && gmailConnected && Boolean(studentEmail) && !sending && !saving && !loggingManual && !disabled;
+  const canLogManual =
+    canSave && Boolean(studentEmail) && !loggingManual && !sending && !saving && !disabled;
   const draftLabel =
     draft.emailKind === "second_miss" ? "Second miss email draft" : "First miss email draft";
 
@@ -382,6 +386,33 @@ function MissEmailDraftPanel({
     }
   }
 
+  async function handleLogManualSent() {
+    if (!canLogManual) return;
+    setLoggingManual(true);
+    setError("");
+    try {
+      const result = await postFinanceCollectionEmailSentManually(
+        collectionCase.userId,
+        collectionCase.planCode,
+        {
+          subject: trimmedSubject,
+          bodyText: trimmedBody,
+          studentEmail,
+          arrearsCents: collectionCase.arrearsCents,
+        }
+      );
+      if (!result?.success) {
+        setError(result?.message || "Failed to log manually sent email");
+        return;
+      }
+      onEmailSent?.(result);
+    } catch (err) {
+      setError(toCollectionsApiError(err, "Failed to log manually sent email").message);
+    } finally {
+      setLoggingManual(false);
+    }
+  }
+
   return (
     <section className="mt-5 rounded-lg border border-amber-500/40 bg-amber-950/20 px-3 py-3">
       <h3 className="text-sm font-semibold text-amber-100">{draftLabel}</h3>
@@ -397,7 +428,7 @@ function MissEmailDraftPanel({
             value={cc}
             onChange={(event) => setCc(event.target.value)}
             placeholder="Payer email (optional)"
-            disabled={disabled || saving || sending}
+            disabled={disabled || saving || sending || loggingManual}
             className="w-full rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white placeholder:text-white/40"
           />
         </div>
@@ -407,7 +438,7 @@ function MissEmailDraftPanel({
             type="text"
             value={subject}
             onChange={(event) => setSubject(event.target.value)}
-            disabled={disabled || saving || sending}
+            disabled={disabled || saving || sending || loggingManual}
             className="w-full rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white"
           />
         </div>
@@ -417,7 +448,7 @@ function MissEmailDraftPanel({
             value={bodyText}
             onChange={(event) => setBodyText(event.target.value)}
             rows={10}
-            disabled={disabled || saving || sending}
+            disabled={disabled || saving || sending || loggingManual}
             className="w-full rounded-lg border border-white/20 bg-white/10 px-2.5 py-1.5 text-xs text-white"
           />
         </div>
@@ -426,13 +457,21 @@ function MissEmailDraftPanel({
             {error}
           </p>
         ) : null}
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="submit"
             disabled={!canSave}
             className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs text-white disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save draft"}
+          </button>
+          <button
+            type="button"
+            disabled={!canLogManual}
+            onClick={handleLogManualSent}
+            className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/40 hover:bg-emerald-900/50 text-xs text-emerald-100 disabled:opacity-50"
+          >
+            {loggingManual ? "Logging…" : "Email sent manually"}
           </button>
           <button
             type="button"
