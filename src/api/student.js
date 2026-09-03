@@ -300,6 +300,18 @@ export const updateInstallment = (userId, planId, installmentNumber, payload) =>
       return { success: false, message: err?.response?.data?.message || "Update failed" };
     });
 
+export const splitTwoInstallmentPlan = (userId, planId, installmentNumber, payload) =>
+  axios
+    .post(
+      API_URL + `/student-profile/${userId}/installment-plans/${planId}/installments/${installmentNumber}/split`,
+      payload
+    )
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Split failed" };
+    });
+
 // Get proof of payment URL for a billing record (installment payment)
 export const getProofByBillingRecordId = (userId, billingRecordId) =>
   axios
@@ -370,6 +382,18 @@ export const updateCustomInstallment = (userId, planId, installmentNumber, paylo
     .catch((err) => {
       console.log(err);
       return { success: false, message: err?.response?.data?.message || "Update failed" };
+    });
+
+export const splitCustomInstallment = (userId, planId, installmentNumber, payload) =>
+  axios
+    .post(
+      API_URL + `/student-profile/${userId}/custom-plans/${planId}/installments/${installmentNumber}/split`,
+      payload
+    )
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Split failed" };
     });
 
 // Custom payment plan: remove installment from plan (pending or paid)
@@ -832,6 +856,12 @@ export const blockUser = (data) =>
 export const unblockUser = (data) =>
   axios
     .post(BASE_URL + `/company/unblock-user`, data)
+    .then((res) => res.data)
+    .catch((err) => console.log(err));
+
+export const releasePaymentBlockOverride = (data) =>
+  axios
+    .post(BASE_URL + `/company/release-payment-block-override`, data)
     .then((res) => res.data)
     .catch((err) => console.log(err));
 

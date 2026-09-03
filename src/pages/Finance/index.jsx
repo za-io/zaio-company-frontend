@@ -27,6 +27,7 @@ import {
 import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
 import CopyableEmailCell from "../../components/CopyableEmailCell";
+import CollectionsBoard from "./collections/CollectionsBoard";
 
 const FINANCE_ROLES = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN"];
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -431,6 +432,12 @@ const Finance = () => {
   const [allMonthsCollectedLoading, setAllMonthsCollectedLoading] = useState(false);
   /** Incremented when main Apply/load finishes so the 12-month chart loads after (never 12× parallel with primary summary). */
   const [financeMainLoadId, setFinanceMainLoadId] = useState(0);
+  /** monthly | collections — Collections owns its own request lifecycle. */
+  const [financeView, setFinanceView] = useState(() => {
+    if (typeof window === "undefined") return "monthly";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tab") === "collections" ? "collections" : "monthly";
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -741,6 +748,29 @@ const Finance = () => {
         </div>
       </div>
 
+      <div className="flex rounded-lg overflow-hidden border border-white/20 w-fit mb-6">
+        {[
+          ["monthly", "Monthly summary"],
+          ["collections", "Collections"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={financeView === value}
+            onClick={() => setFinanceView(value)}
+            className={`px-4 py-1.5 text-xs ${
+              financeView === value ? "bg-blue-600 text-white" : "bg-white/5 text-gray-300"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {financeView === "collections" ? (
+        <CollectionsBoard includeExcluded={includeExcluded} />
+      ) : (
+      <>
       <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/25 p-3 mb-6 text-[11px] text-cyan-100/90 leading-relaxed max-w-4xl">
         <p className="font-medium text-cyan-200/95 mb-1">Why you might see far fewer people than enrolled students</p>
         <p className="text-gray-300/95">
@@ -1298,6 +1328,8 @@ const Finance = () => {
             )}
           </div>
         </>
+      )}
+      </>
       )}
 
       {attentionOpen && (

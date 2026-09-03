@@ -137,4 +137,55 @@ describe("buildCustomPlanTableRows — Paystack installment paid by EFT", () => 
     expect(rows.filter((r) => r._orphan)).toHaveLength(0);
     expect(rows.some((r) => /Payment\s+6\s+of\s+12/i.test(r.installmentLabel || ""))).toBe(false);
   });
+
+  it("shows payment_arranged when installment has arrangement status and no billing match", () => {
+    const plan = {
+      _id: "plan-arranged",
+      installments: [
+        {
+          number: 8,
+          type: "paystack",
+          status: "payment_arranged",
+          amount: 588605,
+          dueDate: "2026-09-29",
+          paystackPlanCode: "PLN_test",
+          arrangementNote: "Pay both on 29 Sep",
+        },
+      ],
+    };
+    const rows = buildCustomPlanTableRows(plan, null);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("payment_arranged");
+    expect(rows[0].arrangementNote).toBe("Pay both on 29 Sep");
+  });
+
+  it("prefers payment_arranged over pending Paystack billing rows", () => {
+    const plan = {
+      _id: "plan-arranged-billing",
+      firstPaystackPaymentUrl: "https://paystack.shop/pay/example",
+      installments: [
+        {
+          number: 8,
+          type: "paystack",
+          status: "payment_arranged",
+          amount: 588605,
+          dueDate: "2026-09-29",
+          paystackPlanCode: "PLN_test",
+        },
+      ],
+    };
+    const billingPlan = {
+      planCode: "CUSTOM-test",
+      payments: [
+        {
+          installmentNumber: 8,
+          paymentType: "paystack",
+          status: "pending",
+          amount: 588605,
+        },
+      ],
+    };
+    const rows = buildCustomPlanTableRows(plan, billingPlan);
+    expect(rows[0].status).toBe("payment_arranged");
+  });
 });

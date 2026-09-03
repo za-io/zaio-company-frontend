@@ -1802,3 +1802,240 @@ export const postFinanceRecordPaystackEft = (formData) => {
       message: err?.response?.data?.message || "Failed to record EFT payment",
     }));
 };
+
+/** Collections queue. Params: { stage, search, includeExcluded } */
+export const getFinanceCollections = (params = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const search = new URLSearchParams();
+  if (params.stage) {
+    search.set("stage", params.stage);
+  }
+  if (params.search) {
+    search.set("search", params.search);
+  }
+  if (params.includeExcluded) {
+    search.set("includeExcluded", "true");
+  }
+  const q = search.toString();
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-collections${q ? `?${q}` : ""}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load collections",
+    }));
+};
+
+/** Manual call note on a student-plan collection case. */
+export const postFinanceCollectionEvent = (userId, planCode, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/events`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to create collection event",
+    }));
+};
+
+/** Manual policy stage override for a collection case (pass stage=null to reset to auto). */
+export const patchFinanceCollectionStage = (userId, planCode, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+  return axios
+    .patch(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/stage`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update policy stage",
+    }));
+};
+
+/** Manual cancellation for an active second-miss cycle; moves case to debt recovery. */
+export const postFinanceCollectionCancel = (userId, planCode, payload = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/cancel`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to initiate manual cancellation",
+    }));
+};
+
+/** Collections Gmail connection status (accounts@zaio.io sender). */
+export const getFinanceCollectionsGmailStatus = () => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-collections/gmail/status`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load Gmail status",
+    }));
+};
+
+/** Start Google OAuth to connect collections sender mailbox. */
+export const getFinanceCollectionsGmailAuthUrl = () => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-collections/gmail/auth-url`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to start Gmail connect",
+    }));
+};
+
+/** Disconnect collections Gmail sender. */
+export const postFinanceCollectionsGmailDisconnect = () => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(`${BASE_URL}/bootcamp/finance-collections/gmail/disconnect`, {}, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to disconnect Gmail",
+    }));
+};
+
+/** Toggle collections miss-email automations (off = manual drafts). */
+export const patchFinanceCollectionsGmailAutomations = (enabled) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .patch(`${BASE_URL}/bootcamp/finance-collections/gmail/automations`, { enabled }, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update email automations",
+    }));
+};
+
+/** Save an editable miss-email draft for a collection case. */
+export const patchFinanceCollectionEmailDraft = (userId, planCode, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .patch(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/email-draft`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to update email draft",
+    }));
+};
+
+/** Manually send a miss-email draft for a collection case. */
+export const postFinanceCollectionSendEmail = (userId, planCode, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/send-email`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to send email",
+    }));
+};
+
+/** Pending account-check reminders. Params: { preset: today|tomorrow, date, from, to } */
+export const getFinanceCollectionReminders = (params = {}) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  const search = new URLSearchParams();
+  if (params.preset) search.set("preset", params.preset);
+  if (params.date) search.set("date", params.date);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  const q = search.toString();
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-collections/reminders${q ? `?${q}` : ""}`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load reminders",
+    }));
+};
+
+/** Schedule an account-check reminder for a collection case. */
+export const postFinanceCollectionReminder = (userId, planCode, payload) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token
+    ? { "auth-token": token, "Content-Type": "application/json" }
+    : { "Content-Type": "application/json" };
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/reminders`,
+      payload,
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to save reminder",
+    }));
+};
+
+export const postFinanceCollectionReminderComplete = (userId, planCode, reminderId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/reminders/${encodeURIComponent(reminderId)}/complete`,
+      {},
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to complete reminder",
+    }));
+};
+
+export const postFinanceCollectionReminderDismiss = (userId, planCode, reminderId) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/reminders/${encodeURIComponent(reminderId)}/dismiss`,
+      {},
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to dismiss reminder",
+    }));
+};

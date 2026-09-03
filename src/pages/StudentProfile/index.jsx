@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, updateCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import {
@@ -10,6 +10,7 @@ import {
   getFirstPaystackInstallment,
   customPlanRowTypeKind,
 } from "./customPlanTableRows";
+import CustomInstallmentActions from "./CustomInstallmentActions";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "—";
@@ -27,6 +28,49 @@ const parseAmountString = (val) => {
   const num = typeof val === "number" ? val : parseFloat(String(val).replace(/,/g, ""));
   return Number.isFinite(num) ? num : 0;
 };
+
+const addMonthsToDateInput = (dateStr, months) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+};
+
+const buildSplitRows = (count, inst) => {
+  const rows = Math.max(2, Number(count) || 2);
+  const baseDate = inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "";
+  return Array.from({ length: rows }, (_, idx) => ({
+    amount: "",
+    dueDate: addMonthsToDateInput(baseDate, idx) || baseDate,
+  }));
+};
+
+const buildDefaultSplitForm = (inst, paymentCount = 3) => {
+  const count = Math.max(2, Number(paymentCount) || 3);
+  return {
+    paymentCount: count,
+    splits: buildSplitRows(count, inst),
+    arrangementNote: inst.arrangementNote || "",
+  };
+};
+
+const resizeSplitRows = (currentSplits, newCount, inst) => {
+  const count = Math.max(2, Number(newCount) || 2);
+  const baseDate = inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "";
+  return Array.from({ length: count }, (_, idx) => {
+    if (currentSplits[idx]) return currentSplits[idx];
+    return { amount: "", dueDate: addMonthsToDateInput(baseDate, idx) || baseDate };
+  });
+};
+
+const maxSplitCountForPlan = (plan) => {
+  const current = (plan?.installments || []).length;
+  return Math.max(2, Math.min(24, 48 - current + 1));
+};
+
+const canSplitInstallmentRow = (inst) =>
+  !!inst && (inst.status === "pending" || inst.status === "payment_arranged") && inst.type !== "paystack";
 
 const formatTotal = (num) =>
   new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
@@ -117,6 +161,7 @@ const StudentProfile = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState(null);
+  const [paymentBlockStatus, setPaymentBlockStatus] = useState(null);
   const [blockLoading, setBlockLoading] = useState(false);
   const [billing, setBilling] = useState({ plans: [], outstandingLinks: [] });
   const [billingLoading, setBillingLoading] = useState(false);
@@ -221,6 +266,15 @@ const StudentProfile = () => {
   const [loginAsMessage, setLoginAsMessage] = useState(null);
   /** Custom plan table: inline due date save — key `${planId}-${installmentNumber}` */
   const [inlineCustomDueSaving, setInlineCustomDueSaving] = useState(null);
+  const [markArrangedSaving, setMarkArrangedSaving] = useState(null);
+  const [clearArrangementSaving, setClearArrangementSaving] = useState(null);
+  const [installmentHistoryModal, setInstallmentHistoryModal] = useState(null);
+  const [revertHistorySaving, setRevertHistorySaving] = useState(null);
+  const [instActionsMenuKey, setInstActionsMenuKey] = useState(null);
+  const [splitInstallmentModal, setSplitInstallmentModal] = useState(null);
+  const [splitForm, setSplitForm] = useState({ paymentCount: 3, splits: [{ amount: "", dueDate: "" }, { amount: "", dueDate: "" }, { amount: "", dueDate: "" }], arrangementNote: "" });
+  const [splitSubmitting, setSplitSubmitting] = useState(false);
+  const [splitError, setSplitError] = useState(null);
 
   /** Standalone Paystack subscription: record EFT (same as POST /bootcamp/finance-record-paystack-eft) */
   const [paystackEftModal, setPaystackEftModal] = useState(null);
@@ -351,6 +405,7 @@ const StudentProfile = () => {
       console.log("Profile result:", result);
       if (result?.success) {
         setStudent(result.student);
+        setPaymentBlockStatus(result.paymentBlockStatus || null);
         setStudentNumberValue(result.student?.studentNumber ?? "");
       }
     } catch (err) {
@@ -595,12 +650,19 @@ const StudentProfile = () => {
     setBlockLoading(true);
     
     if (student.accBlocked) {
-      await unblockUser({ userid: student._id });
+      await unblockUser({ userid: student._id, hard: true });
     } else {
       await blockUser({ userid: student._id });
     }
     
-    // Refresh profile
+    await fetchProfile();
+    setBlockLoading(false);
+  };
+
+  const handleReleasePaymentBlockOverride = async () => {
+    if (!student) return;
+    setBlockLoading(true);
+    await releasePaymentBlockOverride({ userid: student._id });
     await fetchProfile();
     setBlockLoading(false);
   };
@@ -764,7 +826,23 @@ const StudentProfile = () => {
     setEditInstallmentError(null);
   };
 
-  const handleInlineCustomDueDateBlur = async (plan, inst, newValueRaw) => {
+  const refreshInstallmentPlans = async (planType) => {
+    if (planType === "custom") {
+      const listRes = await getCustomPlans(userId);
+      if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+    } else {
+      const listRes = await getStudentInstallmentPlans(userId);
+      if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+    }
+    fetchBilling();
+  };
+
+  const patchInstallment = (planType, planId, installmentNumber, payload) =>
+    planType === "custom"
+      ? updateCustomInstallment(userId, planId, installmentNumber, payload)
+      : updateInstallment(userId, planId, installmentNumber, payload);
+
+  const handleInlineDueDateBlur = async (plan, inst, planType, newValueRaw) => {
     const prev = inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "";
     const newValue = (newValueRaw || "").trim();
     if (newValue === prev) return;
@@ -775,13 +853,12 @@ const StudentProfile = () => {
     const key = `${planId}-${inst.number}`;
     setInlineCustomDueSaving(key);
     try {
-      const res = await updateCustomInstallment(userId, planId, inst.number, {
+      const res = await patchInstallment(planType, planId, inst.number, {
         due_date: newValue.replace(/\//g, "-"),
+        mark_payment_arranged: inst.status === "pending" || inst.status === "payment_arranged",
       });
       if (res.success) {
-        const listRes = await getCustomPlans(userId);
-        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
-        fetchBilling();
+        await refreshInstallmentPlans(planType);
       } else {
         alert(res.message || "Could not update due date");
       }
@@ -789,6 +866,146 @@ const StudentProfile = () => {
       alert(err?.response?.data?.message ?? err?.message ?? "Could not update due date");
     } finally {
       setInlineCustomDueSaving(null);
+    }
+  };
+
+  const handleMarkPaymentArranged = async (plan, inst, planType = "custom", note = "") => {
+    const planId = plan._id?.toString?.() ?? plan._id;
+    const key = `${planId}-${inst.number}`;
+    setMarkArrangedSaving(key);
+    try {
+      const payload = { mark_payment_arranged: true };
+      if (note) payload.arrangement_note = note;
+      const res = await patchInstallment(planType, planId, inst.number, payload);
+      if (res.success) {
+        await refreshInstallmentPlans(planType);
+      } else {
+        alert(res.message || "Could not mark payment arranged");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message ?? err?.message ?? "Could not mark payment arranged");
+    } finally {
+      setMarkArrangedSaving(null);
+    }
+  };
+
+  const handleClearPaymentArrangement = async (plan, inst, planType = "custom") => {
+    const planId = plan._id?.toString?.() ?? plan._id;
+    const key = `${planId}-${inst.number}`;
+    setClearArrangementSaving(key);
+    try {
+      const res = await patchInstallment(planType, planId, inst.number, { clear_arrangement: true });
+      if (res.success) {
+        await refreshInstallmentPlans(planType);
+      } else {
+        alert(res.message || "Could not clear arrangement");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message ?? err?.message ?? "Could not clear arrangement");
+    } finally {
+      setClearArrangementSaving(null);
+    }
+  };
+
+  const handleRevertInstallmentHistory = async (plan, inst, historyId, planType = "custom") => {
+    const planId = plan._id?.toString?.() ?? plan._id;
+    const key = `${planId}-${inst.number}-${historyId}`;
+    setRevertHistorySaving(key);
+    try {
+      const res = await patchInstallment(planType, planId, inst.number, { revert_history_id: historyId });
+      if (res.success) {
+        await refreshInstallmentPlans(planType);
+        const updatedInst = (res.data?.installments || []).find((i) => i.number === inst.number);
+        if (updatedInst) {
+          setInstallmentHistoryModal({ plan: res.data, inst: updatedInst, planType });
+        } else {
+          setInstallmentHistoryModal(null);
+        }
+      } else {
+        alert(res.message || "Could not revert change");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message ?? err?.message ?? "Could not revert change");
+    } finally {
+      setRevertHistorySaving(null);
+    }
+  };
+
+  const handleSplitInstallmentClick = (plan, inst, planType) => {
+    setSplitInstallmentModal({
+      plan,
+      inst,
+      planType,
+      maxSplitCount: maxSplitCountForPlan(plan),
+    });
+    setSplitForm(buildDefaultSplitForm(inst, 3));
+    setSplitError(null);
+  };
+
+  const handleSplitInstallmentSubmit = async (e) => {
+    e.preventDefault();
+    if (!splitInstallmentModal) return;
+    setSplitError(null);
+
+    const sourceAmount = Number(splitInstallmentModal.inst.amount || 0);
+    const splits = (splitForm.splits || []).map((row, idx) => {
+      const amount = parseAmountString(row.amount);
+      const dueDate = (row.dueDate || "").trim();
+      if (!(amount > 0)) {
+        throw new Error(`Split ${idx + 1}: enter a positive amount`);
+      }
+      if (!dueDate) {
+        throw new Error(`Split ${idx + 1}: due date is required`);
+      }
+      return { amount, due_date: dueDate.replace(/\//g, "-") };
+    });
+
+    if (splits.length < 2) {
+      setSplitError("Add at least 2 split payments.");
+      return;
+    }
+
+    const totalCents = splits.reduce((sum, row) => sum + Math.round(row.amount * 100), 0);
+    if (totalCents !== sourceAmount) {
+      setSplitError(
+        `Split amounts must total ${formatAmount(sourceAmount, splitInstallmentModal.plan.currency)} (currently ${formatAmount(totalCents, splitInstallmentModal.plan.currency)}).`
+      );
+      return;
+    }
+
+    setSplitSubmitting(true);
+    try {
+      const planId = splitInstallmentModal.plan._id?.toString?.() ?? splitInstallmentModal.plan._id;
+      const payload = {
+        splits,
+        arrangement_note: (splitForm.arrangementNote || "").trim() || undefined,
+      };
+      const planType = splitInstallmentModal.planType;
+      const res =
+        planType === "custom"
+          ? await splitCustomInstallment(userId, planId, splitInstallmentModal.inst.number, payload)
+          : await splitTwoInstallmentPlan(userId, planId, splitInstallmentModal.inst.number, payload);
+
+      if (res.success) {
+        setSplitInstallmentModal(null);
+        if (res.convertedToCustom) {
+          const [instRes, customRes] = await Promise.all([
+            getStudentInstallmentPlans(userId),
+            getCustomPlans(userId),
+          ]);
+          if (instRes.success && Array.isArray(instRes.data)) setInstallmentPlans(instRes.data);
+          if (customRes.success && Array.isArray(customRes.data)) setCustomPlans(customRes.data);
+        } else {
+          await refreshInstallmentPlans("custom");
+        }
+        fetchBilling();
+      } else {
+        setSplitError(res.message || "Could not split instalment");
+      }
+    } catch (err) {
+      setSplitError(err?.message || err?.response?.data?.message || "Could not split instalment");
+    } finally {
+      setSplitSubmitting(false);
     }
   };
 
@@ -804,11 +1021,17 @@ const StudentProfile = () => {
     }
     setEditInstallmentSubmitting(true);
     try {
+      const isCustom = editInstallmentModal.planType === "custom";
       const payload = {};
       if (amount > 0) payload.amount = amount;
       if (dueDate) payload.due_date = dueDate.replace(/\//g, "-");
+      if (
+        (editInstallmentModal.inst.status === "pending" || editInstallmentModal.inst.status === "payment_arranged") &&
+        (isCustom || editInstallmentModal.planType === "2_installment")
+      ) {
+        payload.mark_payment_arranged = true;
+      }
       const planId = editInstallmentModal.plan._id?.toString?.() ?? editInstallmentModal.plan._id;
-      const isCustom = editInstallmentModal.planType === "custom";
       const res = isCustom
         ? await updateCustomInstallment(userId, planId, editInstallmentModal.inst.number, payload)
         : await updateInstallment(userId, planId, editInstallmentModal.inst.number, payload);
@@ -1439,12 +1662,49 @@ const StudentProfile = () => {
               className={`px-4 py-2 rounded-full text-sm font-medium ${
                 student.accBlocked
                   ? "bg-red-100 text-red-800"
-                  : "bg-green-100 text-green-800"
+                  : paymentBlockStatus?.paymentBlockOverride
+                    ? "bg-amber-100 text-amber-900"
+                    : "bg-green-100 text-green-800"
               }`}
             >
-              {student.accBlocked ? "Blocked" : "Active"}
+              {student.accBlocked
+                ? "Blocked"
+                : paymentBlockStatus?.paymentBlockOverride
+                  ? "Active (auto-block paused)"
+                  : "Active"}
             </span>
-            {/* Block/Unblock Button */}
+
+            {paymentBlockStatus?.summary ? (
+              <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-xs text-gray-700">
+                <p className="font-semibold text-gray-900">Account block status</p>
+                <p className="mt-1">{paymentBlockStatus.summary}</p>
+                {paymentBlockStatus.missCycle ? (
+                  <ul className="mt-2 space-y-1 text-[11px] text-gray-600">
+                    <li>
+                      Plan: <span className="font-medium">{paymentBlockStatus.missCycle.planCode}</span>
+                    </li>
+                    <li>
+                      Cycle:{" "}
+                      <span className="font-medium">
+                        {paymentBlockStatus.missCycle.cycleKind === "second_miss" ? "Second miss" : "First miss"}
+                      </span>
+                    </li>
+                    {paymentBlockStatus.missCycle.triggerInstallments?.map((row) => (
+                      <li key={row.number}>
+                        Instalment #{row.number}: {row.status}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {paymentBlockStatus.blockedForPayment ? (
+                  <p className="mt-2 text-[11px] text-red-700">Blocked automatically for payment / collections.</p>
+                ) : student.accBlocked ? (
+                  <p className="mt-2 text-[11px] text-red-700">Blocked manually by admin.</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Block / Hard unblock */}
             <button
               onClick={handleBlockToggle}
               disabled={blockLoading}
@@ -1454,8 +1714,34 @@ const StudentProfile = () => {
                   : "bg-red-600 hover:bg-red-700 text-white"
               } disabled:opacity-50`}
             >
-              {blockLoading ? "..." : student.accBlocked ? "Unblock Student" : "Block Student"}
+              {blockLoading
+                ? "..."
+                : student.accBlocked
+                  ? paymentBlockStatus?.blockedForPayment || paymentBlockStatus?.wouldBlock
+                    ? "Hard unblock"
+                    : "Unblock student"
+                  : "Block student"}
             </button>
+            {student.accBlocked && (paymentBlockStatus?.blockedForPayment || paymentBlockStatus?.wouldBlock) ? (
+              <p className="text-xs text-gray-500 text-right max-w-[220px]">
+                Hard unblock restores access and pauses automatic re-block from collections until you re-enable it.
+              </p>
+            ) : null}
+            {paymentBlockStatus?.paymentBlockOverride ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleReleasePaymentBlockOverride}
+                  disabled={blockLoading}
+                  className="px-6 py-2 rounded font-medium bg-amber-700 hover:bg-amber-800 text-white text-sm disabled:opacity-50"
+                >
+                  {blockLoading ? "..." : "Re-enable auto-block"}
+                </button>
+                <p className="text-xs text-gray-500 text-right max-w-[220px]">
+                  Applies collections / payment blocking again if arrears or an active miss cycle still apply.
+                </p>
+              </>
+            ) : null}
             <button
               type="button"
               onClick={openCancelSubModal}
@@ -2244,54 +2530,146 @@ const StudentProfile = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {(plan.installments || []).map((inst) => (
-                    <tr key={inst.number}>
+                  {(plan.installments || []).map((inst) => {
+                    const rowKey = `2inst-${plan._id}-${inst.number}`;
+                    const rowBg =
+                      inst.status === "payment_arranged"
+                        ? "bg-sky-50"
+                        : inst.status === "pending"
+                          ? "bg-amber-50"
+                          : "";
+                    return (
+                    <tr key={inst.number} className={rowBg}>
                       <td className="px-6 py-3 text-sm text-gray-800">Instalment {inst.number}</td>
                       <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(inst.amount, plan.currency)}</td>
-                      <td className="px-6 py-3 text-sm text-gray-600">{inst.dueDate ? formatDate(inst.dueDate) : "—"}</td>
-                      <td className="px-6 py-3">
-                        <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
-                          {inst.status}
-                        </span>
+                      <td className="px-6 py-3 text-sm text-gray-600 align-middle">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <input
+                            type="date"
+                            disabled={inlineCustomDueSaving === `${plan._id}-${inst.number}`}
+                            className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 max-w-[11rem]"
+                            key={`due-2inst-${plan._id}-${inst.number}-${inst.dueDate ? new Date(inst.dueDate).getTime() : "none"}-${inst.status || ""}`}
+                            defaultValue={inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : ""}
+                            onBlur={(e) => handleInlineDueDateBlur(plan, inst, "2_installment", e.target.value)}
+                            title="Scheduled due date for this instalment"
+                          />
+                          {inlineCustomDueSaving === `${plan._id}-${inst.number}` && (
+                            <span className="text-xs text-gray-500">Saving…</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-6 py-3 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditInstallmentClick(plan, inst)}
-                          className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-800 rounded hover:bg-indigo-200"
-                        >
-                          Edit
-                        </button>
-                        {inst.status === "paid" && inst.billingRecordId && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleViewInstallmentPop(inst.billingRecordId)}
-                              className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                            >
-                              View POP
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAttachProofClick(plan, inst)}
-                              className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
-                              title="Attach proof if View POP shows no proof"
-                            >
-                              Attach proof
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteBillingRecordClick(plan, inst)}
-                              className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                              title="Delete billing record and mark installment pending"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
+                      <td className="px-6 py-3">
+                        <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" ? "bg-green-100 text-green-800" : inst.status === "payment_arranged" ? "bg-sky-100 text-sky-800" : "bg-yellow-100 text-yellow-800"}`}>
+                          {inst.status === "payment_arranged" ? "Payment arranged" : inst.status}
+                        </span>
+                        {inst.status === "payment_arranged" && inst.arrangementNote ? (
+                          <p className="mt-1 text-[11px] text-sky-700">{inst.arrangementNote}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-6 py-3 align-middle">
+                        <CustomInstallmentActions
+                          menuKey={rowKey}
+                          openMenuKey={instActionsMenuKey}
+                          setOpenMenuKey={setInstActionsMenuKey}
+                          sections={[
+                            {
+                              title: "Schedule",
+                              items: [
+                                {
+                                  key: "edit",
+                                  label: "Edit instalment",
+                                  onClick: () => handleEditInstallmentClick(plan, inst, "2_installment"),
+                                },
+                                {
+                                  key: "mark-arranged",
+                                  label:
+                                    markArrangedSaving === `${plan._id}-${inst.number}`
+                                      ? "Marking arranged…"
+                                      : "Mark payment arranged",
+                                  show: inst.status === "pending",
+                                  disabled: markArrangedSaving === `${plan._id}-${inst.number}`,
+                                  onClick: () => handleMarkPaymentArranged(plan, inst, "2_installment"),
+                                },
+                                {
+                                  key: "clear-arranged",
+                                  label:
+                                    clearArrangementSaving === `${plan._id}-${inst.number}`
+                                      ? "Clearing…"
+                                      : "Clear arrangement",
+                                  show: inst.status === "payment_arranged",
+                                  disabled: clearArrangementSaving === `${plan._id}-${inst.number}`,
+                                  onClick: () => handleClearPaymentArrangement(plan, inst, "2_installment"),
+                                },
+                                {
+                                  key: "history",
+                                  label: "View history",
+                                  badge: (inst.changeHistory || []).length || null,
+                                  onClick: () =>
+                                    setInstallmentHistoryModal({ plan, inst, planType: "2_installment" }),
+                                },
+                                {
+                                  key: "split",
+                                  label: "Split instalment",
+                                  show: canSplitInstallmentRow(inst),
+                                  onClick: () => handleSplitInstallmentClick(plan, inst, "2_installment"),
+                                },
+                              ],
+                            },
+                            {
+                              title: "Payment",
+                              items: [
+                                {
+                                  key: "add-pop",
+                                  label: "Add proof of payment",
+                                  show: inst.status === "pending" || inst.status === "payment_arranged",
+                                  onClick: () => {
+                                    setAddEftForm({
+                                      planCode: plan.planCode,
+                                      planName: plan.planName || "",
+                                      installmentPlanId: plan._id,
+                                      customPlanId: "",
+                                      installmentNumber: String(inst.number),
+                                      paymentDate: new Date().toISOString().slice(0, 10),
+                                      amount: inst.amount ? String(Number(inst.amount) / 100) : "",
+                                      file: null,
+                                      replaceBillingRecordId: "",
+                                    });
+                                    setAddEftPaystackInitialDisclaimer(false);
+                                    setAddEftModal(true);
+                                    setAddEftError(null);
+                                  },
+                                },
+                                {
+                                  key: "view-pop",
+                                  label: "View proof of payment",
+                                  show: inst.status === "paid" && !!inst.billingRecordId,
+                                  onClick: () => handleViewInstallmentPop(inst.billingRecordId),
+                                },
+                                {
+                                  key: "attach-proof",
+                                  label: "Attach proof",
+                                  show: inst.status === "paid" && !!inst.billingRecordId,
+                                  onClick: () => handleAttachProofClick(plan, inst, "2_installment"),
+                                },
+                              ],
+                            },
+                            {
+                              items: [
+                                {
+                                  key: "delete-paid",
+                                  label: "Delete payment record",
+                                  danger: true,
+                                  show: inst.status === "paid" && !!inst.billingRecordId,
+                                  onClick: () => handleDeleteBillingRecordClick(plan, inst, "2_installment"),
+                                },
+                              ],
+                            },
+                          ]}
+                        />
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               <p className="px-6 py-2 text-xs text-gray-500">Use &quot;Add EFT payment&quot; below and select plan <strong>{plan.planCode}</strong> to record payments for instalment 1 or 2.</p>
@@ -3037,6 +3415,12 @@ const StudentProfile = () => {
                   )}
                 </div>
               </div>
+              {(plan.planChangeHistory || []).length > 0 && (
+                <div className="px-6 py-2 bg-sky-50 border-b border-sky-100 text-xs text-sky-900">
+                  <span className="font-semibold">Plan history: </span>
+                  {plan.planChangeHistory[plan.planChangeHistory.length - 1].summary}
+                </div>
+              )}
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -3084,6 +3468,8 @@ const StudentProfile = () => {
                       const rowBg =
                         row.status === "failed" || row.status === "rejected"
                           ? "bg-red-50"
+                          : row.status === "payment_arranged"
+                            ? "bg-sky-50"
                           : row.status === "pending"
                             ? "bg-amber-50"
                             : "";
@@ -3106,7 +3492,7 @@ const StudentProfile = () => {
                                         ? new Date(inst.dueDate).toISOString().slice(0, 10)
                                         : ""
                                   }
-                                  onBlur={(e) => handleInlineCustomDueDateBlur(plan, inst, e.target.value)}
+                                  onBlur={(e) => handleInlineDueDateBlur(plan, inst, "custom", e.target.value)}
                                   title={
                                     row.status === "failed" || row.status === "rejected"
                                       ? row.failedAttemptAt
@@ -3129,127 +3515,182 @@ const StudentProfile = () => {
                           </td>
                           <td className="px-6 py-3 text-sm text-gray-600">{typeLabel}</td>
                           <td className="px-6 py-3">
-                            <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : row.status === "failed" || row.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
-                              {row.expired ? "Expired" : row.status || "pending"}
+                            <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : row.status === "payment_arranged" ? "bg-sky-100 text-sky-800" : row.status === "failed" || row.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                              {row.expired
+                                ? "Expired"
+                                : row.status === "payment_arranged"
+                                  ? "Payment arranged"
+                                  : row.status || "pending"}
                             </span>
+                            {row.status === "payment_arranged" && row.arrangementNote ? (
+                              <p className="mt-1 text-[11px] text-sky-700">{row.arrangementNote}</p>
+                            ) : null}
                           </td>
-                          <td className="px-6 py-3 flex items-center gap-2 flex-wrap">
-                            {showPayNow && (
-                              <a
-                                href={row.paymentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 text-sm font-medium text-green-700 bg-green-100 rounded hover:bg-green-200"
-                              >
-                                Pay now
-                              </a>
-                            )}
-                            {inst && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleEditInstallmentClick(plan, inst, "custom")}
-                                  className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-800 rounded hover:bg-indigo-200"
-                                >
-                                  Edit
-                                </button>
-                                {methodIsEft && (inst.status === "paid" || row.status === "accepted") && paidBillingRecordId && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleViewInstallmentPop(paidBillingRecordId)}
-                                      className="px-3 py-1.5 text-sm bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                                    >
-                                      View POP
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleAttachProofClick(plan, inst, "custom")}
-                                      className="px-3 py-1.5 text-sm bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
-                                      title="Attach proof if View POP shows no proof"
-                                    >
-                                      Attach proof
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
-                                      className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                                      title="Delete billing record and mark installment pending"
-                                    >
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                                {inst.type === "cash" && inst.status === "pending" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setAddEftForm({
-                                        planCode: plan.planCode,
-                                        planName: plan.planName || "",
-                                        installmentPlanId: "",
-                                        customPlanId: plan._id,
-                                        installmentNumber: String(inst.number),
-                                        paymentDate: new Date().toISOString().slice(0, 10),
-                                        amount: inst.amount ? String(Number(inst.amount) / 100) : "",
-                                        file: null,
-                                        replaceBillingRecordId: "",
-                                      });
-                                      setAddEftPaystackInitialDisclaimer(false);
-                                      setAddEftModal(true);
-                                      setAddEftError(null);
-                                    }}
-                                    className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200"
-                                  >
-                                    Add POP
-                                  </button>
-                                )}
-                                {inst.type === "paystack" &&
-                                  inst.status !== "paid" &&
-                                  (row.status === "failed" ||
-                                    row.status === "rejected" ||
-                                    row.status === "pending") && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const firstPs = getFirstPaystackInstallment(plan);
-                                        const isInitialPaystack = !!(firstPs && inst.number === firstPs.number);
-                                        setAddEftForm({
-                                          planCode: plan.planCode,
-                                          planName: plan.planName || "",
-                                          installmentPlanId: "",
-                                          customPlanId: plan._id,
-                                          installmentNumber: String(inst.number),
-                                          paymentDate: new Date().toISOString().slice(0, 10),
-                                          amount: inst.amount ? String(Number(inst.amount) / 100) : "",
-                                          file: null,
-                                          replaceBillingRecordId:
-                                            row.billingRecordId &&
-                                            (row.status === "failed" || row.status === "rejected")
-                                              ? String(row.billingRecordId)
-                                              : "",
-                                        });
-                                        setAddEftPaystackInitialDisclaimer(isInitialPaystack);
-                                        setAddEftModal(true);
-                                        setAddEftError(null);
-                                      }}
-                                      className="px-2 py-1 text-xs font-medium text-teal-800 bg-teal-100 rounded hover:bg-teal-200"
-                                      title="Learner paid this Paystack instalment by bank transfer — record proof here"
-                                    >
-                                      Record EFT payment
-                                    </button>
-                                  )}
-                                {(inst.status === "pending" || (row.status === "pending" && row.customPlanId && row.installmentNumber)) && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteBillingRecordClick(plan, inst, "custom")}
-                                    className="px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                                    title="Remove installment from plan"
-                                  >
-                                    Delete
-                                  </button>
-                                )}
-                              </>
+                          <td className="px-6 py-3 align-middle">
+                            {inst ? (
+                              <CustomInstallmentActions
+                                menuKey={rowKey}
+                                openMenuKey={instActionsMenuKey}
+                                setOpenMenuKey={setInstActionsMenuKey}
+                                primaryLink={
+                                  showPayNow
+                                    ? { href: row.paymentUrl, label: "Pay now" }
+                                    : null
+                                }
+                                sections={[
+                                  {
+                                    title: "Schedule",
+                                    items: [
+                                      {
+                                        key: "edit",
+                                        label: "Edit instalment",
+                                        onClick: () => handleEditInstallmentClick(plan, inst, "custom"),
+                                      },
+                                      {
+                                        key: "mark-arranged",
+                                        label:
+                                          markArrangedSaving === `${plan._id}-${inst.number}`
+                                            ? "Marking arranged…"
+                                            : "Mark payment arranged",
+                                        show:
+                                          (inst.status === "pending" || row.status === "pending") &&
+                                          inst.status !== "paid" &&
+                                          row.status !== "accepted" &&
+                                          row.status !== "failed" &&
+                                          row.status !== "rejected",
+                                        disabled: markArrangedSaving === `${plan._id}-${inst.number}`,
+                                        onClick: () => handleMarkPaymentArranged(plan, inst, "custom"),
+                                      },
+                                      {
+                                        key: "clear-arranged",
+                                        label:
+                                          clearArrangementSaving === `${plan._id}-${inst.number}`
+                                            ? "Clearing…"
+                                            : "Clear arrangement",
+                                        show:
+                                          inst.status === "payment_arranged" || row.status === "payment_arranged",
+                                        disabled: clearArrangementSaving === `${plan._id}-${inst.number}`,
+                                        onClick: () => handleClearPaymentArrangement(plan, inst, "custom"),
+                                      },
+                                      {
+                                        key: "history",
+                                        label: "View history",
+                                        badge: (inst.changeHistory || []).length || null,
+                                        onClick: () =>
+                                          setInstallmentHistoryModal({ plan, inst, planType: "custom" }),
+                                      },
+                                      {
+                                        key: "split",
+                                        label: "Split instalment",
+                                        show: canSplitInstallmentRow(inst),
+                                        onClick: () => handleSplitInstallmentClick(plan, inst, "custom"),
+                                      },
+                                    ],
+                                  },
+                                  {
+                                    title: "Payment",
+                                    items: [
+                                      {
+                                        key: "add-pop",
+                                        label: "Add proof of payment",
+                                        show: inst.type === "cash" && inst.status === "pending",
+                                        onClick: () => {
+                                          setAddEftForm({
+                                            planCode: plan.planCode,
+                                            planName: plan.planName || "",
+                                            installmentPlanId: "",
+                                            customPlanId: plan._id,
+                                            installmentNumber: String(inst.number),
+                                            paymentDate: new Date().toISOString().slice(0, 10),
+                                            amount: inst.amount ? String(Number(inst.amount) / 100) : "",
+                                            file: null,
+                                            replaceBillingRecordId: "",
+                                          });
+                                          setAddEftPaystackInitialDisclaimer(false);
+                                          setAddEftModal(true);
+                                          setAddEftError(null);
+                                        },
+                                      },
+                                      {
+                                        key: "record-eft",
+                                        label: "Record EFT payment",
+                                        show:
+                                          inst.type === "paystack" &&
+                                          inst.status !== "paid" &&
+                                          (row.status === "failed" ||
+                                            row.status === "rejected" ||
+                                            row.status === "pending" ||
+                                            row.status === "payment_arranged"),
+                                        onClick: () => {
+                                          const firstPs = getFirstPaystackInstallment(plan);
+                                          const isInitialPaystack = !!(firstPs && inst.number === firstPs.number);
+                                          setAddEftForm({
+                                            planCode: plan.planCode,
+                                            planName: plan.planName || "",
+                                            installmentPlanId: "",
+                                            customPlanId: plan._id,
+                                            installmentNumber: String(inst.number),
+                                            paymentDate: new Date().toISOString().slice(0, 10),
+                                            amount: inst.amount ? String(Number(inst.amount) / 100) : "",
+                                            file: null,
+                                            replaceBillingRecordId:
+                                              row.billingRecordId &&
+                                              (row.status === "failed" || row.status === "rejected")
+                                                ? String(row.billingRecordId)
+                                                : "",
+                                          });
+                                          setAddEftPaystackInitialDisclaimer(isInitialPaystack);
+                                          setAddEftModal(true);
+                                          setAddEftError(null);
+                                        },
+                                      },
+                                      {
+                                        key: "view-pop",
+                                        label: "View proof of payment",
+                                        show:
+                                          methodIsEft &&
+                                          (inst.status === "paid" || row.status === "accepted") &&
+                                          !!paidBillingRecordId,
+                                        onClick: () => handleViewInstallmentPop(paidBillingRecordId),
+                                      },
+                                      {
+                                        key: "attach-proof",
+                                        label: "Attach proof",
+                                        show:
+                                          methodIsEft &&
+                                          (inst.status === "paid" || row.status === "accepted") &&
+                                          !!paidBillingRecordId,
+                                        onClick: () => handleAttachProofClick(plan, inst, "custom"),
+                                      },
+                                    ],
+                                  },
+                                  {
+                                    items: [
+                                      {
+                                        key: "delete-paid",
+                                        label: "Delete payment record",
+                                        danger: true,
+                                        show:
+                                          methodIsEft &&
+                                          (inst.status === "paid" || row.status === "accepted") &&
+                                          !!paidBillingRecordId,
+                                        onClick: () => handleDeleteBillingRecordClick(plan, inst, "custom"),
+                                      },
+                                      {
+                                        key: "delete-pending",
+                                        label: "Remove instalment",
+                                        danger: true,
+                                        show:
+                                          inst.status === "pending" ||
+                                          (row.status === "pending" && row.customPlanId && row.installmentNumber),
+                                        onClick: () => handleDeleteBillingRecordClick(plan, inst, "custom"),
+                                      },
+                                    ],
+                                  },
+                                ]}
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
                             )}
                           </td>
                         </tr>
@@ -4608,6 +5049,278 @@ const StudentProfile = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {splitInstallmentModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !splitSubmitting && setSplitInstallmentModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-1">
+              Split instalment {splitInstallmentModal.inst.number}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Divide{" "}
+              <strong>{formatAmount(splitInstallmentModal.inst.amount, splitInstallmentModal.plan.currency)}</strong>{" "}
+              into 2 or more payments. Finance sets each amount and due date — they must add up exactly.
+            </p>
+
+            {splitInstallmentModal.planType === "2_installment" && (
+              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                <strong>Warning:</strong> This 2-installment EFT plan will be converted to a{" "}
+                <strong>custom payment plan</strong>. The conversion is recorded in plan history and cannot be undone
+                automatically.
+              </div>
+            )}
+
+            <form onSubmit={handleSplitInstallmentSubmit} className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Number of payments</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={splitInstallmentModal.maxSplitCount || 24}
+                    value={splitForm.paymentCount ?? splitForm.splits.length}
+                    onChange={(e) => {
+                      const nextCount = Math.min(
+                        splitInstallmentModal.maxSplitCount || 24,
+                        Math.max(2, Number(e.target.value) || 2)
+                      );
+                      setSplitForm((f) => ({
+                        ...f,
+                        paymentCount: nextCount,
+                        splits: resizeSplitRows(f.splits, nextCount, splitInstallmentModal.inst),
+                      }));
+                    }}
+                    className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 pb-2">
+                  Up to {splitInstallmentModal.maxSplitCount || 24} payments for this plan
+                </p>
+              </div>
+
+              {(splitForm.splits || []).map((row, idx) => (
+                <div key={`split-row-${idx}`} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Payment {idx + 1} amount (R)</label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={row.amount}
+                      onChange={(e) =>
+                        setSplitForm((f) => ({
+                          ...f,
+                          splits: f.splits.map((s, i) => (i === idx ? { ...s, amount: e.target.value } : s)),
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Due date</label>
+                    <input
+                      type="date"
+                      value={row.dueDate}
+                      onChange={(e) =>
+                        setSplitForm((f) => ({
+                          ...f,
+                          splits: f.splits.map((s, i) => (i === idx ? { ...s, dueDate: e.target.value } : s)),
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      required
+                    />
+                  </div>
+                  {(splitForm.splits || []).length > 2 ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSplitForm((f) => {
+                          const splits = f.splits.filter((_, i) => i !== idx);
+                          return { ...f, splits, paymentCount: splits.length };
+                        })
+                      }
+                      className="px-2 py-2 text-xs text-red-700 hover:bg-red-50 rounded"
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <span className="hidden sm:block" />
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                disabled={(splitForm.splits || []).length >= (splitInstallmentModal.maxSplitCount || 24)}
+                onClick={() => {
+                  const nextCount = Math.min(
+                    (splitInstallmentModal.maxSplitCount || 24),
+                    (splitForm.splits || []).length + 1
+                  );
+                  setSplitForm((f) => ({
+                    ...f,
+                    paymentCount: nextCount,
+                    splits: resizeSplitRows(f.splits, nextCount, splitInstallmentModal.inst),
+                  }));
+                }}
+                className="self-start px-3 py-1.5 text-xs font-medium text-indigo-800 bg-indigo-50 rounded hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                + Add payment
+              </button>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Arrangement note (optional)</label>
+                <input
+                  type="text"
+                  value={splitForm.arrangementNote}
+                  onChange={(e) => setSplitForm((f) => ({ ...f, arrangementNote: e.target.value }))}
+                  placeholder="e.g. Student agreed to pay over 3 months"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+
+              {(() => {
+                const sourceAmount = Number(splitInstallmentModal.inst.amount || 0);
+                const allocated = Math.round(
+                  (splitForm.splits || []).reduce((sum, row) => sum + parseAmountString(row.amount) * 100, 0)
+                );
+                const remaining = sourceAmount - allocated;
+                const matched = remaining === 0;
+                return (
+                  <p className={`text-sm ${matched ? "text-green-700" : remaining > 0 ? "text-amber-700" : "text-red-700"}`}>
+                    Allocated: {formatAmount(allocated, splitInstallmentModal.plan.currency)} /{" "}
+                    {formatAmount(sourceAmount, splitInstallmentModal.plan.currency)}
+                    {!matched && (
+                      <>
+                        {" "}
+                        · Remaining: {formatAmount(Math.abs(remaining), splitInstallmentModal.plan.currency)}
+                        {remaining < 0 ? " over" : ""}
+                      </>
+                    )}
+                  </p>
+                );
+              })()}
+
+              {splitError && <p className="text-sm text-red-600">{splitError}</p>}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSplitInstallmentModal(null)}
+                  disabled={splitSubmitting}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={splitSubmitting}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {splitSubmitting ? "Splitting…" : "Split instalment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {installmentHistoryModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => !revertHistorySaving && setInstallmentHistoryModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-800 mb-1">
+              Instalment {installmentHistoryModal.inst.number} — edit history
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Reverting restores the instalment to how it was before that change (status, due date, amount).
+            </p>
+            {!(installmentHistoryModal.inst.changeHistory || []).length ? (
+              <p className="text-sm text-gray-500 py-4">
+                No recorded changes yet. History is saved from now when you edit due dates, amounts, or payment arrangement.
+              </p>
+            ) : (
+              <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                {[...(installmentHistoryModal.inst.changeHistory || [])]
+                  .slice()
+                  .reverse()
+                  .map((entry) => {
+                    const historyId = entry._id?.toString?.() ?? entry._id;
+                    const savingKey = `${installmentHistoryModal.plan._id}-${installmentHistoryModal.inst.number}-${historyId}`;
+                    const before = entry.before || {};
+                    return (
+                      <li key={historyId} className="px-4 py-3 bg-gray-50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">{entry.summary || "Updated"}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {entry.changedByName || "Finance admin"}
+                              {" · "}
+                              {entry.changedAt
+                                ? new Date(entry.changedAt).toLocaleString("en-ZA", {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "—"}
+                            </p>
+                            {before.status || before.dueDate ? (
+                              <p className="text-xs text-gray-600 mt-1">
+                                Before: {before.status || "pending"}
+                                {before.dueDate
+                                  ? ` · due ${new Date(before.dueDate).toISOString().slice(0, 10)}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!!revertHistorySaving}
+                            onClick={() =>
+                              handleRevertInstallmentHistory(
+                                installmentHistoryModal.plan,
+                                installmentHistoryModal.inst,
+                                historyId,
+                                installmentHistoryModal.planType || "custom"
+                              )
+                            }
+                            className="shrink-0 px-3 py-1.5 text-xs font-medium text-indigo-800 bg-indigo-100 rounded hover:bg-indigo-200 disabled:opacity-50"
+                          >
+                            {revertHistorySaving === savingKey ? "Reverting…" : "Revert"}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                onClick={() => setInstallmentHistoryModal(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

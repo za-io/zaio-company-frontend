@@ -113,12 +113,18 @@ export function mergeCustomPlanInstallmentWithPayments(plan, inst, matches) {
       amount: inst.amount,
       dueDate: inst.dueDate,
       paymentType: inst.type,
-      status: inst.status === "paid" ? "accepted" : "pending",
+      status:
+        inst.status === "paid"
+          ? "accepted"
+          : inst.status === "payment_arranged"
+            ? "payment_arranged"
+            : "pending",
       billingRecordId: inst.billingRecordId,
       customPlanId: plan._id,
       installmentNumber: inst.number,
       paymentUrl:
         inst.type === "paystack" && plan.firstPaystackPaymentUrl ? plan.firstPaystackPaymentUrl : null,
+      arrangementNote: inst.arrangementNote || null,
       _inst: inst,
     };
   }
@@ -131,6 +137,7 @@ export function mergeCustomPlanInstallmentWithPayments(plan, inst, matches) {
   if (inst.status === "paid") status = "accepted";
   else if (accepted.length > 0) status = "accepted";
   else if (failed.length > 0) status = "failed";
+  else if (inst.status === "payment_arranged") status = "payment_arranged";
   else if (pending.length > 0) status = "pending";
 
   const pickOutstanding = matches.find((m) => m.isOutstanding && m.paymentUrl);
@@ -174,6 +181,7 @@ export function mergeCustomPlanInstallmentWithPayments(plan, inst, matches) {
     outstandingPaymentId: matches.find((m) => m.outstandingPaymentId)?.outstandingPaymentId,
     failedChargeReference: matches.find((m) => m.failedChargeReference)?.failedChargeReference,
     xeroInvoiceUrl: matches.find((m) => m.xeroInvoiceUrl)?.xeroInvoiceUrl,
+    arrangementNote: inst.arrangementNote || null,
     _inst: inst,
   };
 }
