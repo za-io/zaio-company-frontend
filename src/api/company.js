@@ -1898,11 +1898,17 @@ export const getFinanceCollectionsGmailStatus = () => {
 };
 
 /** Start Google OAuth to connect collections sender mailbox. */
-export const getFinanceCollectionsGmailAuthUrl = () => {
+export const getFinanceCollectionsGmailAuthUrl = (returnOrigin) => {
   const token = localStorage.getItem("TOKEN");
   const headers = token ? { "auth-token": token } : {};
+  const params = new URLSearchParams();
+  if (returnOrigin) params.set("returnOrigin", returnOrigin);
+  const query = params.toString();
   return axios
-    .get(`${BASE_URL}/bootcamp/finance-collections/gmail/auth-url`, { headers })
+    .get(
+      `${BASE_URL}/bootcamp/finance-collections/gmail/auth-url${query ? `?${query}` : ""}`,
+      { headers }
+    )
     .then((res) => res.data)
     .catch((err) => ({
       success: false,

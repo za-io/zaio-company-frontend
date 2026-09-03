@@ -263,7 +263,6 @@ export default function CollectionsBoard({ includeExcluded = false }) {
     if (gmailResult) {
       params.delete("collections_gmail");
       params.delete("message");
-      params.delete("tab");
       const next = params.toString();
       const nextUrl = `${window.location.pathname}${next ? `?${next}` : ""}`;
       window.history.replaceState({}, "", nextUrl);
@@ -273,7 +272,7 @@ export default function CollectionsBoard({ includeExcluded = false }) {
   async function handleConnectGmail() {
     setGmailActionLoading(true);
     setGmailBanner("");
-    const result = await getFinanceCollectionsGmailAuthUrl();
+    const result = await getFinanceCollectionsGmailAuthUrl(window.location.origin);
     if (!result?.success || !result.authUrl) {
       setGmailBanner(result?.message || "Could not start Google sign-in.");
       setGmailActionLoading(false);
