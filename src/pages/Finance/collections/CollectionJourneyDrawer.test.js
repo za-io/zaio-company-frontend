@@ -91,6 +91,7 @@ function makeCase(overrides = {}) {
     student: {
       username: "Alice Nkosi",
       email: "alice@example.com",
+      phonenumber: "+27 82 555 1234",
       studentNumber: "S-1001",
       ...studentOverrides,
     },
@@ -216,6 +217,10 @@ describe("CollectionJourneyDrawer", () => {
 
     expect(screen.getByText("Alice Nkosi")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "+27 82 555 1234" })).toHaveAttribute(
+      "href",
+      "tel:+27825551234"
+    );
     expect(screen.getByText("S-1001")).toBeInTheDocument();
     expect(screen.getByText("Full Stack Bootcamp")).toBeInTheDocument();
     expect(screen.getByText("CUSTOM-aaa")).toBeInTheDocument();

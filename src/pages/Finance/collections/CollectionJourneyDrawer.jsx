@@ -31,6 +31,23 @@ function formatMissedInstallments(numbers) {
   return numbers.join(" + ");
 }
 
+function phoneTelHref(phone) {
+  const digits = String(phone ?? "").replace(/[^\d+]/g, "");
+  return digits ? `tel:${digits}` : null;
+}
+
+function StudentPhoneValue({ phone }) {
+  const trimmed = String(phone ?? "").trim();
+  if (!trimmed) return "—";
+  const href = phoneTelHref(trimmed);
+  if (!href) return trimmed;
+  return (
+    <a href={href} className="text-sky-300 hover:underline">
+      {trimmed}
+    </a>
+  );
+}
+
 function formatJourneyDate(value) {
   if (value == null || value === "") return "—";
   const date = new Date(value);
@@ -633,7 +650,11 @@ export default function CollectionJourneyDrawer({
             aria-label="Log call"
             aria-expanded={callPanelOpen}
             aria-controls={CALL_PANEL_ID}
-            title="Log call note (Switch tel coming soon)"
+            title={
+              student.phonenumber?.trim()
+                ? `Log call note · ${student.phonenumber.trim()}`
+                : "Log call note (Switch tel coming soon)"
+            }
             onClick={() => setCallPanelOpen((open) => !open)}
             className={`rounded-lg p-2 text-sm transition-colors ${
               callPanelOpen
@@ -697,6 +718,9 @@ export default function CollectionJourneyDrawer({
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <SummaryRow label="Student">{student.username || "—"}</SummaryRow>
           <SummaryRow label="Email">{student.email || "—"}</SummaryRow>
+          <SummaryRow label="Phone">
+            <StudentPhoneValue phone={student.phonenumber} />
+          </SummaryRow>
           <SummaryRow label="Student number">{student.studentNumber || "—"}</SummaryRow>
           <SummaryRow label="Plan">{collectionCase.planName || "—"}</SummaryRow>
           <SummaryRow label="Plan code">{collectionCase.planCode || "—"}</SummaryRow>
