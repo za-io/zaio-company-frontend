@@ -5,6 +5,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import {
   COLLECTION_STAGE_OPTIONS,
   COLLECTION_STAGE_POLICY_HINTS,
+  FIRST_MISS_EMAIL_SENT_FILTER,
+  SECOND_MISS_EMAIL_SENT_FILTER,
   SECOND_MISS_WINDOW_EXPIRED_FILTER,
   formatCollectionsMoney,
 } from "./collectionsViewModel";
@@ -418,7 +420,11 @@ describe("CollectionsBoard", () => {
           ? counts.total
           : value === SECOND_MISS_WINDOW_EXPIRED_FILTER
             ? 0
-            : counts.byStage[value];
+            : value === FIRST_MISS_EMAIL_SENT_FILTER
+              ? 0
+              : value === SECOND_MISS_EMAIL_SENT_FILTER
+                ? 0
+                : counts.byStage[value];
       expect(button).toHaveTextContent(String(expected));
       expect(button).toHaveAttribute("title", COLLECTION_STAGE_POLICY_HINTS[value]);
     }

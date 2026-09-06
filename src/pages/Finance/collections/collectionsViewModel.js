@@ -1,4 +1,8 @@
 export const SECOND_MISS_WINDOW_EXPIRED_FILTER = "SECOND_MISS_WINDOW_EXPIRED";
+/** Queue-only filter: first miss with miss notification already logged. */
+export const FIRST_MISS_EMAIL_SENT_FILTER = "FIRST_MISS_EMAIL_SENT";
+/** Queue-only filter: second miss with notification already logged and window still open. */
+export const SECOND_MISS_EMAIL_SENT_FILTER = "SECOND_MISS_EMAIL_SENT";
 
 export const RECOVERY_SIGNAL_YELLOW = "yellow";
 export const RECOVERY_SIGNAL_GREEN = "green";
@@ -161,18 +165,46 @@ export function recoverySignalDetailTooltip(collectionCase) {
 export const COLLECTION_STAGE_OPTIONS = [
   ["all", "All arrears"],
   ["FIRST_MISS", "First miss"],
-  ["DAY_3_WINDOW", "Day-3 window"],
+  [FIRST_MISS_EMAIL_SENT_FILTER, "Email sent — waiting"],
   ["SECOND_CONSECUTIVE_MISS", "2nd miss — review cancellation"],
   ["EXISTING_2_PLUS_MONTHS", "Existing 2+ months"],
+  [SECOND_MISS_EMAIL_SENT_FILTER, "2nd email sent — waiting"],
   [SECOND_MISS_WINDOW_EXPIRED_FILTER, "5 business over (after 2+ miss)"],
   ["DEBT_RECOVERY", "Debt recovery"],
 ];
+
+/** Visual journey layout for the collections board filter cycle. */
+export const COLLECTION_STAGE_CYCLE_LAYOUT = [
+  { kind: "step", value: "all" },
+  { kind: "step", value: "FIRST_MISS" },
+  { kind: "step", value: FIRST_MISS_EMAIL_SENT_FILTER },
+  {
+    kind: "fork",
+    caption: "2+ consecutive misses",
+    branches: [
+      { value: "SECOND_CONSECUTIVE_MISS", cohortTag: "New cohort" },
+      { value: "EXISTING_2_PLUS_MONTHS", cohortTag: "Existing cohort" },
+    ],
+  },
+  { kind: "step", value: SECOND_MISS_EMAIL_SENT_FILTER },
+  { kind: "step", value: SECOND_MISS_WINDOW_EXPIRED_FILTER },
+  { kind: "step", value: "DEBT_RECOVERY" },
+];
+
+export function collectionStageLabel(value) {
+  const match = COLLECTION_STAGE_OPTIONS.find(([entryValue]) => entryValue === value);
+  return match ? match[1] : value;
+}
 
 const SECOND_MISS_POLICY_STAGES = new Set(["SECOND_CONSECUTIVE_MISS", "EXISTING_2_PLUS_MONTHS"]);
 
 /** Dropdown values for manual policy stage override (excludes queue-only filters). */
 export const COLLECTION_STAGE_SELECT_OPTIONS = COLLECTION_STAGE_OPTIONS.filter(
-  ([value]) => value !== "all" && value !== SECOND_MISS_WINDOW_EXPIRED_FILTER
+  ([value]) =>
+    value !== "all" &&
+    value !== SECOND_MISS_WINDOW_EXPIRED_FILTER &&
+    value !== FIRST_MISS_EMAIL_SENT_FILTER &&
+    value !== SECOND_MISS_EMAIL_SENT_FILTER
 );
 
 export function stageLabel(stage) {
@@ -194,12 +226,14 @@ export const COLLECTION_STAGE_POLICY_HINTS = Object.freeze({
   all: "Every student-plan currently in arrears on a Jan 2026+ Bootcamp or OC. One row per plan, not per missed instalment.",
   FIRST_MISS:
     "First miss in the current cycle (one consecutive overdue instalment). Account is blocked and a miss notification is logged. Cycle clears when the missed instalment is paid.",
-  DAY_3_WINDOW:
-    "Legacy filter — first-miss cases no longer use a day-3 window. Shown only for older data if any remain.",
+  [FIRST_MISS_EMAIL_SENT_FILTER]:
+    "First miss where the miss email has already been sent — waiting on payment or a reply. Sorted with the longest wait since email at the top.",
   SECOND_CONSECUTIVE_MISS:
     "New cohort (started on/after 3 Aug 2026) with 2 or more consecutive missed instalments. Manga review — 5 business days before manual cancellation.",
   EXISTING_2_PLUS_MONTHS:
     "Existing cohort (started before 3 Aug 2026) with 2 or more consecutive missed instalments. Policy: review the payment plan.",
+  [SECOND_MISS_EMAIL_SENT_FILTER]:
+    "Second miss where the notification email has already been sent — waiting on payment or a reply within the 5 business-day window. Sorted with the longest wait since email at the top.",
   [SECOND_MISS_WINDOW_EXPIRED_FILTER]:
     "Second miss with an active 5 business-day response window that has ended — ready for Manga manual cancellation (stub).",
   DEBT_RECOVERY:
@@ -302,6 +336,86 @@ export function isSecondMissWindowExpiredCase(collectionCase) {
   return missCycle.workingDaysRemaining === 0;
 }
 
+export function isFirstMissEmailSentCase(collectionCase) {
+  if (!collectionCase || collectionCase.stage !== "FIRST_MISS") return false;
+  return Boolean(collectionCase.missCycle?.notificationSentAt);
+}
+
+export function countFirstMissEmailSentCases(cases) {
+  if (!Array.isArray(cases)) return 0;
+  return cases.filter(isFirstMissEmailSentCase).length;
+}
+
+export function isSecondMissEmailSentCase(collectionCase) {
+  if (!isSecondMissArrearsCase(collectionCase)) return false;
+  const missCycle = collectionCase.missCycle;
+  if (!missCycle?.active || missCycle.cycleKind !== "second_miss") return false;
+  if (!missCycle.notificationSentAt) return false;
+  if (isSecondMissWindowExpiredCase(collectionCase)) return false;
+  return true;
+}
+
+export function countSecondMissEmailSentCases(cases) {
+  if (!Array.isArray(cases)) return 0;
+  return cases.filter(isSecondMissEmailSentCase).length;
+}
+
+export function daysSinceMissEmailSent(collectionCase, now = new Date()) {
+  const sentAt = collectionCase?.missCycle?.notificationSentAt;
+  if (!sentAt) return null;
+  const sent = new Date(sentAt);
+  const today = new Date(now);
+  if (!Number.isFinite(sent.getTime())) return null;
+  sent.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const days = Math.floor((today - sent) / (24 * 60 * 60 * 1000));
+  return days >= 0 ? days : null;
+}
+
+function missEmailSentTimestamp(collectionCase) {
+  const sentAt = collectionCase?.missCycle?.notificationSentAt;
+  if (!sentAt) return null;
+  const time = new Date(sentAt).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+/** First miss: needs email first, then longest wait since email sent at top. */
+export function compareFirstMissEmailSentOrder(a, b) {
+  const aSent = missEmailSentTimestamp(a);
+  const bSent = missEmailSentTimestamp(b);
+  if (aSent == null && bSent == null) {
+    const aDue = a?.oldestDueDate ? new Date(a.oldestDueDate).getTime() : Number.MAX_SAFE_INTEGER;
+    const bDue = b?.oldestDueDate ? new Date(b.oldestDueDate).getTime() : Number.MAX_SAFE_INTEGER;
+    if (aDue !== bDue) return aDue - bDue;
+    return String(a?.caseKey ?? "").localeCompare(String(b?.caseKey ?? ""));
+  }
+  if (aSent == null) return -1;
+  if (bSent == null) return 1;
+  if (aSent !== bSent) return aSent - bSent;
+  const aDue = a?.oldestDueDate ? new Date(a.oldestDueDate).getTime() : Number.MAX_SAFE_INTEGER;
+  const bDue = b?.oldestDueDate ? new Date(b.oldestDueDate).getTime() : Number.MAX_SAFE_INTEGER;
+  if (aDue !== bDue) return aDue - bDue;
+  return String(a?.caseKey ?? "").localeCompare(String(b?.caseKey ?? ""));
+}
+
+export function sortFirstMissCasesByEmailSentPriority(cases) {
+  if (!Array.isArray(cases) || cases.length < 2) return cases ?? [];
+  return [...cases].sort(compareFirstMissEmailSentOrder);
+}
+
+export function sortSecondMissCasesByEmailSentPriority(cases) {
+  if (!Array.isArray(cases) || cases.length < 2) return cases ?? [];
+  return [...cases].sort((a, b) => {
+    const aSent = missEmailSentTimestamp(a);
+    const bSent = missEmailSentTimestamp(b);
+    if (aSent == null && bSent == null) return 0;
+    if (aSent == null) return 1;
+    if (bSent == null) return -1;
+    if (aSent !== bSent) return aSent - bSent;
+    return String(a?.caseKey ?? "").localeCompare(String(b?.caseKey ?? ""));
+  });
+}
+
 export function filterCollectionCases(cases, filters) {
   if (!Array.isArray(cases)) return [];
   const opts = filters || {};
@@ -315,9 +429,13 @@ export function filterCollectionCases(cases, filters) {
     !recoverySignal || recoverySignal === "all" ? null : recoverySignal;
   const tokens = normalizeCollectionsSearchText(opts.search).split(" ").filter(Boolean);
 
-  return cases.filter((row) => {
+  const filtered = cases.filter((row) => {
     if (stageFilter === SECOND_MISS_WINDOW_EXPIRED_FILTER) {
       if (!isSecondMissWindowExpiredCase(row)) return false;
+    } else if (stageFilter === FIRST_MISS_EMAIL_SENT_FILTER) {
+      if (!isFirstMissEmailSentCase(row)) return false;
+    } else if (stageFilter === SECOND_MISS_EMAIL_SENT_FILTER) {
+      if (!isSecondMissEmailSentCase(row)) return false;
     } else if (stageFilter && row?.stage !== stageFilter) {
       return false;
     }
@@ -327,6 +445,16 @@ export function filterCollectionCases(cases, filters) {
     const haystack = caseSearchHaystack(row);
     return tokens.every((token) => haystack.includes(token));
   });
+
+  if (stageFilter === "FIRST_MISS" || stageFilter === FIRST_MISS_EMAIL_SENT_FILTER) {
+    return sortFirstMissCasesByEmailSentPriority(filtered);
+  }
+
+  if (stageFilter === SECOND_MISS_EMAIL_SENT_FILTER) {
+    return sortSecondMissCasesByEmailSentPriority(filtered);
+  }
+
+  return filtered;
 }
 
 export function sumCollectionArrearsCents(cases) {

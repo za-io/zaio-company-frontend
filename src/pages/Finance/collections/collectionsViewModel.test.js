@@ -3,6 +3,8 @@ import path from "path";
 import {
   COLLECTION_STAGE_OPTIONS,
   COLLECTION_STAGE_POLICY_HINTS,
+  FIRST_MISS_EMAIL_SENT_FILTER,
+  SECOND_MISS_EMAIL_SENT_FILTER,
   SECOND_MISS_WINDOW_EXPIRED_FILTER,
   formatCollectionsMoney,
   filterCollectionCases,
@@ -55,13 +57,14 @@ function makeCase(overrides = {}) {
 }
 
 describe("COLLECTION_STAGE_OPTIONS", () => {
-  it("exposes all plus the five backend stages with exact labels", () => {
+  it("exposes all plus the backend stages and queue-only filters with exact labels", () => {
     expect(COLLECTION_STAGE_OPTIONS).toEqual([
       ["all", "All arrears"],
       ["FIRST_MISS", "First miss"],
-      ["DAY_3_WINDOW", "Day-3 window"],
+      [FIRST_MISS_EMAIL_SENT_FILTER, "Email sent — waiting"],
       ["SECOND_CONSECUTIVE_MISS", "2nd miss — review cancellation"],
       ["EXISTING_2_PLUS_MONTHS", "Existing 2+ months"],
+      [SECOND_MISS_EMAIL_SENT_FILTER, "2nd email sent — waiting"],
       [SECOND_MISS_WINDOW_EXPIRED_FILTER, "5 business over (after 2+ miss)"],
       ["DEBT_RECOVERY", "Debt recovery"],
     ]);
@@ -77,6 +80,8 @@ describe("COLLECTION_STAGE_OPTIONS", () => {
     expect(COLLECTION_STAGE_POLICY_HINTS[SECOND_MISS_WINDOW_EXPIRED_FILTER]).toMatch(
       /5 business-day response window/i
     );
+    expect(COLLECTION_STAGE_POLICY_HINTS[FIRST_MISS_EMAIL_SENT_FILTER]).toMatch(/longest wait/i);
+    expect(COLLECTION_STAGE_POLICY_HINTS[SECOND_MISS_EMAIL_SENT_FILTER]).toMatch(/5 business-day window/i);
     expect(COLLECTION_STAGE_POLICY_HINTS.DEBT_RECOVERY).toMatch(/cancellation or recovery/i);
   });
 });
@@ -167,6 +172,106 @@ describe("filterCollectionCases", () => {
     expect(filterCollectionCases(cases, { stage: "FIRST_MISS" })).toEqual([alice, hannah]);
     expect(filterCollectionCases(cases, { stage: "EXISTING_2_PLUS_MONTHS" })).toEqual([dineo]);
     expect(filterCollectionCases(cases, { stage: "DEBT_RECOVERY" })).toEqual([]);
+  });
+
+  it("sorts first-miss cases with email sent by longest wait since email", () => {
+    const draftReady = makeCase({
+      caseKey: "u-draft",
+      missCycle: { pendingEmailDraft: { subject: "Draft" } },
+      oldestDueDate: "2026-08-10T00:00:00.000Z",
+    });
+    const emailedLongAgo = makeCase({
+      caseKey: "u-old",
+      missCycle: { notificationSentAt: "2026-08-28T12:00:00.000Z" },
+      oldestDueDate: "2026-08-20T00:00:00.000Z",
+    });
+    const emailedRecently = makeCase({
+      caseKey: "u-new",
+      missCycle: { notificationSentAt: "2026-09-04T12:00:00.000Z" },
+      oldestDueDate: "2026-08-22T00:00:00.000Z",
+    });
+
+    expect(
+      filterCollectionCases([emailedRecently, emailedLongAgo, draftReady], { stage: "FIRST_MISS" }).map(
+        (row) => row.caseKey
+      )
+    ).toEqual(["u-draft", "u-old", "u-new"]);
+  });
+
+  it("filters first-miss email-sent cases and sorts by longest wait", () => {
+    const emailedLongAgo = makeCase({
+      caseKey: "u-old",
+      missCycle: { notificationSentAt: "2026-08-28T12:00:00.000Z" },
+    });
+    const emailedRecently = makeCase({
+      caseKey: "u-new",
+      missCycle: { notificationSentAt: "2026-09-04T12:00:00.000Z" },
+    });
+    const draftReady = makeCase({
+      caseKey: "u-draft",
+      missCycle: { pendingEmailDraft: { subject: "Draft" } },
+    });
+
+    expect(
+      filterCollectionCases([emailedRecently, draftReady, emailedLongAgo], {
+        stage: FIRST_MISS_EMAIL_SENT_FILTER,
+      }).map((row) => row.caseKey)
+    ).toEqual(["u-old", "u-new"]);
+  });
+
+  it("filters second-miss email-sent cases and sorts by longest wait", () => {
+    const emailedLongAgo = makeCase({
+      caseKey: "u-old",
+      stage: "SECOND_CONSECUTIVE_MISS",
+      consecutiveMisses: 2,
+      missCycle: {
+        active: true,
+        cycleKind: "second_miss",
+        notificationSentAt: "2026-08-28T12:00:00.000Z",
+        workingDaysRemaining: 2,
+      },
+    });
+    const emailedRecently = makeCase({
+      caseKey: "u-new",
+      stage: "EXISTING_2_PLUS_MONTHS",
+      consecutiveMisses: 3,
+      missCycle: {
+        active: true,
+        cycleKind: "second_miss",
+        notificationSentAt: "2026-09-04T12:00:00.000Z",
+        workingDaysRemaining: 1,
+      },
+    });
+    const draftReady = makeCase({
+      caseKey: "u-draft",
+      stage: "SECOND_CONSECUTIVE_MISS",
+      consecutiveMisses: 2,
+      missCycle: {
+        active: true,
+        cycleKind: "second_miss",
+        pendingEmailDraft: { subject: "Draft" },
+        workingDaysRemaining: 3,
+      },
+    });
+    const windowExpired = makeCase({
+      caseKey: "u-expired",
+      stage: "EXISTING_2_PLUS_MONTHS",
+      consecutiveMisses: 3,
+      missCycle: {
+        active: true,
+        cycleKind: "second_miss",
+        notificationSentAt: "2026-08-20T12:00:00.000Z",
+        windowExpired: true,
+        workingDaysRemaining: 0,
+      },
+    });
+
+    expect(
+      filterCollectionCases(
+        [emailedRecently, draftReady, windowExpired, emailedLongAgo],
+        { stage: SECOND_MISS_EMAIL_SENT_FILTER }
+      ).map((row) => row.caseKey)
+    ).toEqual(["u-old", "u-new"]);
   });
 
   it("filters expired second-miss window cases client-side", () => {

@@ -2,14 +2,20 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getFinanceCollections, getFinanceCollectionsGmailAuthUrl, getFinanceCollectionsGmailStatus, patchFinanceCollectionsGmailAutomations, postFinanceCollectionsGmailDisconnect } from "../../../api/company";
 import CollectionJourneyDrawer from "./CollectionJourneyDrawer";
+import CollectionStageCycleFilter from "./CollectionStageCycleFilter";
 import CollectionsRemindersPanel from "./CollectionsRemindersPanel";
 import {
   COLLECTION_STAGE_OPTIONS,
   COLLECTION_RECOVERY_SIGNAL_OPTIONS,
+  FIRST_MISS_EMAIL_SENT_FILTER,
+  SECOND_MISS_EMAIL_SENT_FILTER,
   SECOND_MISS_WINDOW_EXPIRED_FILTER,
   cohortNamesOf,
   cohortOptionsFromCases,
   countCasesByRecoverySignal,
+  countFirstMissEmailSentCases,
+  countSecondMissEmailSentCases,
+  daysSinceMissEmailSent,
   filterCollectionCases,
   formatCollectionsMoney,
   formatRecoverySignals,
@@ -91,7 +97,14 @@ function formatMissCycleStatus(row) {
   const parts = [];
   if (missCycle?.status === "cancelled") parts.push("Cancelled");
   else if (blocked) parts.push("Blocked");
-  if (emailLogged) parts.push("Email sent");
+  if (emailLogged) {
+    const daysSinceEmail = daysSinceMissEmailSent(row);
+    parts.push(
+      daysSinceEmail == null
+        ? "Email sent"
+        : `Email sent · ${daysSinceEmail} day${daysSinceEmail === 1 ? "" : "s"} ago`
+    );
+  }
   else if (missCycle?.pendingEmailDraft) parts.push("Draft ready");
   const windowLabel = formatSecondMissWindow(missCycle);
   if (windowLabel) parts.push(windowLabel);
@@ -131,6 +144,12 @@ function RecoverySignalCell({ row }) {
 }
 
 function countFor(value, counts, cases) {
+  if (value === FIRST_MISS_EMAIL_SENT_FILTER) {
+    return countFirstMissEmailSentCases(cases);
+  }
+  if (value === SECOND_MISS_EMAIL_SENT_FILTER) {
+    return countSecondMissEmailSentCases(cases);
+  }
   if (value === SECOND_MISS_WINDOW_EXPIRED_FILTER) {
     return (cases ?? []).filter(isSecondMissWindowExpiredCase).length;
   }
@@ -154,6 +173,12 @@ function emptyMessage({ serverEmpty, stage, search, cohort, recoverySignal }) {
   if (hasStage) {
     if (stage === SECOND_MISS_WINDOW_EXPIRED_FILTER) {
       return "No cases with an expired 5 business-day window after 2+ miss.";
+    }
+    if (stage === FIRST_MISS_EMAIL_SENT_FILTER) {
+      return "No first-miss cases with email sent yet.";
+    }
+    if (stage === SECOND_MISS_EMAIL_SENT_FILTER) {
+      return "No second-miss cases with email sent yet.";
     }
     return "No cases in this stage.";
   }
@@ -570,27 +595,13 @@ export default function CollectionsBoard({ includeExcluded = false }) {
             />
           ) : (
             <>
-          <div className="flex flex-wrap gap-1">
-            {COLLECTION_STAGE_OPTIONS.map(([value, label]) => {
-              const selected = stage === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  title={stagePolicyHint(value)}
-                  aria-pressed={selected}
-                  onClick={() => setStage(value)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium border leading-tight ${
-                    selected
-                      ? "bg-blue-600 text-white border-blue-500"
-                      : "bg-white/5 text-gray-300 border-white/15 hover:bg-white/10"
-                  }`}
-                >
-                  {label} <span className="tabular-nums opacity-90">{countFor(value, counts, cases)}</span>
-                </button>
-              );
-            })}
-          </div>
+          <CollectionStageCycleFilter
+            stage={stage}
+            onStageChange={setStage}
+            countFor={countFor}
+            counts={counts}
+            cases={cases}
+          />
 
           <div className="flex flex-wrap gap-1">
             {COLLECTION_RECOVERY_SIGNAL_OPTIONS.map(([value, label]) => {
