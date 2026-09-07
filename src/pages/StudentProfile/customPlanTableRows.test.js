@@ -1,4 +1,4 @@
-import { buildCustomPlanTableRows, customPlanRowTypeKind } from "./customPlanTableRows";
+import { buildCustomPlanTableRows, customPlanRowTypeKind, isCustomInstallmentOverdue } from "./customPlanTableRows";
 
 function lethaboShapedPlan() {
   return {
@@ -187,5 +187,85 @@ describe("buildCustomPlanTableRows — Paystack installment paid by EFT", () => 
     };
     const rows = buildCustomPlanTableRows(plan, billingPlan);
     expect(rows[0].status).toBe("payment_arranged");
+  });
+});
+
+describe("buildCustomPlanTableRows — cash then Paystack subscription", () => {
+  it("maps Paystack slot 1 to the first Paystack instalment and does not create ghost rows", () => {
+    const plan = {
+      _id: "cp-ndamulelo",
+      installments: [
+        { number: 1, type: "cash", status: "paid", amount: 275000, billingRecordId: "eft1" },
+        { number: 2, type: "cash", status: "paid", amount: 275000, billingRecordId: "eft2" },
+        { number: 3, type: "cash", status: "paid", amount: 275000, billingRecordId: "eft3" },
+        {
+          number: 4,
+          type: "paystack",
+          status: "paid",
+          amount: 275000,
+          billingRecordId: "ps1",
+          paystackPlanCode: "PLN_xeo0i3dbkdmbm60",
+        },
+        { number: 5, type: "paystack", status: "pending", amount: 275000, paystackPlanCode: "PLN_xeo0i3dbkdmbm60" },
+        { number: 6, type: "paystack", status: "pending", amount: 275000, paystackPlanCode: "PLN_xeo0i3dbkdmbm60" },
+        { number: 7, type: "paystack", status: "pending", amount: 275000, paystackPlanCode: "PLN_xeo0i3dbkdmbm60" },
+        { number: 8, type: "paystack", status: "pending", amount: 275000, paystackPlanCode: "PLN_xeo0i3dbkdmbm60" },
+      ],
+    };
+    const billingPlan = {
+      payments: [
+        { billingRecordId: "eft1", paymentType: "eft", status: "accepted", amount: 275000 },
+        { billingRecordId: "eft2", paymentType: "eft", status: "accepted", amount: 275000 },
+        { billingRecordId: "eft3", paymentType: "eft", status: "accepted", amount: 275000 },
+        {
+          billingRecordId: "ps1",
+          paymentType: "initial",
+          status: "accepted",
+          amount: 275000,
+          installmentSlot: 1,
+          installmentLabel: "Payment 1 of 9",
+        },
+        {
+          billingRecordId: "ps2",
+          paymentType: "recurring",
+          status: "accepted",
+          amount: 275000,
+          reference: "2z7mxxx5of",
+        },
+        {
+          billingRecordId: "fail3",
+          paymentType: "recurring",
+          status: "failed",
+          amount: 275000,
+          installmentSlot: 3,
+          installmentLabel: "Payment 3 of 9",
+        },
+      ],
+    };
+
+    const rows = buildCustomPlanTableRows(plan, billingPlan);
+    expect(rows.filter((r) => r._orphan)).toHaveLength(0);
+    expect(rows).toHaveLength(8);
+    expect(rows.find((r) => r.installmentNumber === 4).status).toBe("accepted");
+    expect(rows.find((r) => r.installmentNumber === 5).status).toBe("accepted");
+    expect(rows.find((r) => r.installmentNumber === 6).status).toBe("failed");
+    expect(rows.filter((r) => r.status === "accepted")).toHaveLength(5);
+  });
+});
+
+describe("isCustomInstallmentOverdue", () => {
+  const now = new Date("2026-09-07T12:00:00.000Z");
+
+  test("pending due today or earlier is overdue", () => {
+    expect(isCustomInstallmentOverdue({ status: "pending", dueDate: "2026-08-30T00:00:00.000Z" }, now)).toBe(true);
+    expect(isCustomInstallmentOverdue({ status: "pending", dueDate: "2026-09-07T00:00:00.000Z" }, now)).toBe(true);
+  });
+
+  test("future pending, paid, and arranged rows are not overdue", () => {
+    expect(isCustomInstallmentOverdue({ status: "pending", dueDate: "2026-09-30T00:00:00.000Z" }, now)).toBe(false);
+    expect(isCustomInstallmentOverdue({ status: "accepted", dueDate: "2026-08-30T00:00:00.000Z" }, now)).toBe(false);
+    expect(isCustomInstallmentOverdue({ status: "payment_arranged", dueDate: "2026-08-30T00:00:00.000Z" }, now)).toBe(
+      false
+    );
   });
 });

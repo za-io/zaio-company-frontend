@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
@@ -9,12 +9,23 @@ import {
   buildCustomPlanTableRows,
   getFirstPaystackInstallment,
   customPlanRowTypeKind,
+  isCustomInstallmentOverdue,
 } from "./customPlanTableRows";
+import {
+  encodePaystackEftChoice,
+  buildPaystackEftPaymentChoices,
+  groupPaystackPaymentRows,
+} from "./paystackEftChoices";
 import CustomInstallmentActions from "./CustomInstallmentActions";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "—";
   return new Date(dateStr).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" });
+};
+
+const utcDay = (dateStr) => {
+  const date = new Date(dateStr);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 };
 
 const formatAmount = (amount, currency = "ZAR") => {
@@ -91,71 +102,6 @@ function getLearnerAppBaseUrl() {
   return "https://www.zaio.io";
 }
 
-/** Encode which subscription debit this EFT satisfies (for POST finance-record-paystack-eft). */
-function encodePaystackEftChoice(row) {
-  return JSON.stringify({
-    installmentSlot: row.installmentSlot != null && row.installmentSlot >= 1 ? row.installmentSlot : null,
-    outstandingPaymentId: row.outstandingPaymentId || null,
-    billingRecordId: row.billingRecordId || null,
-  });
-}
-
-/** Pending, failed Pay now links, and rejected Paystack billing rows for standalone plans; fallback to Payment 1..N when no rows yet. */
-function buildPaystackEftPaymentChoices(plan) {
-  if (plan?.partner) return [];
-  const pc = (plan?.planCode || "").trim();
-  const hasSubscriptionCode = !!(plan?.subscriptionCode && String(plan.subscriptionCode).trim());
-  /** Backend allows EFT without SUB_… when plan code is Paystack PLN_… */
-  if (!hasSubscriptionCode && !pc.startsWith("PLN_")) return [];
-  if (pc.startsWith("CUSTOM-") || pc.startsWith("2INST-")) return [];
-  const raw = [];
-  (plan.payments || []).forEach((p, idx) => {
-    const isPending = p.status === "pending";
-    /** Outstanding “Pay now” link (failed recurring) */
-    const isFailedOU = p.status === "failed" && p.isOutstanding;
-    /** Rejected Paystack charge stored as BillingRecord — status failed + billingRecordId, not the same as Pay now row */
-    const isFailedRejected = p.status === "failed" && p.billingRecordId && !p.isOutstanding;
-    if (!isPending && !isFailedOU && !isFailedRejected) return;
-    const slot =
-      p.installmentSlot != null && p.installmentSlot >= 1
-        ? p.installmentSlot
-        : parsePaymentSlotFromRow(p);
-    const baseLabel = p.installmentLabel || (slot ? `Payment ${slot}` : `Line ${idx + 1}`);
-    const failNote = isFailedRejected ? "rejected debit" : isFailedOU ? "Pay now" : null;
-    const label = [
-      baseLabel,
-      p.amount != null ? formatAmount(p.amount, p.currency) : "",
-      failNote,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    raw.push({
-      installmentSlot: slot,
-      outstandingPaymentId: p.outstandingPaymentId || null,
-      billingRecordId: p.billingRecordId || null,
-      label,
-      amountCents: p.amount != null ? Number(p.amount) : null,
-    });
-  });
-  if (raw.length > 0) {
-    raw.sort((a, b) => (a.installmentSlot ?? 999) - (b.installmentSlot ?? 999));
-    return raw;
-  }
-  const total = plan.totalPaymentsRequired;
-  if (total != null && total >= 1 && plan.amount != null) {
-    return Array.from({ length: total }, (_, i) => {
-      const slotNum = i + 1;
-      return {
-        installmentSlot: slotNum,
-        outstandingPaymentId: null,
-        label: `Payment ${slotNum} of ${total} · ${formatAmount(plan.amount, plan.currency)}`,
-        amountCents: Number(plan.amount),
-      };
-    });
-  }
-  return [];
-}
-
 const StudentProfile = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -183,6 +129,7 @@ const StudentProfile = () => {
   const [statementLoading, setStatementLoading] = useState(false);
   const [statementRefreshing, setStatementRefreshing] = useState(false);
   const [paymentsModalPlan, setPaymentsModalPlan] = useState(null);
+  const [openPaymentTries, setOpenPaymentTries] = useState({});
   const [paymentsModalRemoving, setPaymentsModalRemoving] = useState(false);
   const [eftSubmissions, setEftSubmissions] = useState([]);
   const [eftLoading, setEftLoading] = useState(false);
@@ -564,6 +511,10 @@ const StudentProfile = () => {
   }, [userId]);
 
   useEffect(() => {
+    setOpenPaymentTries({});
+  }, [paymentsModalPlan?.planCode]);
+
+  useEffect(() => {
     if (userId) {
       fetchBilling();
     }
@@ -746,6 +697,7 @@ const StudentProfile = () => {
     if (plan.partner === "Manati") {
       handleManatiRowClick(plan);
     } else {
+      setOpenPaymentTries({});
       setPaymentsModalPlan(plan);
     }
   };
@@ -3465,8 +3417,9 @@ const StudentProfile = () => {
                       const rowKey = row._orphan
                         ? `orphan-${plan._id}-${row.reference || row.outstandingPaymentId || idx}`
                         : `inst-${plan._id}-${row.installmentNumber ?? inst?.number ?? idx}`;
+                      const isOverdue = isCustomInstallmentOverdue(row);
                       const rowBg =
-                        row.status === "failed" || row.status === "rejected"
+                        row.status === "failed" || row.status === "rejected" || isOverdue
                           ? "bg-red-50"
                           : row.status === "payment_arranged"
                             ? "bg-sky-50"
@@ -3515,12 +3468,14 @@ const StudentProfile = () => {
                           </td>
                           <td className="px-6 py-3 text-sm text-gray-600">{typeLabel}</td>
                           <td className="px-6 py-3">
-                            <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : row.status === "payment_arranged" ? "bg-sky-100 text-sky-800" : row.status === "failed" || row.status === "rejected" ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
+                            <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : row.status === "payment_arranged" ? "bg-sky-100 text-sky-800" : row.status === "failed" || row.status === "rejected" || isOverdue ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"}`}>
                               {row.expired
                                 ? "Expired"
                                 : row.status === "payment_arranged"
                                   ? "Payment arranged"
-                                  : row.status || "pending"}
+                                  : isOverdue
+                                    ? "overdue"
+                                    : row.status || "pending"}
                             </span>
                             {row.status === "payment_arranged" && row.arrangementNote ? (
                               <p className="mt-1 text-[11px] text-sky-700">{row.arrangementNote}</p>
@@ -4421,7 +4376,8 @@ const StudentProfile = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Due date</th>
+                        <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Paid on</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase">Type</th>
@@ -4430,10 +4386,21 @@ const StudentProfile = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {paymentsModalPlan.payments.map((p, i) => {
+                      {groupPaystackPaymentRows(paymentsModalPlan.payments).map((group, i) => {
+                        const p = group.primary;
+                        const tryKey = group.slot != null ? `slot-${group.slot}` : `row-${i}`;
+                        const triesOpen = Boolean(openPaymentTries[tryKey]);
+                        const isAccepted = p.status === "accepted" || p.status === "paid";
+                        const hasFailedTries = group.attempts.some(
+                          (row) => row.status === "failed" || row.status === "rejected"
+                        );
+                        const slotRecovered = isAccepted && hasFailedTries;
                         const isFailed = p.status === "failed" || p.status === "rejected";
-                        const isAccepted = p.status === "accepted";
-                        const isPending = p.status === "pending";
+                        const isOverdue = p.status === "overdue";
+                        const isPending = p.status === "pending" || isOverdue;
+                        /** Compare calendar days: a debit taken hours after its due timestamp is still on time. */
+                        const settledLate =
+                          isAccepted && p.dueDate && p.paidAt && utcDay(p.paidAt) > utcDay(p.dueDate);
                         const showGenerateLink =
                           (isFailed && !p.isOutstanding) || (p.isOutstanding && p.expired);
                         const showPayNow = p.isOutstanding && p.paymentUrl && !p.expired;
@@ -4453,15 +4420,38 @@ const StudentProfile = () => {
                         const actionKey = p.billingRecordId || p.outstandingPaymentId || (p.customPlanId && p.installmentNumber ? `pending-${p.customPlanId}-${p.installmentNumber}` : null) || (p.installmentPlanId && p.installmentNumber ? `pending-${p.installmentPlanId}-${p.installmentNumber}` : null) || p.reference || p.paymentUrl || i;
                         const isLoading = updatePaymentStatusLoading === actionKey;
                         return (
-                          <tr key={actionKey} className={isFailed ? "bg-red-50" : isPending ? "bg-amber-50" : ""}>
-                            <td className="px-4 py-3 text-sm text-gray-800">{formatDate(p.paidAt)}</td>
+                          <Fragment key={tryKey}>
+                          <tr className={isFailed ? "bg-red-50" : slotRecovered ? "bg-emerald-50" : isOverdue ? "bg-orange-50" : p.status === "pending" ? "bg-amber-50" : ""}>
+                            <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                              {p.dueDate ? formatDate(p.dueDate) : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
+                              {p.paidAt ? formatDate(p.paidAt) : "—"}
+                              {settledLate && (
+                                <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-amber-100 text-amber-800">late</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-800">{formatAmount(p.amount, p.currency)}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-1 text-xs rounded-full ${p.status === "accepted" ? "bg-green-100 text-green-800" : isFailed ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
-                                {p.expired ? "Expired" : p.status || "—"}
+                              <span className={`px-2 py-1 text-xs rounded-full ${slotRecovered ? "bg-emerald-100 text-emerald-800" : p.status === "accepted" ? "bg-green-100 text-green-800" : isFailed ? "bg-red-100 text-red-800" : isOverdue ? "bg-orange-100 text-orange-800" : "bg-gray-100 text-gray-800"}`}>
+                                {p.expired ? "Expired" : slotRecovered ? "recovered" : p.status || "—"}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{p.installmentLabel || p.paymentType || "—"}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              <div>{p.installmentLabel || p.paymentType || "—"}</div>
+                              {group.attempts.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenPaymentTries((prev) => ({ ...prev, [tryKey]: !prev[tryKey] }))
+                                  }
+                                  className="mt-1 text-xs text-indigo-600 hover:underline"
+                                >
+                                  {triesOpen ? "Hide" : "Show"} {group.attempts.length}{" "}
+                                  {group.attempts.length === 1 ? "try" : "tries"}
+                                </button>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-600 font-mono">{p.reference || "—"}</td>
                             <td className="px-4 py-3 flex flex-wrap items-center gap-2">
                               {showPayNow && (
@@ -4665,6 +4655,41 @@ const StudentProfile = () => {
                               {!showPayNow && !showGenerateLink && !showEditStatus && !showDeleteBillingRecord && !showDismiss && !showMarkAsPaid && !showMarkPaystackEft && !showDeletePending && !p.xeroInvoiceUrl && "—"}
                             </td>
                           </tr>
+                          {triesOpen &&
+                            group.attempts.map((attempt, ai) => {
+                              const attemptFailed = attempt.status === "failed" || attempt.status === "rejected";
+                              return (
+                                <tr
+                                  key={`${tryKey}-try-${attempt.billingRecordId || attempt.reference || ai}`}
+                                  className="bg-slate-50"
+                                >
+                                  <td className="px-4 py-2 pl-8 text-xs text-gray-500 whitespace-nowrap">try</td>
+                                  <td className="px-4 py-2 text-xs text-gray-700 whitespace-nowrap">
+                                    {attempt.paidAt || attempt.failedAttemptAt
+                                      ? formatDate(attempt.paidAt || attempt.failedAttemptAt)
+                                      : "—"}
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-gray-600">
+                                    {formatAmount(attempt.amount, attempt.currency)}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span
+                                      className={`px-2 py-0.5 text-xs rounded-full ${
+                                        attemptFailed
+                                          ? "bg-red-100 text-red-800"
+                                          : "bg-gray-100 text-gray-700"
+                                      }`}
+                                    >
+                                      {attemptFailed ? "attempt failed" : attempt.status || "—"}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2 text-xs text-gray-500">Card attempt</td>
+                                  <td className="px-4 py-2 text-xs text-gray-500 font-mono">{attempt.reference || "—"}</td>
+                                  <td className="px-4 py-2 text-xs text-gray-400">—</td>
+                                </tr>
+                              );
+                            })}
+                          </Fragment>
                         );
                       })}
                     </tbody>

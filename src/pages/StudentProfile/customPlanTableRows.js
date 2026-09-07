@@ -5,9 +5,39 @@ export function parsePaymentSlotFromRow(p) {
   return m ? Number(m[1]) : null;
 }
 
+export function isPaystackBillingRow(row) {
+  const pt = String(row?.paymentType || "").toLowerCase();
+  return pt === "paystack" || pt === "recurring" || pt === "initial";
+}
+
+/** Paystack-typed legs only, in plan order (after any cash/EFT months). */
+export function paystackInstallmentsOnPlan(plan) {
+  return [...(plan?.installments || [])]
+    .filter((inst) => inst?.type === "paystack" || String(inst?.paystackPlanCode || "").trim())
+    .sort((a, b) => Number(a.number) - Number(b.number));
+}
+
+/** Paystack subscription slot 1 → first Paystack custom instalment (e.g. 4 after 3 EFT months). */
+export function customNumberForPaystackSlot(plan, slot) {
+  const n = Number(slot);
+  if (!Number.isFinite(n) || n < 1) return null;
+  const mapped = paystackInstallmentsOnPlan(plan)[n - 1];
+  return mapped?.number != null ? Number(mapped.number) : null;
+}
+
 export function isEftPaymentType(paymentType) {
   const pt = String(paymentType || "").toLowerCase();
   return pt === "eft" || pt === "cash";
+}
+
+/** Pending custom instalment whose due day has arrived (same calendar-day rule as Paystack slots). */
+export function isCustomInstallmentOverdue(row, now = new Date()) {
+  if (!row || row.status !== "pending" || !row.dueDate) return false;
+  const due = new Date(row.dueDate);
+  if (Number.isNaN(due.getTime()) || Number.isNaN(now.getTime())) return false;
+  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return dueDay <= today;
 }
 
 /** Map merged billing row → CustomPaymentPlan installment when `_inst` is missing (GET /billing rows omit installmentNumber). */
@@ -28,12 +58,14 @@ export function resolveCustomPlanRowInst(plan, row) {
     if (found) return found;
   }
   if (row.installmentSlot != null) {
-    const found = installments.find((i) => i.number === row.installmentSlot);
+    const mapped = isPaystackBillingRow(row) ? customNumberForPaystackSlot(plan, row.installmentSlot) : null;
+    const found = installments.find((i) => i.number === (mapped ?? row.installmentSlot));
     if (found) return found;
   }
   const slotFromPayment = parsePaymentSlotFromRow(row);
   if (slotFromPayment != null) {
-    const found = installments.find((i) => i.number === slotFromPayment);
+    const mapped = isPaystackBillingRow(row) ? customNumberForPaystackSlot(plan, slotFromPayment) : null;
+    const found = installments.find((i) => i.number === (mapped ?? slotFromPayment));
     if (found) return found;
   }
   if (row.billingRecordId != null) {
@@ -71,6 +103,14 @@ export function resolveRowToInstNumber(plan, row) {
   if (row == null) return null;
   if (row.installmentNumber != null && Number(row.installmentNumber) > 0) {
     return Math.floor(Number(row.installmentNumber));
+  }
+  if (isPaystackBillingRow(row) && plan) {
+    const slot =
+      row.installmentSlot != null && Number(row.installmentSlot) > 0
+        ? Number(row.installmentSlot)
+        : parsePaymentSlotFromRow(row);
+    const mapped = customNumberForPaystackSlot(plan, slot);
+    if (mapped != null) return mapped;
   }
   if (row.installmentSlot != null && Number(row.installmentSlot) > 0) {
     return Math.floor(Number(row.installmentSlot));
@@ -243,7 +283,8 @@ export function buildCustomPlanTableRows(plan, billingPlan) {
     if (used.has(i)) return;
     if (isSyntheticPaystackPlaceholder(row)) {
       const slot = row.installmentSlot != null ? Number(row.installmentSlot) : parsePaymentSlotFromRow(row);
-      if (existingNumbers.has(slot)) {
+      const mapped = customNumberForPaystackSlot(plan, slot) ?? slot;
+      if (existingNumbers.has(mapped)) {
         used.add(i);
         return;
       }
@@ -257,12 +298,23 @@ export function buildCustomPlanTableRows(plan, billingPlan) {
     }
   });
 
-  /** Slot orphan failed debits to the next open Paystack installment (e.g. 3rd Paystack month → instalment 3). */
+  /** Unslotted Paystack successes (e.g. Pay now on the custom plan code) fill the next open Paystack month. */
+  payments.forEach((row, i) => {
+    if (used.has(i)) return;
+    if (row.status !== "accepted" && row.status !== "paid") return;
+    if (!isPaystackBillingRow(row)) return;
+    const j = findPaystackInstIndexForOrphanFailure(base, matchesByInst);
+    if (j != null) {
+      matchesByInst[j].push(row);
+      used.add(i);
+    }
+  });
+
+  /** Slot orphan failed debits to the next open Paystack installment. */
   payments.forEach((row, i) => {
     if (used.has(i)) return;
     if (row.status !== "failed" && row.status !== "rejected") return;
-    const pt = String(row.paymentType || "");
-    if (!["paystack", "recurring", "initial"].includes(pt)) return;
+    if (!isPaystackBillingRow(row)) return;
     const j = findPaystackInstIndexForOrphanFailure(base, matchesByInst);
     if (j != null) {
       matchesByInst[j].push(row);
