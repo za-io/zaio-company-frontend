@@ -1,6 +1,6 @@
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, updateStandaloneScheduleSlot, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import {
@@ -793,6 +793,40 @@ const StudentProfile = () => {
     planType === "custom"
       ? updateCustomInstallment(userId, planId, installmentNumber, payload)
       : updateInstallment(userId, planId, installmentNumber, payload);
+
+  const handleStandaloneDueDateBlur = async (plan, row, newValueRaw) => {
+    const slot = parsePaymentSlotFromRow(row);
+    if (slot == null || !plan?.planCode) return;
+    const prev = row.dueDate ? new Date(row.dueDate).toISOString().slice(0, 10) : "";
+    const newValue = (newValueRaw || "").trim();
+    if (!newValue || newValue === prev) return;
+    const key = `standalone-${plan.planCode}-${slot}`;
+    setInlineCustomDueSaving(key);
+    try {
+      const res = await updateStandaloneScheduleSlot(userId, {
+        planCode: plan.planCode,
+        paymentSlot: slot,
+        dueDate: newValue.replace(/\//g, "-"),
+      });
+      if (res.success) {
+        const billingRes = await getStudentBilling(userId);
+        if (billingRes?.success) {
+          setBilling({
+            plans: billingRes.plans || [],
+            outstandingLinks: billingRes.outstandingLinks || [],
+          });
+          const updated = (billingRes.plans || []).find((p) => p.planCode === plan.planCode);
+          if (updated) setPaymentsModalPlan(updated);
+        }
+      } else {
+        alert(res.message || "Could not update due date");
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message ?? err?.message ?? "Could not update due date");
+    } finally {
+      setInlineCustomDueSaving(null);
+    }
+  };
 
   const handleInlineDueDateBlur = async (plan, inst, planType, newValueRaw) => {
     const prev = inst.dueDate ? new Date(inst.dueDate).toISOString().slice(0, 10) : "";
@@ -4416,6 +4450,10 @@ const StudentProfile = () => {
                           !paymentsModalPlan.partner;
                         const showMarkPaystackEft =
                           isPending && isStandalonePaystackPlan && !p.customPlanId && !p.installmentPlanId;
+                        const standaloneSlot = parsePaymentSlotFromRow(p);
+                        const showStandaloneDueDateEdit =
+                          isPending && isStandalonePaystackPlan && standaloneSlot != null && !p.customPlanId && !p.installmentPlanId;
+                        const standaloneDueKey = `standalone-${paymentsModalPlan.planCode}-${standaloneSlot}`;
                         const showDeletePending = isPending && p.customPlanId && p.installmentNumber;
                         const actionKey = p.billingRecordId || p.outstandingPaymentId || (p.customPlanId && p.installmentNumber ? `pending-${p.customPlanId}-${p.installmentNumber}` : null) || (p.installmentPlanId && p.installmentNumber ? `pending-${p.installmentPlanId}-${p.installmentNumber}` : null) || p.reference || p.paymentUrl || i;
                         const isLoading = updatePaymentStatusLoading === actionKey;
@@ -4423,7 +4461,26 @@ const StudentProfile = () => {
                           <Fragment key={tryKey}>
                           <tr className={isFailed ? "bg-red-50" : slotRecovered ? "bg-emerald-50" : isOverdue ? "bg-orange-50" : p.status === "pending" ? "bg-amber-50" : ""}>
                             <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                              {p.dueDate ? formatDate(p.dueDate) : "—"}
+                              {showStandaloneDueDateEdit ? (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <input
+                                    type="date"
+                                    disabled={inlineCustomDueSaving === standaloneDueKey}
+                                    className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-900 max-w-[11rem]"
+                                    key={`${standaloneDueKey}-${p.dueDate || "none"}`}
+                                    defaultValue={p.dueDate ? new Date(p.dueDate).toISOString().slice(0, 10) : ""}
+                                    onBlur={(e) => handleStandaloneDueDateBlur(paymentsModalPlan, p, e.target.value)}
+                                    title="Change this instalment’s due date. This does not change the Paystack subscription."
+                                  />
+                                  {inlineCustomDueSaving === standaloneDueKey && (
+                                    <span className="text-xs text-gray-500">Saving…</span>
+                                  )}
+                                </div>
+                              ) : p.dueDate ? (
+                                formatDate(p.dueDate)
+                              ) : (
+                                "—"
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">
                               {p.paidAt ? formatDate(p.paidAt) : "—"}

@@ -111,6 +111,19 @@ export const updateSubscriptionCode = (userId, { planCode, subscriptionCode }) =
       return { success: false, message: err?.response?.data?.message || "Failed to update subscription code" };
     });
 
+export const updateStandaloneScheduleSlot = (userId, { planCode, paymentSlot, dueDate }) =>
+  axios
+    .patch(API_URL + `/student-profile/${userId}/standalone-schedule-slot`, {
+      plan_code: (planCode || "").trim(),
+      payment_slot: paymentSlot,
+      due_date: dueDate,
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to update due date" };
+    });
+
 /** Remove standalone Paystack plan (e.g. 12-month PLN_) from student profile — not custom / 2-installment / Manati */
 export const removeStandalonePaystackPlan = (userId, planCode) =>
   axios
