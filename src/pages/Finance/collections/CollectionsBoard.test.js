@@ -20,6 +20,8 @@ import {
   getFinancePendingEftSubmissions,
   getFinanceCollectionsGmailStatus,
   getFinanceCollectionReminders,
+  getFinanceCollectionCollected,
+  postFinanceCollectionCollectedApprove,
   getFinanceCollectionsGmailAuthUrl,
   postFinanceCollectionsGmailDisconnect,
 } from "../../../api/company";
@@ -27,6 +29,8 @@ import {
 jest.mock("../../../api/company", () => ({
   getFinanceCollections: jest.fn(),
   getFinanceCollectionReminders: jest.fn(),
+  getFinanceCollectionCollected: jest.fn(),
+  postFinanceCollectionCollectedApprove: jest.fn(),
   postFinanceCollectionEvent: jest.fn(),
   getFinanceSummaryWithPolling: jest.fn(),
   getFinanceSummary: jest.fn(),
@@ -329,11 +333,18 @@ beforeEach(() => {
   postFinanceCollectionEvent.mockReset();
   getFinanceCollectionsGmailStatus.mockReset();
   getFinanceCollectionReminders.mockReset();
+  getFinanceCollectionCollected.mockReset();
+  postFinanceCollectionCollectedApprove.mockReset();
   getFinanceCollectionsGmailAuthUrl.mockReset();
   postFinanceCollectionsGmailDisconnect.mockReset();
   getFinanceCollections.mockResolvedValue(makeSuccessPayload());
   postFinanceCollectionEvent.mockResolvedValue({ success: true, event: {} });
   getFinanceCollectionReminders.mockResolvedValue({ success: true, reminders: [] });
+  getFinanceCollectionCollected.mockResolvedValue({ success: true, cases: [] });
+  postFinanceCollectionCollectedApprove.mockResolvedValue({
+    success: true,
+    missCycle: { status: "cleared" },
+  });
   getFinanceCollectionsGmailStatus.mockResolvedValue({
     success: true,
     connected: false,
@@ -362,6 +373,44 @@ describe("CollectionsBoard", () => {
     });
     expect(await screen.findByRole("link", { name: "Álice Nkosi" })).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("lists a paid collection on Collected and lets finance approve close", async () => {
+    const collectedCase = {
+      userId: "u-dean",
+      planCode: "CUSTOM-dean",
+      planName: "Full Stack Bootcamp",
+      status: "collected",
+      collectedAt: "2026-09-08T10:00:00.000Z",
+      triggerInstallmentNumbers: [7, 8],
+      student: { username: "Dean Zvauya", email: "deanzvauya38@gmail.com" },
+    };
+    getFinanceCollectionCollected.mockResolvedValue({
+      success: true,
+      cases: [collectedCase],
+    });
+    postFinanceCollectionCollectedApprove.mockImplementation(async () => {
+      getFinanceCollectionCollected.mockResolvedValue({ success: true, cases: [] });
+      return { success: true, missCycle: { status: "cleared" } };
+    });
+
+    await renderLoaded();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Collected cases" }));
+    });
+    expect(await screen.findByText("Dean Zvauya")).toBeInTheDocument();
+    expect(screen.getByText("CUSTOM-dean")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Approve close/i }));
+    });
+    await waitFor(() => {
+      expect(postFinanceCollectionCollectedApprove).toHaveBeenCalledWith("u-dean", "CUSTOM-dean");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Dean Zvauya")).not.toBeInTheDocument();
+    });
   });
 
   it("renders one two-miss row, exact columns, counts including zeros, captions, and no forbidden actions", async () => {

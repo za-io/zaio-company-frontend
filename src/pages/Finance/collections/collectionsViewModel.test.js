@@ -14,6 +14,7 @@ import {
   buildFinanceCollectionsQuery,
   buildFinanceCollectionEventPath,
   buildFinanceCollectionCancelPath,
+  buildFinanceCollectionCollectedApprovePath,
   formatSecondMissWindow,
   isSecondMissWindowExpiredCase,
   canInitiateManualCancel,
@@ -505,6 +506,11 @@ describe("collections API helpers", () => {
         "PLN a+"
       )}/cancel`
     );
+    expect(buildFinanceCollectionCollectedApprovePath("user/1", "PLN a+")).toBe(
+      `/bootcamp/finance-collections/${encodeURIComponent("user/1")}/${encodeURIComponent(
+        "PLN a+"
+      )}/collected/approve`
+    );
   });
 
   it("formats second miss window and cancel eligibility", () => {
@@ -717,6 +723,14 @@ describe("company.js collections API source contract", () => {
       "`${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/events`"
     );
     expect(COMPANY_SRC).toMatch(/export const postFinanceCollectionCancel\s*=\s*\(userId,\s*planCode,\s*payload\s*=\s*\{\}\)/);
+    expect(COMPANY_SRC).toMatch(/export const getFinanceCollectionCollected\s*=\s*\(\)/);
+    expect(COMPANY_SRC).toMatch(
+      /export const postFinanceCollectionCollectedApprove\s*=\s*\(userId,\s*planCode\)/
+    );
+    expect(COMPANY_SRC).toContain("${BASE_URL}/bootcamp/finance-collections/collected");
+    expect(COMPANY_SRC).toContain(
+      "`${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/collected/approve`"
+    );
     expect(COMPANY_SRC).toContain(
       "`${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/cancel`"
     );

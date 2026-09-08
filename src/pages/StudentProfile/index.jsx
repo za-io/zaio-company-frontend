@@ -15,6 +15,7 @@ import {
   encodePaystackEftChoice,
   buildPaystackEftPaymentChoices,
   groupPaystackPaymentRows,
+  paystackRowStatusLabel,
 } from "./paystackEftChoices";
 import CustomInstallmentActions from "./CustomInstallmentActions";
 
@@ -1185,7 +1186,7 @@ const StudentProfile = () => {
     if (!planCode || !userId) return;
     if (
       !window.confirm(
-        `Remove this Paystack plan (${paymentsModalPlan.planName || planCode}) and delete all billing records and outstanding payment links for it? If a subscription is linked, it will be disabled in Paystack. This cannot be undone.`
+        `Remove this Paystack plan (${paymentsModalPlan.planName || planCode}) from Zaio and delete its billing records and outstanding payment links? The Paystack subscription will keep running so you can re-add and fetch. This cannot be undone.`
       )
     ) {
       return;
@@ -1211,7 +1212,7 @@ const StudentProfile = () => {
     if (!planCode || !userId) return;
     if (
       !window.confirm(
-        `Remove this Paystack plan (${plan.planName || planCode}) and delete all billing records and outstanding payment links for it? The linked Paystack subscription will be disabled if present. This cannot be undone.`
+        `Remove this Paystack plan (${plan.planName || planCode}) from Zaio and delete its billing records and outstanding payment links? The Paystack subscription will keep running so you can re-add and fetch. This cannot be undone.`
       )
     ) {
       return;
@@ -4388,7 +4389,7 @@ const StudentProfile = () => {
                       disabled={paymentsModalRemoving}
                       onClick={handleRemoveStandalonePlanFromPaymentsModal}
                       className="px-3 py-1.5 text-sm font-medium text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:opacity-50"
-                      title="Remove this Paystack plan from the student (disables subscription if linked)"
+                      title="Remove this Paystack plan from Zaio. Does not cancel the Paystack subscription."
                     >
                       {paymentsModalRemoving ? "Removing…" : "Remove plan"}
                     </button>
@@ -4430,8 +4431,9 @@ const StudentProfile = () => {
                         );
                         const slotRecovered = isAccepted && hasFailedTries;
                         const isFailed = p.status === "failed" || p.status === "rejected";
-                        const isOverdue = p.status === "overdue";
-                        const isPending = p.status === "pending" || isOverdue;
+                        const statusLabel = p.expired ? "Expired" : slotRecovered ? "recovered" : paystackRowStatusLabel(p);
+                        const isOverdue = statusLabel === "overdue";
+                        const isPending = p.status === "pending" || p.status === "overdue";
                         /** Compare calendar days: a debit taken hours after its due timestamp is still on time. */
                         const settledLate =
                           isAccepted && p.dueDate && p.paidAt && utcDay(p.paidAt) > utcDay(p.dueDate);
@@ -4459,7 +4461,7 @@ const StudentProfile = () => {
                         const isLoading = updatePaymentStatusLoading === actionKey;
                         return (
                           <Fragment key={tryKey}>
-                          <tr className={isFailed ? "bg-red-50" : slotRecovered ? "bg-emerald-50" : isOverdue ? "bg-orange-50" : p.status === "pending" ? "bg-amber-50" : ""}>
+                          <tr className={isOverdue ? "bg-orange-50" : isFailed ? "bg-red-50" : slotRecovered ? "bg-emerald-50" : p.status === "pending" ? "bg-amber-50" : ""}>
                             <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                               {showStandaloneDueDateEdit ? (
                                 <div className="flex flex-wrap items-center gap-1">
@@ -4490,8 +4492,8 @@ const StudentProfile = () => {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-800">{formatAmount(p.amount, p.currency)}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-1 text-xs rounded-full ${slotRecovered ? "bg-emerald-100 text-emerald-800" : p.status === "accepted" ? "bg-green-100 text-green-800" : isFailed ? "bg-red-100 text-red-800" : isOverdue ? "bg-orange-100 text-orange-800" : "bg-gray-100 text-gray-800"}`}>
-                                {p.expired ? "Expired" : slotRecovered ? "recovered" : p.status || "—"}
+                              <span className={`px-2 py-1 text-xs rounded-full ${slotRecovered ? "bg-emerald-100 text-emerald-800" : p.status === "accepted" ? "bg-green-100 text-green-800" : isOverdue ? "bg-orange-100 text-orange-800" : isFailed ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"}`}>
+                                {statusLabel}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600">

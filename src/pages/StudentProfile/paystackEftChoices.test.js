@@ -2,6 +2,7 @@ import {
   buildPaystackEftPaymentChoices,
   groupPaystackPaymentRows,
   isRecoveredPaystackFailure,
+  paystackRowStatusLabel,
 } from "./paystackEftChoices";
 
 const plan = (payments) => ({
@@ -26,6 +27,29 @@ describe("groupPaystackPaymentRows", () => {
     expect(groups[0].primary.status).toBe("accepted");
     expect(groups[0].attempts).toHaveLength(2);
     expect(groups[1].attempts).toHaveLength(0);
+  });
+
+  test("groups custom-plan invoices by instalment number, not the leftover Paystack slot", () => {
+    const groups = groupPaystackPaymentRows([
+      {
+        installmentNumber: 3,
+        installmentLabel: "Instalment 3",
+        installmentSlot: 2,
+        status: "accepted",
+        dueDate: "2026-04-27T09:27:25.000Z",
+      },
+      {
+        installmentNumber: 7,
+        installmentLabel: "Instalment 7",
+        installmentSlot: 3,
+        status: "accepted",
+        dueDate: "2026-08-27T09:27:25.000Z",
+      },
+    ]);
+    expect(groups.map((group) => [group.slot, group.primary.installmentLabel])).toEqual([
+      [3, "Instalment 3"],
+      [7, "Instalment 7"],
+    ]);
   });
 });
 
@@ -67,6 +91,28 @@ describe("recovered Paystack failures", () => {
       ])
     ).find((row) => row.installmentSlot === 7);
     expect(sept.label).toMatch(/overdue/);
+  });
+
+  test("unpaid failed months use the same overdue label as a missed hole", () => {
+    const now = new Date("2026-09-08T12:00:00.000Z");
+    expect(
+      paystackRowStatusLabel(
+        {
+          status: "rejected",
+          dueDate: "2026-06-25T13:35:32.000Z",
+        },
+        now
+      )
+    ).toBe("overdue");
+    expect(
+      paystackRowStatusLabel(
+        {
+          status: "overdue",
+          dueDate: "2026-03-25T13:35:32.000Z",
+        },
+        now
+      )
+    ).toBe("overdue");
   });
 
   test("fallback list skips already-paid instalments", () => {

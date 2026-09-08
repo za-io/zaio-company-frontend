@@ -2047,6 +2047,34 @@ export const postFinanceCollectionReminderComplete = (userId, planCode, reminder
     }));
 };
 
+export const getFinanceCollectionCollected = () => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .get(`${BASE_URL}/bootcamp/finance-collections/collected`, { headers })
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to load collected cases",
+    }));
+};
+
+export const postFinanceCollectionCollectedApprove = (userId, planCode) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  return axios
+    .post(
+      `${BASE_URL}/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(planCode)}/collected/approve`,
+      {},
+      { headers }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || err?.message || "Failed to approve collected case",
+    }));
+};
+
 export const postFinanceCollectionReminderDismiss = (userId, planCode, reminderId) => {
   const token = localStorage.getItem("TOKEN");
   const headers = token ? { "auth-token": token } : {};

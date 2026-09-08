@@ -40,9 +40,11 @@ export function groupPaystackPaymentRows(payments = []) {
   const unslotted = [];
   payments.forEach((row, index) => {
     const slot =
-      row?.installmentSlot != null && Number(row.installmentSlot) >= 1
-        ? Number(row.installmentSlot)
-        : parsePaymentSlotFromRow(row);
+      row?.installmentNumber != null && Number(row.installmentNumber) >= 1
+        ? Number(row.installmentNumber)
+        : row?.installmentSlot != null && Number(row.installmentSlot) >= 1
+          ? Number(row.installmentSlot)
+          : parsePaymentSlotFromRow(row);
     if (slot == null) {
       unslotted.push({ slot: null, primary: row, attempts: [], index });
       return;
@@ -67,6 +69,23 @@ export function groupPaystackPaymentRows(payments = []) {
     });
 
   return [...groups, ...unslotted];
+}
+
+function isPastDueDate(dueDate, now = new Date()) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime()) || Number.isNaN(now.getTime())) return false;
+  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return dueDay <= today;
+}
+
+/** Failed unpaid months use the same overdue label as a missed schedule hole. */
+export function paystackRowStatusLabel(row, now = new Date()) {
+  if (row?.expired) return "Expired";
+  const failed = row?.status === "failed" || row?.status === "rejected";
+  if (row?.status === "overdue" || (failed && isPastDueDate(row?.dueDate, now))) return "overdue";
+  return row?.status || "—";
 }
 
 /** Failed debit whose instalment was later paid (EFT catch-up or a later Paystack success). */

@@ -13,7 +13,7 @@ export function isPaystackBillingRow(row) {
 /** Paystack-typed legs only, in plan order (after any cash/EFT months). */
 export function paystackInstallmentsOnPlan(plan) {
   return [...(plan?.installments || [])]
-    .filter((inst) => inst?.type === "paystack" || String(inst?.paystackPlanCode || "").trim())
+    .filter((inst) => inst?.type === "paystack")
     .sort((a, b) => Number(a.number) - Number(b.number));
 }
 

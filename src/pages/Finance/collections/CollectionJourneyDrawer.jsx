@@ -96,6 +96,7 @@ function systemEventLabel(type) {
   if (type === "second_miss_notification_sent") return "Second miss notification (logged)";
   if (type === "miss_notification_draft_ready") return "Miss email draft ready";
   if (type === "account_blocked") return "Account blocked";
+  if (type === "cycle_collected") return "Payment collected";
   if (type === "cycle_cleared") return "Miss cycle cleared";
   if (type === "manual_cancellation_initiated") return "Manual cancellation initiated";
   return type || "—";

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { getFinanceCollections, getFinanceCollectionsGmailAuthUrl, getFinanceCollectionsGmailStatus, patchFinanceCollectionsGmailAutomations, postFinanceCollectionsGmailDisconnect } from "../../../api/company";
+import { getFinanceCollectionCollected, getFinanceCollections, getFinanceCollectionsGmailAuthUrl, getFinanceCollectionsGmailStatus, patchFinanceCollectionsGmailAutomations, postFinanceCollectionsGmailDisconnect } from "../../../api/company";
 import CollectionJourneyDrawer from "./CollectionJourneyDrawer";
 import CollectionStageCycleFilter from "./CollectionStageCycleFilter";
+import CollectionsCollectedPanel from "./CollectionsCollectedPanel";
 import CollectionsRemindersPanel from "./CollectionsRemindersPanel";
 import {
   COLLECTION_STAGE_OPTIONS,
@@ -204,6 +205,8 @@ export default function CollectionsBoard({ includeExcluded = false }) {
   const [gmailBanner, setGmailBanner] = useState("");
   const [boardView, setBoardView] = useState("queue");
   const [remindersRefreshKey, setRemindersRefreshKey] = useState(0);
+  const [collectedCount, setCollectedCount] = useState(0);
+  const [collectedRefreshKey, setCollectedRefreshKey] = useState(0);
 
   const generationRef = useRef(0);
   const includeExcludedRef = useRef(includeExcluded);
@@ -258,6 +261,14 @@ export default function CollectionsBoard({ includeExcluded = false }) {
       generationRef.current += 1;
     };
   }, [includeExcluded, load]);
+
+  useEffect(() => {
+    getFinanceCollectionCollected().then((result) => {
+      if (result?.success) {
+        setCollectedCount(Array.isArray(result.cases) ? result.cases.length : 0);
+      }
+    });
+  }, [collectedRefreshKey]);
 
   const loadGmailStatus = useCallback(() => {
     setGmailLoading(true);
@@ -584,6 +595,22 @@ export default function CollectionsBoard({ includeExcluded = false }) {
               Reminders to check{" "}
               <span className="tabular-nums opacity-90">{pendingReminderCount}</span>
             </button>
+            <button
+              type="button"
+              aria-pressed={boardView === "collected"}
+              aria-label="Collected cases"
+              onClick={() => setBoardView("collected")}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium border leading-tight ${
+                boardView === "collected"
+                  ? "bg-emerald-600 text-white border-emerald-500"
+                  : "bg-white/5 text-gray-300 border-white/15 hover:bg-white/10"
+              }`}
+            >
+              Collected{" "}
+              <span className="tabular-nums opacity-90" aria-hidden="true">
+                {collectedCount}
+              </span>
+            </button>
           </div>
 
           {boardView === "reminders" ? (
@@ -592,6 +619,11 @@ export default function CollectionsBoard({ includeExcluded = false }) {
               cases={cases}
               onOpenCase={handleOpenCaseFromReminder}
               onReminderCompleted={handleReminderCompleted}
+            />
+          ) : boardView === "collected" ? (
+            <CollectionsCollectedPanel
+              key={collectedRefreshKey}
+              onCountChange={setCollectedCount}
             />
           ) : (
             <>

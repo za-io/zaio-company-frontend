@@ -472,6 +472,7 @@ function normalizeJourneyNote(event) {
     type === "second_miss_notification_sent" ||
     type === "miss_notification_draft_ready" ||
     type === "account_blocked" ||
+    type === "cycle_collected" ||
     type === "cycle_cleared" ||
     type === "manual_cancellation_initiated";
   return {
@@ -550,6 +551,12 @@ export function buildFinanceCollectionCancelPath(userId, planCode) {
   return `/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(
     planCode
   )}/cancel`;
+}
+
+export function buildFinanceCollectionCollectedApprovePath(userId, planCode) {
+  return `/bootcamp/finance-collections/${encodeURIComponent(userId)}/${encodeURIComponent(
+    planCode
+  )}/collected/approve`;
 }
 
 export function formatSecondMissWindow(missCycle) {
