@@ -624,6 +624,7 @@ export default function CollectionsBoard({ includeExcluded = false }) {
             <CollectionsCollectedPanel
               key={collectedRefreshKey}
               onCountChange={setCollectedCount}
+              onOpenCase={setSelectedCase}
             />
           ) : (
             <>

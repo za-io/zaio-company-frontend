@@ -23,7 +23,7 @@ function triggerLabel(numbers) {
   return numbers.join(", ");
 }
 
-export default function CollectionsCollectedPanel({ onCountChange }) {
+export default function CollectionsCollectedPanel({ onCountChange, onOpenCase }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cases, setCases] = useState([]);
@@ -130,7 +130,14 @@ export default function CollectionsCollectedPanel({ onCountChange }) {
                       <td className="px-2 py-1.5 text-gray-300 tabular-nums">
                         {triggerLabel(row.triggerInstallmentNumbers)}
                       </td>
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 whitespace-nowrap space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => onOpenCase?.(row)}
+                          className="text-blue-400 hover:text-blue-300"
+                        >
+                          Open
+                        </button>
                         <button
                           type="button"
                           disabled={approving}

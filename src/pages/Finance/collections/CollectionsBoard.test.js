@@ -413,6 +413,37 @@ describe("CollectionsBoard", () => {
     });
   });
 
+  it("opens the journey drawer from a collected case", async () => {
+    getFinanceCollectionCollected.mockResolvedValue({
+      success: true,
+      cases: [
+        {
+          userId: "u-dia",
+          planCode: "CUSTOM-28428d95",
+          planName: "Cyber Security Analyst Aug 2026 Payment Plan",
+          status: "collected",
+          collectedAt: "2026-09-09T15:26:00.000Z",
+          triggerInstallmentNumbers: [2],
+          student: { username: "dia mouhameth", email: "dia421509@hotmail.com" },
+          journey: [{ id: "ce-1", kind: "system", type: "cycle_collected", summary: "First miss collected", occurredAt: "2026-09-09T15:26:00.000Z" }],
+        },
+      ],
+    });
+
+    await renderLoaded();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Collected cases" }));
+    });
+    expect(await screen.findByText("dia mouhameth")).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByText("dia mouhameth").closest("tr")).getByRole("button", { name: /^open$/i }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAccessibleName(/collection journey/i);
+    expect(within(dialog).getByText("dia mouhameth")).toBeInTheDocument();
+    expect(within(dialog).getByText("Cyber Security Analyst Aug 2026 Payment Plan")).toBeInTheDocument();
+  });
+
   it("renders one two-miss row, exact columns, counts including zeros, captions, and no forbidden actions", async () => {
     await renderLoaded();
 
