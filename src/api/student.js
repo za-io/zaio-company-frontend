@@ -81,6 +81,40 @@ export const getStudentBilling = (userId) =>
       return { success: false, plans: [], outstandingLinks: [] };
     });
 
+export const overrideStudentGraduateEligibility = (userId, payload) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/graduate-override`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return {
+        success: false,
+        message: err?.response?.data?.message || err?.message || "Override failed",
+      };
+    });
+
+/** Read-only graduate check. Manati scrape can take a while. Does not change status. */
+export const checkStudentGraduateEligibility = (userId, { bootcampId, studentName, checkedBy } = {}) =>
+  axios
+    .post(
+      API_URL + `/student-profile/${userId}/graduate-check`,
+      {
+        ...(bootcampId ? { bootcampId } : {}),
+        ...(studentName ? { studentName } : {}),
+        ...(checkedBy ? { checkedBy } : {}),
+      },
+      { timeout: 180000 }
+    )
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return {
+        success: false,
+        canGraduate: false,
+        message: err?.response?.data?.message || err?.message || "Graduate check failed",
+      };
+    });
+
 // Generate one-time Paystack payment link for failed or expired payment
 export const generatePaymentLink = (userId, { planCode, amount, currency, subscriptionCode, paymentSlot, failedChargeReference }) =>
   axios
@@ -133,6 +167,19 @@ export const getStudentMissCyclesForPlanRemoval = (userId, planCode) =>
     .catch((err) => {
       console.log(err);
       return { success: false, message: err?.response?.data?.message || "Failed to load collection cycles", thisPlan: [], otherCycles: [] };
+    });
+
+export const archiveStudentBillingPlan = (userId, { planCode, archiveNote, archivedBy } = {}) =>
+  axios
+    .post(API_URL + `/student-profile/${userId}/archive-plan`, {
+      plan_code: (planCode || "").trim(),
+      archive_note: archiveNote || "",
+      ...(archivedBy ? { archivedBy } : {}),
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || err?.message || "Failed to archive plan" };
     });
 
 /** Remove standalone Paystack plan (e.g. 12-month PLN_) from student profile — not custom / 2-installment / Manati */

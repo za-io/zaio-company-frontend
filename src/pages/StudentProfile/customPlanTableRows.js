@@ -125,11 +125,17 @@ export function resolveRowToInstNumber(plan, row) {
 }
 
 export function rowMatchesInstallment(inst, plan, row) {
+  const recId = row?.billingRecordId != null ? String(row.billingRecordId) : "";
+  const instRecId = inst?.billingRecordId != null ? String(inst.billingRecordId) : "";
+  if (recId && instRecId && recId === instRecId) return true;
+
   const n = resolveRowToInstNumber(plan, row);
   if (n == null || n !== inst.number) return false;
   const pt = row.paymentType;
   if (inst.type === "cash") {
-    return pt === "cash" || pt === "eft";
+    if (pt === "cash" || pt === "eft") return true;
+    // Archived Paystack rows linked onto a cash instalment keep paymentType recurring/initial.
+    return row.installmentNumber != null && Number(row.installmentNumber) === Number(inst.number);
   }
   if (inst.type === "paystack") {
     // Admin "Record EFT payment" on a Paystack-typed line: same installment, method becomes EFT.
@@ -324,9 +330,15 @@ export function buildCustomPlanTableRows(plan, billingPlan) {
 
   const canonical = base.map((inst, j) => mergeCustomPlanInstallmentWithPayments(plan, inst, matchesByInst[j]));
 
+  const linkedRecordIds = new Set(
+    base
+      .map((inst) => (inst.billingRecordId != null ? String(inst.billingRecordId) : ""))
+      .filter(Boolean)
+  );
   const orphans = [];
   payments.forEach((row, i) => {
     if (used.has(i)) return;
+    if (row.billingRecordId && linkedRecordIds.has(String(row.billingRecordId))) return;
     orphans.push({
       ...row,
       _inst: resolveCustomPlanRowInst(plan, row),

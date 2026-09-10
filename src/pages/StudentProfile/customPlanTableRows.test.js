@@ -253,6 +253,36 @@ describe("buildCustomPlanTableRows — cash then Paystack subscription", () => {
   });
 });
 
+describe("buildCustomPlanTableRows — linked archived Paystack on cash instalments", () => {
+  it("does not append a duplicate Paystack Instalment 3", () => {
+    const plan = {
+      _id: "plan-fs",
+      installments: [
+        { number: 1, type: "cash", status: "paid", amount: 150000, billingRecordId: "br1" },
+        { number: 2, type: "cash", status: "paid", amount: 320000, billingRecordId: "br2" },
+        { number: 3, type: "cash", status: "paid", amount: 320000, billingRecordId: "br3" },
+      ],
+    };
+    const billingPlan = {
+      planCode: "CUSTOM-new",
+      payments: [
+        {
+          billingRecordId: "br3",
+          paymentType: "recurring",
+          status: "accepted",
+          amount: 320000,
+          installmentNumber: 3,
+          installmentLabel: "Instalment 3",
+        },
+      ],
+    };
+    const rows = buildCustomPlanTableRows(plan, billingPlan);
+    expect(rows.filter((r) => r.installmentNumber === 3 || r.installmentLabel === "Instalment 3")).toHaveLength(1);
+    expect(rows.filter((r) => r._orphan)).toHaveLength(0);
+    expect(customPlanRowTypeKind(rows[2], rows[2]._inst)).toBe("cash");
+  });
+});
+
 describe("isCustomInstallmentOverdue", () => {
   const now = new Date("2026-09-07T12:00:00.000Z");
 

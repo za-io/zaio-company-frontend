@@ -1,6 +1,6 @@
-import React, { Fragment, useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, updateStandaloneScheduleSlot, removeStandalonePaystackPlan, getStudentMissCyclesForPlanRemoval, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, updateStandaloneScheduleSlot, removeStandalonePaystackPlan, archiveStudentBillingPlan, getStudentMissCyclesForPlanRemoval, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
 import RemovePlanCyclesModal, { suggestedMissCycleIds } from "./RemovePlanCyclesModal";
 import { postStudentLoginAsToken, postFinanceRecordPaystackEft, getEditTilesToken } from "../../api/company";
 import Loader from "../../components/loader/loader";
@@ -35,6 +35,115 @@ const formatAmount = (amount, currency = "ZAR") => {
   const value = Number(amount) / 100;
   return new Intl.NumberFormat("en-ZA", { style: "currency", currency: currency || "ZAR" }).format(value);
 };
+
+const toDateInputValue = (dateStr) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+};
+
+const isAcceptedBillingPayment = (payment) => {
+  const status = String(payment?.status || "").toLowerCase();
+  return status === "accepted" || status === "paid";
+};
+
+const collectArchivedAcceptedPayments = (plans = [], customPlans = []) => {
+  const seen = new Set();
+  const rows = [];
+  const pushRow = ({ billingRecordId, planName, planCode, amountCents, paidAt, dueDate, label }) => {
+    const id = billingRecordId != null ? String(billingRecordId) : "";
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    rows.push({
+      billingRecordId: id,
+      planName: planName || planCode || "Archived plan",
+      planCode: planCode || "",
+      amountCents: Number(amountCents) || 0,
+      paidAt: paidAt || null,
+      dueDate: dueDate || paidAt || null,
+      label: label || "Accepted payment",
+    });
+  };
+
+  for (const plan of plans || []) {
+    if (!plan?.archived) continue;
+    for (const payment of plan.payments || []) {
+      if (!isAcceptedBillingPayment(payment) || !payment.billingRecordId) continue;
+      pushRow({
+        billingRecordId: payment.billingRecordId,
+        planName: plan.planName,
+        planCode: plan.planCode,
+        amountCents: payment.amount,
+        paidAt: payment.paidAt,
+        dueDate: payment.dueDate,
+        label: payment.installmentLabel || payment.reference || "Accepted payment",
+      });
+    }
+  }
+
+  for (const plan of customPlans || []) {
+    if (!plan?.archivedAt) continue;
+    for (const inst of plan.installments || []) {
+      if (!isAcceptedBillingPayment(inst) || !inst.billingRecordId) continue;
+      pushRow({
+        billingRecordId: inst.billingRecordId,
+        planName: plan.planName,
+        planCode: plan.planCode,
+        amountCents: inst.amount,
+        paidAt: inst.paidAt,
+        dueDate: inst.dueDate,
+        label: inst.number != null ? `Instalment ${inst.number}` : "Accepted payment",
+      });
+    }
+  }
+
+  return rows;
+};
+
+const EMPTY_CUSTOM_INSTALLMENT = {
+  amount: "",
+  due_date: "",
+  type: "cash",
+  paystack_plan_code: "",
+  paystack_expected_first_date: "",
+  paystack_payment_url: "",
+  paystackLookup: null,
+};
+
+let customInstallmentKeySeq = 0;
+const createEmptyCustomInstallment = () => ({
+  ...EMPTY_CUSTOM_INSTALLMENT,
+  _key: `custom-row-${++customInstallmentKeySeq}`,
+});
+
+const createDefaultCustomPlanForm = () => ({
+  planName: "",
+  manatiAgreementCode: "",
+  totalDue: "",
+  installments: [createEmptyCustomInstallment()],
+});
+
+const installmentRowAmountRands = (row) => {
+  if ((row?.type || "cash").toLowerCase() === "paystack") {
+    const lookup = row?.paystackLookup;
+    if (!lookup) return 0;
+    const perPaymentCents = Number(lookup.amount);
+    if (!Number.isFinite(perPaymentCents) || perPaymentCents <= 0) return 0;
+    const count = Math.min(Math.max(1, Number(lookup.invoice_limit) || 1), 24);
+    return (perPaymentCents * count) / 100;
+  }
+  const amount = Number(row?.amount);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+};
+
+const duplicateCustomInstallment = (row) => ({
+  ...row,
+  _key: `custom-row-${++customInstallmentKeySeq}`,
+  due_date: row?.due_date ? addMonthsToDateInput(row.due_date, 1) || row.due_date : "",
+  paystack_expected_first_date: row?.paystack_expected_first_date
+    ? addMonthsToDateInput(row.paystack_expected_first_date, 1) || row.paystack_expected_first_date
+    : "",
+});
 
 const parseAmountString = (val) => {
   if (val == null || val === "" || val === "—") return 0;
@@ -168,7 +277,10 @@ const StudentProfile = () => {
   const [customPlans, setCustomPlans] = useState([]);
   const [customPlansLoading, setCustomPlansLoading] = useState(false);
   const [addCustomModal, setAddCustomModal] = useState(false);
-  const [addCustomForm, setAddCustomForm] = useState({ planName: "", manatiAgreementCode: "", installments: [{ amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }] });
+  const [addCustomModalOffset, setAddCustomModalOffset] = useState({ x: 0, y: 0 });
+  const addCustomModalDragRef = useRef(null);
+  const [copiedArchivedPaymentIds, setCopiedArchivedPaymentIds] = useState([]);
+  const [addCustomForm, setAddCustomForm] = useState(createDefaultCustomPlanForm);
   const [paystackLookupLoading, setPaystackLookupLoading] = useState(null);
   const [addCustomSubmitting, setAddCustomSubmitting] = useState(false);
   const [addCustomError, setAddCustomError] = useState(null);
@@ -197,6 +309,7 @@ const StudentProfile = () => {
   const [deleteRecordSubmitting, setDeleteRecordSubmitting] = useState(false);
   const [deleteRecordError, setDeleteRecordError] = useState(null);
   const [removeWholePlanLoading, setRemoveWholePlanLoading] = useState(null);
+  const [archivePlanLoading, setArchivePlanLoading] = useState(null);
   const [removePlanModal, setRemovePlanModal] = useState(null);
   const [editPlanModal, setEditPlanModal] = useState(null);
   const [editPlanForm, setEditPlanForm] = useState({ planName: "", manatiAgreementCode: "", newInstallments: [] });
@@ -418,6 +531,82 @@ const StudentProfile = () => {
       setCancelSubLoading(false);
     }
   };
+
+  const archivedAcceptedPayments = useMemo(
+    () => collectArchivedAcceptedPayments(billing.plans, customPlans),
+    [billing.plans, customPlans]
+  );
+
+  const activeCustomPlans = useMemo(
+    () => (customPlans || []).filter((plan) => !plan.archivedAt),
+    [customPlans]
+  );
+  const archivedCustomPlans = useMemo(
+    () => (customPlans || []).filter((plan) => plan.archivedAt),
+    [customPlans]
+  );
+  const activeInstallmentPlans = useMemo(
+    () => (installmentPlans || []).filter((plan) => !plan.archivedAt),
+    [installmentPlans]
+  );
+  const archivedInstallmentPlans = useMemo(
+    () => (installmentPlans || []).filter((plan) => plan.archivedAt),
+    [installmentPlans]
+  );
+  const activeBillingPlans = useMemo(
+    () => (billing.plans || []).filter((plan) => !plan.archived),
+    [billing.plans]
+  );
+  const archivedBillingPlans = useMemo(
+    () => (billing.plans || []).filter((plan) => plan.archived),
+    [billing.plans]
+  );
+  const archivedStandaloneBillingPlans = useMemo(
+    () => archivedBillingPlans.filter((plan) => {
+      const code = plan.planCode || "";
+      return !code.startsWith("CUSTOM-") && !code.startsWith("2INST-");
+    }),
+    [archivedBillingPlans]
+  );
+  const hasArchivedHistory =
+    archivedCustomPlans.length > 0 ||
+    archivedInstallmentPlans.length > 0 ||
+    archivedStandaloneBillingPlans.length > 0;
+
+  const addCustomPlanTotals = useMemo(() => {
+    const selectedArchived = archivedAcceptedPayments.filter((payment) =>
+      copiedArchivedPaymentIds.includes(payment.billingRecordId)
+    );
+    const collectedCents = selectedArchived.reduce((sum, payment) => sum + (Number(payment.amountCents) || 0), 0);
+    const scheduledRands = (addCustomForm.installments || []).reduce(
+      (sum, row) => sum + installmentRowAmountRands(row),
+      0
+    );
+    const scheduledCents = Math.round(scheduledRands * 100);
+    const totalDueRands = Number(addCustomForm.totalDue);
+    const hasTotalDue = Number.isFinite(totalDueRands) && totalDueRands > 0;
+    const totalDueCents = hasTotalDue ? Math.round(totalDueRands * 100) : collectedCents + scheduledCents;
+    let leftoverCents = totalDueCents;
+    const leftoverAfterCollected = {};
+    for (const payment of selectedArchived) {
+      leftoverCents -= Number(payment.amountCents) || 0;
+      leftoverAfterCollected[payment.billingRecordId] = leftoverCents;
+    }
+    const leftoverAfterRows = (addCustomForm.installments || []).map((row) => {
+      leftoverCents -= Math.round(installmentRowAmountRands(row) * 100);
+      return leftoverCents;
+    });
+    return {
+      selectedArchived,
+      collectedCents,
+      scheduledCents,
+      totalDueCents,
+      remainingCents: leftoverCents,
+      leftoverAfterCollected,
+      leftoverAfterRows,
+      hasTotalDue,
+    };
+  }, [archivedAcceptedPayments, copiedArchivedPaymentIds, addCustomForm.installments, addCustomForm.totalDue]);
 
   const upcomingWriteOffRows = useMemo(() => {
     const rows = [];
@@ -1217,6 +1406,31 @@ const StudentProfile = () => {
     });
   };
 
+  const handleArchivePlan = async (plan) => {
+    const planCode = (plan?.planCode || "").trim();
+    if (!planCode || !userId || plan.archived) return;
+    const note = window.prompt(
+      `Archive ${plan.planName || planCode}? This stops any Paystack subscription and removes it from LMS access checks. Billing history stays. Optional note:`,
+      ""
+    );
+    if (note === null) return;
+    setArchivePlanLoading(planCode);
+    try {
+      const res = await archiveStudentBillingPlan(userId, { planCode, archiveNote: note });
+      if (!res?.success) {
+        window.alert(res?.message || "Failed to archive plan");
+        return;
+      }
+      if (res.paystackError) window.alert(res.message);
+      const billingRes = await getStudentBilling(userId);
+      if (billingRes?.success && billingRes.plans) {
+        setBilling({ plans: billingRes.plans, outstandingLinks: billingRes.outstandingLinks || [] });
+      }
+    } finally {
+      setArchivePlanLoading(null);
+    }
+  };
+
   const handleRemoveStandalonePlanFromBillingRow = (plan) => {
     const planCode = (plan?.planCode || "").trim();
     if (!planCode || !userId) return;
@@ -1403,25 +1617,70 @@ const StudentProfile = () => {
     }
   };
 
+  const handleAddCustomModalDragStart = (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origX = addCustomModalOffset.x;
+    const origY = addCustomModalOffset.y;
+    addCustomModalDragRef.current = { startX, startY, origX, origY };
+    const onMove = (ev) => {
+      setAddCustomModalOffset({
+        x: origX + ev.clientX - startX,
+        y: origY + ev.clientY - startY,
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      addCustomModalDragRef.current = null;
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
   const handleAddCustomPlanSubmit = async (e) => {
     e.preventDefault();
     setAddCustomError(null);
     const rows = addCustomForm.installments;
-    const hasValidRow = rows.some((row) => {
-      const type = (row.type || "cash").toLowerCase();
-      if (type === "paystack") {
-        return (row.paystack_plan_code || "").trim();
-      }
-      return Number.isFinite(Number(row.amount)) && Number(row.amount) > 0;
-    });
-    if (!hasValidRow) {
-      setAddCustomError("Add at least one installment: Cash with amount (Rands) or Paystack with plan code (use Look up).");
+    const copiedRows = archivedAcceptedPayments
+      .filter((payment) => copiedArchivedPaymentIds.includes(payment.billingRecordId))
+      .map((payment) => ({
+        amount: Number((payment.amountCents / 100).toFixed(2)),
+        due_date: toDateInputValue(payment.dueDate) || undefined,
+        type: "cash",
+        status: "paid",
+        paid_at: payment.paidAt || undefined,
+        billing_record_id: payment.billingRecordId,
+      }));
+    const newInstallments = rows
+      .map((row) => {
+        const type = (row.type || "cash").toLowerCase() === "paystack" ? "paystack" : "cash";
+        const paystackCode = (row.paystack_plan_code || "").trim() || undefined;
+        if (type === "paystack" && paystackCode) {
+          return {
+            type: "paystack",
+            paystack_plan_code: paystackCode,
+            paystack_expected_first_payment_date: (row.paystack_expected_first_date || "").trim() || undefined,
+          };
+        }
+        const amount = Number(row.amount);
+        if (!Number.isFinite(amount) || amount <= 0) return null;
+        return {
+          amount,
+          due_date: (row.due_date || "").trim() || undefined,
+          type: "cash",
+        };
+      })
+      .filter(Boolean);
+    if (copiedRows.length < 1 && newInstallments.length < 1) {
+      setAddCustomError("Add at least one installment: copy an accepted payment from an archived plan, add Cash with amount (Rands), or add Paystack with a plan code.");
       return;
     }
-    const paystackWithoutDate = rows.some((row) => {
-      const type = (row.type || "cash").toLowerCase();
-      return type === "paystack" && (row.paystack_plan_code || "").trim() && !(row.paystack_expected_first_date || "").trim();
-    });
+    const paystackWithoutDate = newInstallments.some((row) => (
+      row.type === "paystack" && !(row.paystack_expected_first_payment_date || "").trim()
+    ));
     if (paystackWithoutDate) {
       setAddCustomError("For each Paystack plan code, set the expected first payment date.");
       return;
@@ -1436,29 +1695,16 @@ const StudentProfile = () => {
       plan_name: (addCustomForm.planName || "").trim() || undefined,
       manati_agreement_code: (addCustomForm.manatiAgreementCode || "").trim() || undefined,
       first_paystack_payment_url: firstUrl || undefined,
-      installments: rows.map((row) => {
-        const type = (row.type || "cash").toLowerCase() === "paystack" ? "paystack" : "cash";
-        const paystackCode = (row.paystack_plan_code || "").trim() || undefined;
-        if (type === "paystack" && paystackCode) {
-          return {
-            type: "paystack",
-            paystack_plan_code: paystackCode,
-            paystack_expected_first_payment_date: (row.paystack_expected_first_date || "").trim() || undefined,
-          };
-        }
-        return {
-          amount: Number(row.amount),
-          due_date: (row.due_date || "").trim() || undefined,
-          type: "cash",
-        };
-      }),
+      installments: [...copiedRows, ...newInstallments],
     };
     setAddCustomSubmitting(true);
     try {
       const res = await createCustomPlan(userId, payload);
       if (res.success) {
         setAddCustomModal(false);
-        setAddCustomForm({ planName: "", manatiAgreementCode: "", installments: [{ amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }] });
+        setAddCustomModalOffset({ x: 0, y: 0 });
+        setCopiedArchivedPaymentIds([]);
+        setAddCustomForm(createDefaultCustomPlanForm());
         const listRes = await getCustomPlans(userId);
         if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
         fetchBilling();
@@ -2362,11 +2608,11 @@ const StudentProfile = () => {
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">Loading billing...</p>
         </div>
-      ) : !billing.plans?.length && outstandingPaymentRows.length === 0 ? (
+      ) : !activeBillingPlans.length && outstandingPaymentRows.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">No billing records</p>
         </div>
-      ) : billing.plans?.length > 0 ? (
+      ) : activeBillingPlans.length > 0 ? (
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -2395,7 +2641,7 @@ const StudentProfile = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {billing.plans.map((plan, idx) => {
+              {activeBillingPlans.map((plan, idx) => {
                 const isManati = plan.partner === "Manati";
                 const is2InstallmentEft = (plan.planCode || "").startsWith("2INST-");
                 const isCustom = (plan.planCode || "").startsWith("CUSTOM-");
@@ -2425,6 +2671,9 @@ const StudentProfile = () => {
                   >
                     <td className="px-6 py-4 text-sm font-medium text-gray-800">
                       {plan.planName || plan.planCode || "—"}
+                      {plan.archived ? (
+                        <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-slate-200 text-slate-700">Archived</span>
+                      ) : null}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 ${billingTypeClass} text-xs rounded-full`}>
@@ -2445,6 +2694,19 @@ const StudentProfile = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
+                        {!plan.archived && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleArchivePlan(plan);
+                            }}
+                            disabled={archivePlanLoading === (plan.planCode || "")}
+                            className="px-3 py-1.5 text-xs font-medium text-slate-800 bg-slate-200 rounded hover:bg-slate-300 disabled:opacity-50"
+                          >
+                            {archivePlanLoading === (plan.planCode || "") ? "Archiving…" : "Archive plan"}
+                          </button>
+                        )}
                         {billingTypeLabel === "Paystack" && (
                           <button
                             type="button"
@@ -2549,13 +2811,13 @@ const StudentProfile = () => {
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">Loading plans…</p>
         </div>
-      ) : !installmentPlans.length ? (
+      ) : !activeInstallmentPlans.length ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">No 2-installment EFT plans. Add one to define two EFT installments for this student.</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {installmentPlans.map((plan) => (
+          {activeInstallmentPlans.map((plan) => (
             <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
               <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                 <span className="font-semibold text-gray-800">{plan.planName || "2-installment EFT"}</span>
@@ -3409,7 +3671,12 @@ const StudentProfile = () => {
         <h2 className="text-2xl font-bold text-white">Custom payment plans</h2>
         <button
           type="button"
-          onClick={() => { setAddCustomModal(true); setAddCustomError(null); }}
+          onClick={() => {
+            setAddCustomModal(true);
+            setAddCustomModalOffset({ x: 0, y: 0 });
+            setAddCustomError(null);
+            setCopiedArchivedPaymentIds([]);
+          }}
           className="px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700"
         >
           Add custom plan
@@ -3419,32 +3686,36 @@ const StudentProfile = () => {
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">Loading custom plans…</p>
         </div>
-      ) : !customPlans.length ? (
+      ) : !activeCustomPlans.length ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p className="text-gray-400">No custom payment plans. Add one to define cash + Paystack or multiple cash installments with dates.</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {customPlans.map((plan) => (
+          {activeCustomPlans.map((plan) => (
             <div key={plan._id} className="bg-white rounded-lg shadow-lg overflow-hidden">
               <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-gray-800">{plan.planName || "Custom plan"}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleEditPlanClick(plan)}
-                    className="px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
-                  >
-                    Edit plan
-                  </button>
-                  <button
-                    type="button"
-                    disabled={removeWholePlanLoading === `custom-${plan._id}`}
-                    onClick={() => handleRemoveCustomPlan(plan)}
-                    className="px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:opacity-50"
-                  >
-                    {removeWholePlanLoading === `custom-${plan._id}` ? "Removing…" : "Remove plan"}
-                  </button>
+                  {!plan.archivedAt && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleEditPlanClick(plan)}
+                        className="px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200"
+                      >
+                        Edit plan
+                      </button>
+                      <button
+                        type="button"
+                        disabled={removeWholePlanLoading === `custom-${plan._id}`}
+                        onClick={() => handleRemoveCustomPlan(plan)}
+                        className="px-2 py-1 text-xs font-medium text-red-800 bg-red-100 rounded hover:bg-red-200 disabled:opacity-50"
+                      >
+                        {removeWholePlanLoading === `custom-${plan._id}` ? "Removing…" : "Remove plan"}
+                      </button>
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}</span>
@@ -3773,12 +4044,190 @@ const StudentProfile = () => {
         </div>
       )}
 
+      {hasArchivedHistory && (
+        <div className="mt-10">
+          <h2 className="text-2xl font-bold text-white mb-1">Archived history</h2>
+          <p className="text-sm text-gray-400 mb-4">Read-only. Archived plans keep payment history and cannot be edited or removed here.</p>
+          <div className="space-y-4">
+            {archivedCustomPlans.map((plan) => {
+              const billingPlan = billing?.plans?.find((p) => p.planCode === plan.planCode);
+              const rows = buildCustomPlanTableRows(plan, billingPlan);
+              return (
+                <div key={`archived-custom-${plan._id}`} className="bg-white rounded-lg shadow-lg overflow-hidden opacity-95">
+                  <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-800">{plan.planName || "Custom plan"}</span>
+                      <span className="px-1.5 py-0.5 text-[10px] rounded bg-slate-200 text-slate-700">Archived</span>
+                    </div>
+                    <span className="text-sm text-gray-600">
+                      Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}
+                      {plan.archivedAt ? ` · ${formatDate(plan.archivedAt)}` : ""}
+                    </span>
+                  </div>
+                  {plan.archiveNote ? (
+                    <p className="px-6 py-2 text-xs text-slate-600 bg-slate-50 border-b border-slate-100">{plan.archiveNote}</p>
+                  ) : null}
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Installment</th>
+                        <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                        <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Due date</th>
+                        <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Type</th>
+                        <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {rows.map((row, idx) => {
+                        const inst = row._inst ?? resolveCustomPlanRowInst(plan, row);
+                        const typeKind = customPlanRowTypeKind(row, inst);
+                        return (
+                          <tr key={`archived-custom-${plan._id}-${idx}`}>
+                            <td className="px-6 py-3 text-sm text-gray-800">
+                              {row.installmentLabel || (inst?.number != null ? `Instalment ${inst.number}` : `Instalment ${idx + 1}`)}
+                            </td>
+                            <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(row.amount, row.currency || plan.currency)}</td>
+                            <td className="px-6 py-3 text-sm text-gray-600">{formatDate(row.dueDate || inst?.dueDate || row.paidAt)}</td>
+                            <td className="px-6 py-3 text-sm text-gray-600">
+                              {typeKind === "paystack" ? "Paystack" : typeKind === "cash" ? "Cash (EFT)" : row.paymentType || "—"}
+                            </td>
+                            <td className="px-6 py-3">
+                              <span className={`px-2 py-1 text-xs rounded-full ${row.status === "accepted" || row.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
+                                {row.status === "accepted" || row.status === "paid" ? "accepted" : row.status || "pending"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+            {archivedInstallmentPlans.map((plan) => (
+              <div key={`archived-2inst-${plan._id}`} className="bg-white rounded-lg shadow-lg overflow-hidden opacity-95">
+                <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-800">{plan.planName || "2-installment EFT"}</span>
+                    <span className="px-1.5 py-0.5 text-[10px] rounded bg-slate-200 text-slate-700">Archived</span>
+                  </div>
+                  <span className="text-sm text-gray-600">
+                    Total: {formatAmount(plan.totalAmount, plan.currency)} · Plan: {plan.planCode}
+                    {plan.archivedAt ? ` · ${formatDate(plan.archivedAt)}` : ""}
+                  </span>
+                </div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Installment</th>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Due date</th>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {(plan.installments || []).map((inst) => (
+                      <tr key={`archived-2inst-${plan._id}-${inst.number}`}>
+                        <td className="px-6 py-3 text-sm text-gray-800">Instalment {inst.number}</td>
+                        <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(inst.amount, plan.currency)}</td>
+                        <td className="px-6 py-3 text-sm text-gray-600">{formatDate(inst.dueDate || inst.paidAt)}</td>
+                        <td className="px-6 py-3">
+                          <span className={`px-2 py-1 text-xs rounded-full ${inst.status === "paid" || inst.status === "accepted" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
+                            {inst.status || "pending"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            {archivedStandaloneBillingPlans.map((plan) => (
+              <div key={`archived-billing-${plan.planCode}`} className="bg-white rounded-lg shadow-lg overflow-hidden opacity-95">
+                <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-800">{plan.planName || plan.planCode || "Plan"}</span>
+                    <span className="px-1.5 py-0.5 text-[10px] rounded bg-slate-200 text-slate-700">Archived</span>
+                    <span className="px-2 py-0.5 text-[10px] rounded bg-blue-100 text-blue-800">
+                      {plan.partner === "Manati" ? "Financing (Manati)" : "Paystack"}
+                    </span>
+                  </div>
+                  <span className="text-sm text-gray-600">
+                    {plan.planCode}
+                    {plan.archivedAt ? ` · ${formatDate(plan.archivedAt)}` : ""}
+                  </span>
+                </div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Amount</th>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Paid</th>
+                      <th className="px-6 py-2 text-left text-xs font-bold text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {(plan.payments || []).filter((payment) => payment.status === "accepted" || payment.status === "paid").length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-3 text-sm text-gray-500">No accepted payments on this archived plan.</td>
+                      </tr>
+                    ) : (
+                      (plan.payments || [])
+                        .filter((payment) => payment.status === "accepted" || payment.status === "paid")
+                        .map((payment, idx) => (
+                          <tr key={payment.billingRecordId || `${plan.planCode}-pay-${idx}`}>
+                            <td className="px-6 py-3 text-sm text-gray-800">{formatAmount(payment.amount, payment.currency || plan.currency)}</td>
+                            <td className="px-6 py-3 text-sm text-gray-600">{formatDate(payment.paidAt)}</td>
+                            <td className="px-6 py-3">
+                              <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">accepted</span>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Add custom plan modal */}
       {addCustomModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !addCustomSubmitting && setAddCustomModal(false)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Add custom payment plan</h3>
-            <p className="text-sm text-gray-600 mb-4">Define multiple installments; each can be Cash (EFT) or Paystack. Optionally add a Manati agreement code for cash + Manati plans (statement is shown via scraping).</p>
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto p-6 pointer-events-auto"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: `translate(calc(-50% + ${addCustomModalOffset.x}px), calc(-50% + ${addCustomModalOffset.y}px))`,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-start justify-between gap-3 mb-2 cursor-grab active:cursor-grabbing select-none"
+              onPointerDown={handleAddCustomModalDragStart}
+            >
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Add custom payment plan</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Drag this header to move the modal and see the page behind it.</p>
+              </div>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  if (addCustomSubmitting) return;
+                  setAddCustomModal(false);
+                  setAddCustomModalOffset({ x: 0, y: 0 });
+                }}
+                disabled={addCustomSubmitting}
+                className="shrink-0 px-2 py-1 text-sm text-gray-500 hover:text-gray-800"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Optionally copy accepted payments from archived plans, then add remaining Cash (EFT) or Paystack instalments. Copied payments stay on the original billing records.</p>
             <form onSubmit={handleAddCustomPlanSubmit} className="flex flex-col gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Plan name (optional)</label>
@@ -3791,6 +4240,19 @@ const StudentProfile = () => {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount they have to pay</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={addCustomForm.totalDue || ""}
+                  onChange={(e) => setAddCustomForm((f) => ({ ...f, totalDue: e.target.value }))}
+                  placeholder="e.g. 7700"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-0.5">Total plan amount. Collected payments and new instalments are subtracted from this as you add them.</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Manati agreement code (optional – for cash + Manati)</label>
                 <input
                   type="text"
@@ -3801,12 +4263,66 @@ const StudentProfile = () => {
                 />
                 <p className="text-xs text-gray-500 mt-0.5">Student will see Manati statement (scraped) for this agreement code under this plan.</p>
               </div>
+              {archivedAcceptedPayments.length > 0 ? (
+                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="block text-sm font-medium text-gray-700">Accepted payments from archived plans</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = archivedAcceptedPayments.map((payment) => payment.billingRecordId);
+                        const allSelected = allIds.every((id) => copiedArchivedPaymentIds.includes(id));
+                        setCopiedArchivedPaymentIds(allSelected ? [] : allIds);
+                      }}
+                      className="text-xs text-indigo-600 hover:underline"
+                    >
+                      {archivedAcceptedPayments.every((payment) => copiedArchivedPaymentIds.includes(payment.billingRecordId))
+                        ? "Clear"
+                        : "Select all"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">Tick the payments to carry onto this plan as paid instalments. They are linked, not copied.</p>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {archivedAcceptedPayments.map((payment) => (
+                      <label key={payment.billingRecordId} className="flex items-start gap-2 text-sm text-gray-800">
+                        <input
+                          type="checkbox"
+                          checked={copiedArchivedPaymentIds.includes(payment.billingRecordId)}
+                          onChange={() => {
+                            setCopiedArchivedPaymentIds((prev) => (
+                              prev.includes(payment.billingRecordId)
+                                ? prev.filter((id) => id !== payment.billingRecordId)
+                                : [...prev, payment.billingRecordId]
+                            ));
+                          }}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="font-medium">{formatAmount(payment.amountCents)}</span>
+                          {payment.label ? ` · ${payment.label}` : ""}
+                          {payment.paidAt ? ` · ${formatDate(payment.paidAt)}` : ""}
+                          <span className="block text-xs text-gray-500">{payment.planName}</span>
+                          {addCustomPlanTotals.hasTotalDue && copiedArchivedPaymentIds.includes(payment.billingRecordId) && addCustomPlanTotals.leftoverAfterCollected[payment.billingRecordId] != null ? (
+                            <span className="block text-xs text-slate-600">
+                              Left after this: {formatAmount(addCustomPlanTotals.leftoverAfterCollected[payment.billingRecordId])}
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">Archive a plan first to copy its accepted payments onto this new plan.</p>
+              )}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-gray-700">Installments</label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {copiedArchivedPaymentIds.length > 0 ? "Remaining installments" : "Installments"}
+                  </label>
                   <button
                     type="button"
-                            onClick={() => setAddCustomForm((f) => ({ ...f, installments: [...f.installments, { amount: "", due_date: "", type: "cash", paystack_plan_code: "", paystack_expected_first_date: "", paystack_payment_url: "", paystackLookup: null }] }))}
+                            onClick={() => setAddCustomForm((f) => ({ ...f, installments: [...f.installments, createEmptyCustomInstallment()] }))}
                     className="text-xs text-indigo-600 hover:underline"
                   >
                     + Add row
@@ -3816,9 +4332,9 @@ const StudentProfile = () => {
                   {addCustomForm.installments.map((row, idx) => {
                     const isPaystack = (row.type || "cash").toLowerCase() === "paystack";
                     return (
-                      <div key={idx} className="border border-gray-200 rounded p-2 bg-gray-50 space-y-1">
+                      <div key={row._key || idx} className="border border-gray-200 rounded p-2 bg-gray-50 space-y-1">
                         <div className="flex gap-2 items-center flex-wrap">
-                          <span className="text-xs font-medium text-gray-500 w-8">#{idx + 1}</span>
+                          <span className="text-xs font-medium text-gray-500 w-8">#{copiedArchivedPaymentIds.length + idx + 1}</span>
                           <select
                             value={row.type || "cash"}
                             onChange={(e) => setAddCustomForm((f) => ({
@@ -3911,6 +4427,17 @@ const StudentProfile = () => {
                               />
                             </>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setAddCustomForm((f) => {
+                              const next = [...f.installments];
+                              next.splice(idx + 1, 0, duplicateCustomInstallment(row));
+                              return { ...f, installments: next };
+                            })}
+                            className="text-indigo-600 hover:underline text-xs shrink-0"
+                          >
+                            Duplicate
+                          </button>
                           {addCustomForm.installments.length > 1 && (
                             <button
                               type="button"
@@ -3921,10 +4448,42 @@ const StudentProfile = () => {
                             </button>
                           )}
                         </div>
+                        {addCustomPlanTotals.hasTotalDue && addCustomPlanTotals.leftoverAfterRows[idx] != null && installmentRowAmountRands(row) > 0 ? (
+                          <p className="text-xs text-slate-600 pl-10">
+                            Left after this: {formatAmount(addCustomPlanTotals.leftoverAfterRows[idx])}
+                          </p>
+                        ) : null}
                       </div>
                     );
                   })}
                 </div>
+              </div>
+              <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 text-sm">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <span className="text-gray-600">Amount to pay</span>
+                  <span className="font-semibold text-gray-900 text-right">
+                    {addCustomPlanTotals.hasTotalDue ? formatAmount(addCustomPlanTotals.totalDueCents) : "Enter amount above"}
+                  </span>
+                  <span className="text-gray-600">Collected</span>
+                  <span className="font-semibold text-green-800 text-right">{formatAmount(addCustomPlanTotals.collectedCents)}</span>
+                  <span className="text-gray-600">Added instalments</span>
+                  <span className="font-semibold text-gray-900 text-right">{formatAmount(addCustomPlanTotals.scheduledCents)}</span>
+                  <span className="text-gray-600">Left</span>
+                  <span className={`font-semibold text-right ${addCustomPlanTotals.remainingCents === 0 ? "text-green-800" : addCustomPlanTotals.remainingCents < 0 ? "text-red-700" : "text-amber-800"}`}>
+                    {formatAmount(addCustomPlanTotals.remainingCents)}
+                  </span>
+                </div>
+                {!addCustomPlanTotals.hasTotalDue ? (
+                  <p className="text-xs text-gray-500 mt-2">Enter the amount they have to pay to see collected and remaining after each item.</p>
+                ) : addCustomPlanTotals.remainingCents !== 0 ? (
+                  <p className="text-xs text-amber-800 mt-2">
+                    {addCustomPlanTotals.remainingCents > 0
+                      ? "Add more instalments or collected payments until this is R0.00."
+                      : "Items add up to more than the amount to pay."}
+                  </p>
+                ) : (
+                  <p className="text-xs text-green-800 mt-2">Collected plus instalments match the amount to pay.</p>
+                )}
               </div>
               {addCustomError && <p className="text-sm text-red-600">{addCustomError}</p>}
               <div className="flex gap-3 mt-2">
@@ -3937,7 +4496,11 @@ const StudentProfile = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAddCustomModal(false)}
+                  onClick={() => {
+                    setAddCustomModal(false);
+                    setAddCustomModalOffset({ x: 0, y: 0 });
+                    setCopiedArchivedPaymentIds([]);
+                  }}
                   disabled={addCustomSubmitting}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
                 >

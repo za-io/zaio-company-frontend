@@ -7,9 +7,11 @@ import { SORTING } from "./learningpath.index";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
 import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors, syncStudentToAthena } from "../../api/company";
+import { checkStudentGraduateEligibility, overrideStudentGraduateEligibility } from "../../api/student";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
+import GraduateReportModal from "./GraduateReportModal";
 import { RxCheckCircled } from "react-icons/rx";
-import { HiOutlineClipboardDocument } from "react-icons/hi2";
+import { HiOutlineClipboardDocument, HiOutlineBanknotes } from "react-icons/hi2";
 
 const getClassroomConnectionStatus = (row) => {
   const linked =
@@ -145,6 +147,8 @@ const AnalyticsTable = ({
   const [enrollmentStatusSaving, setEnrollmentStatusSaving] = useState(null);
   const [athenaSyncSaving, setAthenaSyncSaving] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [graduateCheckingId, setGraduateCheckingId] = useState(null);
+  const [graduateReport, setGraduateReport] = useState(null);
 
   const copyToClipboard = (text, id) => {
     if (!text || text === "—") return;
@@ -172,6 +176,53 @@ const AnalyticsTable = ({
       alert("Failed to enroll in Athena");
     } finally {
       setAthenaSyncSaving(null);
+    }
+  };
+
+  const openSavedGraduateReport = (event, ba) => {
+    event.stopPropagation();
+    const saved = ba?.graduateEligibility;
+    if (!saved?.canGraduate) return;
+    setGraduateReport({
+      ...saved,
+      studentName: saved.studentName || ba?.userid?.username || ba?.userid?.email || "Student",
+      saved: true,
+    });
+  };
+
+  const handleGraduateCheck = async (event, ba) => {
+    event.stopPropagation();
+    const userId = ba?.userid?._id;
+    if (!userId) {
+      window.alert("Cannot check graduate: student has no user id.");
+      return;
+    }
+    const studentName = ba?.userid?.username || ba?.userid?.email || "Student";
+    setGraduateCheckingId(String(userId));
+    try {
+      const res = await checkStudentGraduateEligibility(userId, {
+        bootcampId: data?.bootcampDetails?._id,
+        studentName,
+        checkedBy: user?.company_username || user?.email || user?.username || "",
+      });
+      setGraduateReport({
+        userId,
+        bootcampId: data?.bootcampDetails?._id,
+        studentName,
+        canGraduate: Boolean(res?.canGraduate),
+        message: res?.message || (res?.canGraduate ? "Able to graduate." : "Not able to graduate."),
+        reasons: res?.reasons || [],
+        planReports: res?.planReports || [],
+        latePaymentCount: res?.latePaymentCount || 0,
+        checkedAt: res?.graduateEligibility?.checkedAt || new Date().toISOString(),
+        checkedBy: res?.graduateEligibility?.checkedBy || user?.company_username || user?.email || "",
+        saved: false,
+      });
+      if (res?.canGraduate) {
+        getAnalytics();
+      }
+    } finally {
+      setGraduateCheckingId(null);
     }
   };
 
@@ -442,17 +493,53 @@ const AnalyticsTable = ({
         getAnalytics={getAnalytics}
       />
 
+      <GraduateReportModal
+        report={graduateReport}
+        onClose={() => setGraduateReport(null)}
+        onOverride={async (note) => {
+          const userId = graduateReport?.userId;
+          const bootcampId = graduateReport?.bootcampId;
+          if (!userId || !bootcampId) {
+            return { success: false, message: "Missing student or bootcamp." };
+          }
+          const res = await overrideStudentGraduateEligibility(userId, {
+            bootcampId,
+            overrideNote: note,
+            studentName: graduateReport.studentName,
+            checkedBy: graduateReport.checkedBy,
+            checkedAt: graduateReport.checkedAt,
+            message: graduateReport.message,
+            reasons: graduateReport.reasons,
+            planReports: graduateReport.planReports,
+            latePaymentCount: graduateReport.latePaymentCount,
+            overriddenBy: user?.company_username || user?.email || user?.username || "",
+          });
+          if (res?.success) {
+            setGraduateReport({
+              ...graduateReport,
+              ...(res.graduateEligibility || {}),
+              canGraduate: true,
+              overridden: true,
+              overrideNote: note,
+              saved: true,
+            });
+            getAnalytics();
+          }
+          return res;
+        }}
+      />
+
       {data?.analytics?.length > 0 && (
         <div className="bg-[#161B22] rounded-xl border border-gray-800 overflow-hidden">
           {/* Table Header Section */}
-          <div className="p-6 border-b border-gray-800">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="p-3 border-b border-gray-800">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               {/* Bootcamp Title */}
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-sm font-bold text-white">
                   {data?.bootcampDetails?.bootcampName || "Bootcamp Analytics"}
                 </h2>
-                <p className="text-gray-400 text-sm mt-1">
+                <p className="text-gray-400 text-xs mt-0.5">
                   {totalStudents} student{totalStudents !== 1 ? "s" : ""} enrolled
                   {deferredCount > 0 && (
                     <span className="text-yellow-500 ml-2">
@@ -466,11 +553,11 @@ const AnalyticsTable = ({
                   )}
                 </p>
                 {searchType === "bootcamp" && (
-                  <div className="mt-3">
-                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                  <div className="mt-2">
+                    <p className="text-[10px] font-medium text-gray-500 uppercase mb-1">
                       Tutors on this bootcamp
                     </p>
-                    <p className="text-[11px] text-gray-500 mb-2 leading-relaxed max-w-xl">
+                    <p className="text-[10px] text-gray-500 mb-1.5 leading-snug max-w-xl">
                       Only tutors listed here appear when you assign a tutor to a student (bulk or Actions).{" "}
                       {showBootcampTutorManage ? "Add or remove tutors below." : ""}
                     </p>
@@ -480,7 +567,7 @@ const AnalyticsTable = ({
                         {showBootcampTutorManage && " Add at least one tutor to enable assignments."}
                       </p>
                     )}
-                    <ul className="flex flex-wrap gap-2">
+                    <ul className="flex flex-wrap gap-1.5">
                       {tutorsForAssignment.map((t) => {
                         const id = t?._id != null ? String(t._id) : "";
                         const label =
@@ -492,7 +579,7 @@ const AnalyticsTable = ({
                         return (
                           <li
                             key={id || label}
-                            className="inline-flex flex-col px-2.5 py-1.5 rounded-lg bg-[#21262d] border border-gray-700 text-left max-w-[220px] relative pr-7"
+                            className="inline-flex flex-col px-2 py-1 rounded-lg bg-[#21262d] border border-gray-700 text-left max-w-[180px] relative pr-6"
                           >
                             {showBootcampTutorManage && id && (
                               <button
@@ -505,7 +592,7 @@ const AnalyticsTable = ({
                                 ×
                               </button>
                             )}
-                            <span className="text-sm text-white font-medium truncate" title={label}>
+                            <span className="text-xs text-white font-medium truncate" title={label}>
                               {label}
                             </span>
                             {sub && (
@@ -523,7 +610,7 @@ const AnalyticsTable = ({
                           value={addTutorPick}
                           onChange={(e) => setAddTutorPick(e.target.value)}
                           disabled={allocateSaving || tutorsAvailableToAdd.length === 0}
-                          className="px-3 py-2 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                          className="px-2 py-1 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[160px]"
                         >
                           <option value="">
                             {tutorsAvailableToAdd.length === 0 ? "No more tutors to add" : "Add a tutor…"}
@@ -538,7 +625,7 @@ const AnalyticsTable = ({
                           type="button"
                           disabled={!addTutorPick || allocateSaving}
                           onClick={addSelectedTutorToBootcamp}
-                          className="px-3 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="px-2 py-1 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {allocateSaving ? "Saving…" : "Add to bootcamp"}
                         </button>
@@ -570,7 +657,7 @@ const AnalyticsTable = ({
                     value={searchQuery}
                     placeholder="Search by name, email or student #..."
                     onChange={(e) => setSearchQuery(e?.target?.value)}
-                    className="w-full sm:w-64 pl-10 pr-4 py-2.5 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
+                    className="w-full sm:w-56 pl-9 pr-3 py-1.5 text-xs bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500"
                   />
                   <datalist id="browsers">
                     {data?.analytics?.map((d, idx) => (
@@ -586,7 +673,7 @@ const AnalyticsTable = ({
 
                 {/* Sort Select */}
                 <select
-                  className="px-4 py-2.5 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="px-3 py-1.5 text-xs bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                   value={sortBy}
                   onChange={handleChange}
                 >
@@ -607,8 +694,8 @@ const AnalyticsTable = ({
             </div>
 
             {showBulkTutorTools && filteredSortedAnalytics.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-800 flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+              <div className="mt-2 pt-2 border-t border-gray-800 flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
                   <input
                     ref={selectAllCheckboxRef}
                     type="checkbox"
@@ -621,14 +708,14 @@ const AnalyticsTable = ({
                   </span>
                 </label>
                 <span className="text-gray-600">|</span>
-                <span className="text-sm text-gray-400">
+                <span className="text-xs text-gray-400">
                   {selectedUserIds.length} selected
                 </span>
                 <select
                   value={bulkTutorId}
                   onChange={(e) => setBulkTutorId(e.target.value)}
                   disabled={bulkAssigning}
-                  className="px-3 py-2 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[200px]"
+                  className="px-2 py-1 bg-[#0D1117] text-gray-300 border border-gray-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 min-w-[160px]"
                 >
                   <option value="">
                     {tutorsForAssignment.length === 0
@@ -645,7 +732,7 @@ const AnalyticsTable = ({
                   type="button"
                   disabled={bulkAssigning || !bulkTutorId || selectedUserIds.length === 0}
                   onClick={handleBulkAssignTutor}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="px-2 py-1 rounded-lg text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {bulkAssigning ? "Assigning…" : "Assign tutor to selected"}
                 </button>
@@ -659,53 +746,53 @@ const AnalyticsTable = ({
               <thead className="bg-[#0D1117]">
                 <tr>
                   {showBulkTutorTools && (
-                    <th className="w-10 px-2 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="w-8 px-1 py-2 text-center text-[10px] font-semibold text-gray-400 uppercase">
                       <span className="sr-only">Select</span>
                     </th>
                   )}
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Student
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Student #
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Auth
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Progress
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Enrollment
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Tutor
                   </th>
                   {searchType === "bootcamp" && (
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                       Classroom
                     </th>
                   )}
                   {showAthenaColumn && (
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                       Athena
                     </th>
                   )}
-                  <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-400 uppercase">
                     Calendar
                   </th>
                   {!["TUTOR"]?.includes(user?.role) && (
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-400 uppercase">
                       Status
                     </th>
                   )}
                   {!["TUTOR"]?.includes(user?.role) && (
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-400 uppercase">
                       Ping
                     </th>
                   )}
                   {!["TUTOR"]?.includes(user?.role) && (
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <th className="px-2 py-2 text-center text-[10px] font-semibold text-gray-400 uppercase">
                       Actions
                     </th>
                   )}
@@ -740,7 +827,7 @@ const AnalyticsTable = ({
                       >
                         {showBulkTutorTools && (
                           <td
-                            className="w-10 px-2 py-4 align-middle text-center"
+                            className="w-8 px-1 py-2 align-middle text-center"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <input
@@ -753,15 +840,25 @@ const AnalyticsTable = ({
                           </td>
                         )}
                         {/* Student Info */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            {ba?.graduateEligibility?.canGraduate && (
+                              <button
+                                type="button"
+                                className="text-emerald-400 hover:text-emerald-300 flex-shrink-0"
+                                title="Eligible to graduate — view report"
+                                onClick={(event) => openSavedGraduateReport(event, ba)}
+                              >
+                                <HiOutlineBanknotes className="w-4 h-4" />
+                              </button>
+                            )}
                             {isCompleted && (
                               <span className="text-green-500 flex-shrink-0">
-                                <RxCheckCircled className="w-5 h-5" />
+                                <RxCheckCircled className="w-3.5 h-3.5" />
                               </span>
                             )}
                             <div className="min-w-0">
-                              <p className="text-sm font-medium text-white truncate">
+                              <p className="text-xs font-medium text-white truncate">
                                 {ba?.userid?.username}
                               </p>
                               <div className="flex items-center gap-1.5">
@@ -789,9 +886,9 @@ const AnalyticsTable = ({
                         </td>
 
                         {/* Student Number */}
-                        <td className="px-4 py-4">
+                        <td className="px-2 py-2">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm text-gray-400">
+                            <span className="text-xs text-gray-400">
                               {ba?.userid?.studentNumber || "—"}
                             </span>
                             {ba?.userid?.studentNumber && (
@@ -813,12 +910,12 @@ const AnalyticsTable = ({
                         </td>
 
                         {/* Auth method */}
-                        <td className="px-4 py-4">
+                        <td className="px-2 py-2">
                           {(() => {
                             const authMethod = getAuthMethodDisplay(ba?.userid);
                             return (
                               <span
-                                className={`text-sm font-medium whitespace-nowrap ${getAuthMethodStyle(authMethod)}`}
+                                className={`text-xs font-medium whitespace-nowrap ${getAuthMethodStyle(authMethod)}`}
                                 title={`Sign-in method: ${authMethod}`}
                               >
                                 {authMethod}
@@ -828,10 +925,10 @@ const AnalyticsTable = ({
                         </td>
 
                         {/* Progress */}
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1 w-24">
-                              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 w-16">
+                              <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all duration-300 ${
                                     totalProgress >= 100
@@ -846,7 +943,7 @@ const AnalyticsTable = ({
                                 />
                               </div>
                             </div>
-                            <span className={`text-sm font-medium ${
+                            <span className={`text-xs font-medium ${
                               totalProgress >= 100 ? "text-green-400" : "text-gray-300"
                             }`}>
                               {roundOff(totalProgress)}%
@@ -855,13 +952,13 @@ const AnalyticsTable = ({
                         </td>
 
                         {/* Enrollment lifecycle status */}
-                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           {searchType === "bootcamp" && !["TUTOR"]?.includes(user?.role) ? (
                             <select
                               value={ba?.enrollmentStatus || "in_progress"}
                               onChange={(e) => handleEnrollmentStatusChange(e, ba)}
                               disabled={enrollmentStatusSaving === String(ba?.userid?._id)}
-                              className="min-w-[160px] px-2 py-1.5 rounded-lg text-xs font-medium border border-gray-600 bg-[#0D1117] text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                              className="min-w-0 max-w-[7.5rem] px-1 py-0.5 rounded text-[10px] font-medium border border-gray-600 bg-[#0D1117] text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                               title="Change enrollment status"
                             >
                               {ENROLLMENT_STATUS_OPTIONS.map((opt) => (
@@ -883,8 +980,8 @@ const AnalyticsTable = ({
                         </td>
 
                         {/* Tutor */}
-                        <td className="px-4 py-4">
-                          <span className={`text-sm ${
+                        <td className="px-2 py-2">
+                          <span className={`text-xs ${
                             ba?.tutor ? "text-gray-300" : "text-gray-500 italic"
                           }`}>
                             {ba?.tutor?.company_username || ba?.tutor?.email || "Not Assigned"}
@@ -892,12 +989,12 @@ const AnalyticsTable = ({
                         </td>
 
                         {searchType === "bootcamp" && (
-                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                             {(() => {
                               const status = getClassroomConnectionStatus(ba);
                               return (
                                 <span
-                                  className={`text-sm font-medium ${status.className}`}
+                                  className={`text-xs font-medium ${status.className}`}
                                   title={status.title}
                                 >
                                   {status.label}
@@ -908,13 +1005,13 @@ const AnalyticsTable = ({
                         )}
 
                         {showAthenaColumn && (
-                          <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex flex-col gap-1.5 items-start">
+                          <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col gap-1 items-start">
                               {(() => {
                                 const status = getAthenaSyncStatus(ba);
                                 return (
                                   <span
-                                    className={`text-sm font-medium ${status.className}`}
+                                    className={`text-xs font-medium ${status.className}`}
                                     title={status.title}
                                   >
                                     {status.label}
@@ -938,8 +1035,8 @@ const AnalyticsTable = ({
                         )}
 
                         {/* View Calendar / Student Profile */}
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2 flex-wrap">
+                        <td className="px-2 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
                             <button
                               className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors"
                               onClick={async (event) => {
@@ -972,13 +1069,22 @@ const AnalyticsTable = ({
                             >
                               Profile
                             </button>
+                            <button
+                              className="px-3 py-1.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                              disabled={graduateCheckingId === String(ba?.userid?._id)}
+                              onClick={(event) => handleGraduateCheck(event, ba)}
+                            >
+                              {graduateCheckingId === String(ba?.userid?._id)
+                                ? "Checking…"
+                                : "Check Grad Eligibility"}
+                            </button>
                           </div>
                         </td>
 
                         {/* Account Status */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-4 py-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
+                          <td className="px-2 py-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
                               <button
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                   isBlocked
@@ -1001,8 +1107,8 @@ const AnalyticsTable = ({
 
                         {/* Ping Student */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-4 py-4">
-                            <div className="flex flex-col items-center gap-1">
+                          <td className="px-2 py-2">
+                            <div className="flex flex-col items-center gap-0.5">
                               <button
                                 className="px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg text-xs font-medium transition-colors w-full"
                                 onClick={(event) => {
@@ -1030,9 +1136,9 @@ const AnalyticsTable = ({
 
                         {/* More Actions */}
                         {!["TUTOR"]?.includes(user?.role) && (
-                          <td className="px-4 py-4 text-center">
+                          <td className="px-2 py-2 text-center">
                             <button
-                              className="px-3 py-1.5 bg-gray-700/50 text-gray-400 hover:bg-gray-700 hover:text-gray-300 rounded-lg text-xs font-medium transition-colors"
+                              className="px-2 py-0.5 bg-gray-700/50 text-gray-400 hover:bg-gray-700 hover:text-gray-300 rounded text-[10px] font-medium transition-colors"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setShowMoreActionsModal(ba);
