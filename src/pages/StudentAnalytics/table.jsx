@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
 import { blockUser, unblockUser, updateTutor, updateBootcampEnrollmentStatus, ENROLLMENT_STATUS_OPTIONS } from "../../api/student";
 import Loader from "../../components/loader/loader";
@@ -137,7 +137,10 @@ const AnalyticsTable = ({
   getAnalytics,
   user,
 }) => {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(
+    () => String(searchParams.get("q") || searchParams.get("email") || "").trim()
+  );
   const [rowLoading, setRowLoading] = useState(false);
   const [enrollmentStatusSaving, setEnrollmentStatusSaving] = useState(null);
   const [athenaSyncSaving, setAthenaSyncSaving] = useState(null);

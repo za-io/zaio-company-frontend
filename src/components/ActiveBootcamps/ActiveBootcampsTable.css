@@ -10,11 +10,39 @@
   margin-bottom: 16px;
 }
 
+.bootcamp-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .bootcamp-track-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
+}
+
+.bootcamp-track-filter-btn.archive-filter-btn.active {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fde68a;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2);
+}
+
+.archived-bootcamp-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.2);
+  vertical-align: middle;
 }
 
 .bootcamp-track-filter-btn {

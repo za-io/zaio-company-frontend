@@ -124,11 +124,23 @@ export const updateStandaloneScheduleSlot = (userId, { planCode, paymentSlot, du
       return { success: false, message: err?.response?.data?.message || "Failed to update due date" };
     });
 
+export const getStudentMissCyclesForPlanRemoval = (userId, planCode) =>
+  axios
+    .get(API_URL + `/student-profile/${userId}/collection-miss-cycles`, {
+      params: { plan_code: (planCode || "").trim() },
+    })
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return { success: false, message: err?.response?.data?.message || "Failed to load collection cycles", thisPlan: [], otherCycles: [] };
+    });
+
 /** Remove standalone Paystack plan (e.g. 12-month PLN_) from student profile — not custom / 2-installment / Manati */
-export const removeStandalonePaystackPlan = (userId, planCode) =>
+export const removeStandalonePaystackPlan = (userId, planCode, deleteMissCycleIds = []) =>
   axios
     .post(API_URL + `/student-profile/${userId}/remove-standalone-paystack-plan`, {
       plan_code: (planCode || "").trim(),
+      deleteMissCycleIds,
     })
     .then((res) => res.data)
     .catch((err) => {
@@ -294,9 +306,11 @@ export const createStudentInstallmentPlan = (userId, payload) =>
     });
 
 // 2-installment EFT plan: remove entire plan (and StudentPlan row)
-export const deleteStudentInstallmentPlan = (userId, planId) =>
+export const deleteStudentInstallmentPlan = (userId, planId, deleteMissCycleIds = []) =>
   axios
-    .delete(API_URL + `/student-profile/${userId}/installment-plans/${planId}`)
+    .delete(API_URL + `/student-profile/${userId}/installment-plans/${planId}`, {
+      data: { deleteMissCycleIds },
+    })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
@@ -430,9 +444,11 @@ export const updateCustomPlan = (userId, planId, payload) =>
     });
 
 // Custom payment plan: remove entire plan (and StudentPlan row)
-export const deleteCustomPaymentPlan = (userId, planId) =>
+export const deleteCustomPaymentPlan = (userId, planId, deleteMissCycleIds = []) =>
   axios
-    .delete(API_URL + `/student-profile/${userId}/custom-plans/${planId}`)
+    .delete(API_URL + `/student-profile/${userId}/custom-plans/${planId}`, {
+      data: { deleteMissCycleIds },
+    })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);

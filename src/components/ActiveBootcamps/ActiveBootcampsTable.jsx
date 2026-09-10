@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   getEnrolledBootcampsWithPolling,
   archiveBootcamp,
@@ -1507,8 +1506,12 @@ const BOOTCAMP_TRACK_FILTERS = [
   { id: "data-sci", label: "Data Sci" },
 ];
 
+const BOOTCAMP_ARCHIVE_FILTERS = [
+  { id: "active", label: "Active" },
+  { id: "archived", label: "Archived" },
+];
+
 function ActiveBootcampsTable() {
-  const navigate = useNavigate();
   const { user } = useUserStore();
   const canProvisionBootcampDiscord = ["SUPER_ADMIN", "SUPER_STUDENT_ADMIN"].includes(user?.role);
   const [bootcamps, setBootcamps] = useState([]);
@@ -1516,6 +1519,7 @@ function ActiveBootcampsTable() {
   const [loadHint, setLoadHint] = useState("");
   const [page, setPage] = useState(1);
   const [trackFilter, setTrackFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState("active");
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -1538,12 +1542,12 @@ function ActiveBootcampsTable() {
 
   const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
 
-  const fetchBootcamps = (pageNum = page, track = trackFilter) => {
+  const fetchBootcamps = (pageNum = page, track = trackFilter, archive = archiveFilter) => {
     setLoading(true);
     setLoadHint("");
     let pollHintSet = false;
     getEnrolledBootcampsWithPolling(
-      { page: pageNum, limit: BOOTCAMPS_PAGE_SIZE, track },
+      { page: pageNum, limit: BOOTCAMPS_PAGE_SIZE, track, archived: archive === "archived" },
       {
         onPoll: () => {
           if (!pollHintSet) {
@@ -1571,11 +1575,17 @@ function ActiveBootcampsTable() {
   };
 
   useEffect(() => {
-    fetchBootcamps(page, trackFilter);
-  }, [page, trackFilter]);
+    fetchBootcamps(page, trackFilter, archiveFilter);
+  }, [page, trackFilter, archiveFilter]);
 
   const handleTrackFilterChange = (nextTrack) => {
     setTrackFilter(nextTrack);
+    setPage(1);
+    setSelectedIds([]);
+  };
+
+  const handleArchiveFilterChange = (nextArchive) => {
+    setArchiveFilter(nextArchive);
     setPage(1);
     setSelectedIds([]);
   };
@@ -1593,8 +1603,8 @@ function ActiveBootcampsTable() {
 
   const handleRowClick = (bootcampItem) => {
     const bootcampId = bootcampItem?.bootcampid?._id || bootcampItem?.bootcampid || bootcampItem?._id;
-    // Navigate to the student analytics page with bootcamp filter
-    navigate(`/student/analytics?bootcamp=${bootcampId}`);
+    if (!bootcampId) return;
+    window.open(`/student/analytics?bootcamp=${bootcampId}`, "_blank", "noopener,noreferrer");
   };
 
   const handleActionsClick = (e, bootcampId) => {
@@ -1706,7 +1716,7 @@ function ActiveBootcampsTable() {
     <div className="active-bootcamps-card">
       <div className="bootcamps-header">
         <h3 className="active-bootcamps-title">Bootcamps</h3>
-        {selectedIds.length > 0 && (
+        {selectedIds.length > 0 && archiveFilter === "active" && (
           <div className="bulk-actions">
             <span className="selected-count">{selectedIds.length} selected</span>
             <button 
@@ -1726,19 +1736,35 @@ function ActiveBootcampsTable() {
         )}
       </div>
 
-      <div className="bootcamp-track-filters" role="tablist" aria-label="Filter bootcamps by programme">
-        {BOOTCAMP_TRACK_FILTERS.map((filter) => (
-          <button
-            key={filter.id}
-            type="button"
-            role="tab"
-            aria-selected={trackFilter === filter.id}
-            className={`bootcamp-track-filter-btn ${trackFilter === filter.id ? "active" : ""}`}
-            onClick={() => handleTrackFilterChange(filter.id)}
-          >
-            {filter.label}
-          </button>
-        ))}
+      <div className="bootcamp-list-filters">
+        <div className="bootcamp-track-filters" role="tablist" aria-label="Filter bootcamps by programme">
+          {BOOTCAMP_TRACK_FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              role="tab"
+              aria-selected={trackFilter === filter.id}
+              className={`bootcamp-track-filter-btn ${trackFilter === filter.id ? "active" : ""}`}
+              onClick={() => handleTrackFilterChange(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <div className="bootcamp-track-filters" role="tablist" aria-label="Show active or archived bootcamps">
+          {BOOTCAMP_ARCHIVE_FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              role="tab"
+              aria-selected={archiveFilter === filter.id}
+              className={`bootcamp-track-filter-btn ${archiveFilter === filter.id ? "active" : ""} ${filter.id === "archived" ? "archive-filter-btn" : ""}`}
+              onClick={() => handleArchiveFilterChange(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="active-bootcamps-table-wrap">
@@ -1780,6 +1806,9 @@ function ActiveBootcampsTable() {
                   </td>
                   <td className="bootcamp-name">
                     {b.bootcampName || b.learningpath?.learningpathname || "—"}
+                    {(b.isArchived || archiveFilter === "archived") && (
+                      <span className="archived-bootcamp-badge">Archived</span>
+                    )}
                   </td>
                   <td>{formatBootcampDate(b.startDate)}</td>
                   <td>{formatBootcampDate(b.endDate)}</td>
@@ -1863,12 +1892,14 @@ function ActiveBootcampsTable() {
                               Discord role &amp; channel
                             </button>
                           )}
-                          <button
-                            className="dropdown-item archive-btn"
-                            onClick={(e) => handleArchive(e, b._id, b.bootcampName)}
-                          >
-                            Archive
-                          </button>
+                          {archiveFilter === "active" && (
+                            <button
+                              className="dropdown-item archive-btn"
+                              onClick={(e) => handleArchive(e, b._id, b.bootcampName)}
+                            >
+                              Archive
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1883,9 +1914,13 @@ function ActiveBootcampsTable() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                     <p>
-                      {trackFilter === "all"
-                        ? "No bootcamps found"
-                        : `No ${BOOTCAMP_TRACK_FILTERS.find((f) => f.id === trackFilter)?.label || ""} bootcamps found`}
+                      {archiveFilter === "archived"
+                        ? trackFilter === "all"
+                          ? "No archived bootcamps found"
+                          : `No archived ${BOOTCAMP_TRACK_FILTERS.find((f) => f.id === trackFilter)?.label || ""} bootcamps found`
+                        : trackFilter === "all"
+                          ? "No bootcamps found"
+                          : `No ${BOOTCAMP_TRACK_FILTERS.find((f) => f.id === trackFilter)?.label || ""} bootcamps found`}
                     </p>
                   </div>
                 </td>

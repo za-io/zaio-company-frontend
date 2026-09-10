@@ -1,7 +1,8 @@
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, updateStandaloneScheduleSlot, removeStandalonePaystackPlan, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
-import { postStudentLoginAsToken, postFinanceRecordPaystackEft } from "../../api/company";
+import { getStudentProfile, getStudentBilling, getStudentManatiStatement, refreshStudentManatiStatement, getStudentEftSubmissions, getEftSubmissionProofUrl, approveEftSubmission, rejectEftSubmission, addEftPaymentAdmin, getStudentInstallmentPlans, createStudentInstallmentPlan, deleteStudentInstallmentPlan, updateInstallment, splitTwoInstallmentPlan, updateCustomInstallment, splitCustomInstallment, deleteCustomInstallment, getProofByBillingRecordId, attachProofToBillingRecord, deleteBillingRecord, updateBillingRecordStatus, dismissOutstandingPayment, updateCustomPlan, deleteCustomPaymentPlan, getCustomPlans, createCustomPlan, createUpfrontPlan, getPaystackPlanInfo, setupPaystackPlanPreview, setupPaystackPlan, generatePaymentLink, changePaystackPaymentDate, updateSubscriptionCode, updateStandaloneScheduleSlot, removeStandalonePaystackPlan, getStudentMissCyclesForPlanRemoval, addStudentManatiPlan, blockUser, unblockUser, releasePaymentBlockOverride, updateStudentNumber, updateStudentFinanceExclude, syncPaystackPaymentsToBilling, listStudentPaystackSubscriptions, cancelStudentPaystackSubscription, writeOffUpcomingPayments } from "../../api/student";
+import RemovePlanCyclesModal, { suggestedMissCycleIds } from "./RemovePlanCyclesModal";
+import { postStudentLoginAsToken, postFinanceRecordPaystackEft, getEditTilesToken } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import {
   parsePaymentSlotFromRow,
@@ -196,6 +197,7 @@ const StudentProfile = () => {
   const [deleteRecordSubmitting, setDeleteRecordSubmitting] = useState(false);
   const [deleteRecordError, setDeleteRecordError] = useState(null);
   const [removeWholePlanLoading, setRemoveWholePlanLoading] = useState(null);
+  const [removePlanModal, setRemovePlanModal] = useState(null);
   const [editPlanModal, setEditPlanModal] = useState(null);
   const [editPlanForm, setEditPlanForm] = useState({ planName: "", manatiAgreementCode: "", newInstallments: [] });
   const [editPlanSubmitting, setEditPlanSubmitting] = useState(false);
@@ -619,11 +621,24 @@ const StudentProfile = () => {
     setBlockLoading(false);
   };
 
-  const handleBootcampClick = (bootcamp) => {
-    if (bootcamp._id && bootcamp.learningpathId) {
-      navigate(
-        `/student/bootcamp/${bootcamp._id}/learningpath/${bootcamp.learningpathId}?user_id=${student._id}`
-      );
+  const openBootcampAnalytics = (bootcamp) => {
+    if (!bootcamp?._id) return;
+    const params = new URLSearchParams({ bootcamp: String(bootcamp._id) });
+    const email = String(student?.email || "").trim();
+    if (email) params.set("q", email);
+    window.open(`/student/analytics?${params.toString()}`, "_blank", "noopener,noreferrer");
+  };
+
+  const openLearnerProgressProfile = async () => {
+    const email = String(student?.email || "").trim();
+    if (!email) return;
+    const baseUrl = `https://www.zaio.io/app/zaio-profile/${email}`;
+    try {
+      const res = await getEditTilesToken(email);
+      const qs = res?.success && res?.token ? `?editTiles=${encodeURIComponent(res.token)}` : "";
+      window.open(baseUrl + qs, "_blank", "noopener,noreferrer");
+    } catch {
+      window.open(baseUrl, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -1131,104 +1146,132 @@ const StudentProfile = () => {
     }
   };
 
-  const handleRemoveTwoInstallmentPlan = async (plan) => {
-    if (
-      !window.confirm(
-        `Remove this 2-installment plan (${plan.planCode || plan.planName})? Existing billing records stay on the student; the plan will disappear from this page.`
-      )
-    ) {
-      return;
-    }
-    setRemoveWholePlanLoading(`2inst-${plan._id}`);
+  const refreshProfileBlockStatus = async () => {
+    if (!userId) return;
     try {
-      const res = await deleteStudentInstallmentPlan(userId, plan._id);
-      if (res.success) {
-        const listRes = await getStudentInstallmentPlans(userId);
-        if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
-        fetchBilling();
-      } else {
-        alert(res.message || "Failed to remove plan");
+      const result = await getStudentProfile(userId);
+      if (result?.success) {
+        setStudent(result.student);
+        setPaymentBlockStatus(result.paymentBlockStatus || null);
       }
-    } catch (err) {
-      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
-    } finally {
-      setRemoveWholePlanLoading(null);
+    } catch (_) {
+      /* keep current profile */
     }
   };
 
-  const handleRemoveCustomPlan = async (plan) => {
-    if (
-      !window.confirm(
-        `Remove this custom plan (${plan.planCode || plan.planName})? Existing billing records stay on the student; the plan will disappear from this page.`
-      )
-    ) {
-      return;
-    }
-    setRemoveWholePlanLoading(`custom-${plan._id}`);
-    try {
-      const res = await deleteCustomPaymentPlan(userId, plan._id);
-      if (res.success) {
-        const listRes = await getCustomPlans(userId);
-        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
-        fetchBilling();
-      } else {
-        alert(res.message || "Failed to remove plan");
+  const openRemovePlanModal = async ({ kind, plan, warning }) => {
+    if (!userId || !plan) return;
+    setRemovePlanModal({
+      kind,
+      plan,
+      warning,
+      thisPlan: [],
+      otherCycles: [],
+      selectedIds: [],
+      loading: true,
+      confirming: false,
+      error: null,
+    });
+    const res = await getStudentMissCyclesForPlanRemoval(userId, plan.planCode);
+    setRemovePlanModal((prev) => {
+      if (!prev) return prev;
+      if (!res?.success) {
+        return { ...prev, loading: false, error: res?.message || "Failed to load collection cycles" };
       }
-    } catch (err) {
-      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
-    } finally {
-      setRemoveWholePlanLoading(null);
-    }
+      const thisPlan = Array.isArray(res.thisPlan) ? res.thisPlan : [];
+      const otherCycles = Array.isArray(res.otherCycles) ? res.otherCycles : [];
+      return {
+        ...prev,
+        loading: false,
+        thisPlan,
+        otherCycles,
+        selectedIds: suggestedMissCycleIds(thisPlan, otherCycles),
+      };
+    });
   };
 
-  const handleRemoveStandalonePlanFromPaymentsModal = async () => {
-    const planCode = (paymentsModalPlan?.planCode || "").trim();
-    if (!planCode || !userId) return;
-    if (
-      !window.confirm(
-        `Remove this Paystack plan (${paymentsModalPlan.planName || planCode}) from Zaio and delete its billing records and outstanding payment links? The Paystack subscription will keep running so you can re-add and fetch. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-    setPaymentsModalRemoving(true);
-    try {
-      const res = await removeStandalonePaystackPlan(userId, planCode);
-      if (res.success) {
-        setPaymentsModalPlan(null);
-        fetchBilling();
-      } else {
-        alert(res.message || "Failed to remove plan");
-      }
-    } catch (err) {
-      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
-    } finally {
-      setPaymentsModalRemoving(false);
-    }
+  const handleRemoveTwoInstallmentPlan = (plan) => {
+    openRemovePlanModal({
+      kind: "2inst",
+      plan,
+      warning: `Remove this 2-installment plan (${plan.planCode || plan.planName})? Existing billing records stay on the student; the plan will disappear from this page.`,
+    });
   };
 
-  const handleRemoveStandalonePlanFromBillingRow = async (plan) => {
+  const handleRemoveCustomPlan = (plan) => {
+    openRemovePlanModal({
+      kind: "custom",
+      plan,
+      warning: `Remove this custom plan (${plan.planCode || plan.planName})? Existing billing records stay on the student; the plan will disappear from this page.`,
+    });
+  };
+
+  const handleRemoveStandalonePlanFromPaymentsModal = () => {
+    const plan = paymentsModalPlan;
     const planCode = (plan?.planCode || "").trim();
     if (!planCode || !userId) return;
-    if (
-      !window.confirm(
-        `Remove this Paystack plan (${plan.planName || planCode}) from Zaio and delete its billing records and outstanding payment links? The Paystack subscription will keep running so you can re-add and fetch. This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-    setRemoveWholePlanLoading(`standalone-${planCode}`);
+    openRemovePlanModal({
+      kind: "standalone",
+      plan,
+      warning: `Remove this Paystack plan (${plan.planName || planCode}) from Zaio and delete its billing records and outstanding payment links? The Paystack subscription will keep running so you can re-add and fetch. This cannot be undone.`,
+    });
+  };
+
+  const handleRemoveStandalonePlanFromBillingRow = (plan) => {
+    const planCode = (plan?.planCode || "").trim();
+    if (!planCode || !userId) return;
+    openRemovePlanModal({
+      kind: "standalone",
+      plan,
+      warning: `Remove this Paystack plan (${plan.planName || planCode}) from Zaio and delete its billing records and outstanding payment links? The Paystack subscription will keep running so you can re-add and fetch. This cannot be undone.`,
+    });
+  };
+
+  const confirmRemovePlanModal = async () => {
+    if (!removePlanModal?.plan || !userId) return;
+    const { kind, plan, selectedIds } = removePlanModal;
+    const loadingKey =
+      kind === "custom"
+        ? `custom-${plan._id}`
+        : kind === "2inst"
+          ? `2inst-${plan._id}`
+          : `standalone-${plan.planCode || ""}`;
+    setRemoveWholePlanLoading(loadingKey);
+    if (kind === "standalone" && paymentsModalPlan) setPaymentsModalRemoving(true);
+    setRemovePlanModal((prev) => (prev ? { ...prev, confirming: true, error: null } : prev));
     try {
-      const res = await removeStandalonePaystackPlan(userId, planCode);
-      if (res.success) {
-        fetchBilling();
-      } else {
-        alert(res.message || "Failed to remove plan");
+      const ids = Array.isArray(selectedIds) ? selectedIds : [];
+      let res;
+      if (kind === "custom") res = await deleteCustomPaymentPlan(userId, plan._id, ids);
+      else if (kind === "2inst") res = await deleteStudentInstallmentPlan(userId, plan._id, ids);
+      else res = await removeStandalonePaystackPlan(userId, plan.planCode, ids);
+
+      if (!res?.success) {
+        setRemovePlanModal((prev) => (prev ? { ...prev, confirming: false, error: res?.message || "Failed to remove plan" } : prev));
+        return;
       }
+
+      if (kind === "custom") {
+        const listRes = await getCustomPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setCustomPlans(listRes.data);
+      } else if (kind === "2inst") {
+        const listRes = await getStudentInstallmentPlans(userId);
+        if (listRes.success && Array.isArray(listRes.data)) setInstallmentPlans(listRes.data);
+      } else if (paymentsModalPlan) {
+        setPaymentsModalPlan(null);
+      }
+      setRemovePlanModal(null);
+      fetchBilling();
+      await refreshProfileBlockStatus();
     } catch (err) {
-      alert(err?.response?.data?.message || err?.message || "Failed to remove plan");
+      setRemovePlanModal((prev) => (
+        prev
+          ? { ...prev, confirming: false, error: err?.response?.data?.message || err?.message || "Failed to remove plan" }
+          : prev
+      ));
     } finally {
       setRemoveWholePlanLoading(null);
+      setPaymentsModalRemoving(false);
     }
   };
 
@@ -1807,14 +1850,16 @@ const StudentProfile = () => {
                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
                   Enrolled
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {student.bootcamps?.map((bootcamp, idx) => (
                 <tr
                   key={bootcamp._id || idx}
-                  onClick={() => handleBootcampClick(bootcamp)}
-                  className="hover:bg-blue-50 cursor-pointer transition-colors"
+                  className="hover:bg-blue-50 transition-colors"
                 >
                   <td className="px-6 py-4 text-sm font-medium text-gray-800">
                     {bootcamp.bootcampName}
@@ -1860,6 +1905,26 @@ const StudentProfile = () => {
                     {bootcamp.enrolledAt
                       ? new Date(bootcamp.enrolledAt).toLocaleDateString()
                       : "N/A"}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!bootcamp._id}
+                        onClick={() => openBootcampAnalytics(bootcamp)}
+                        className="px-2.5 py-1 text-xs font-medium text-indigo-800 bg-indigo-100 rounded hover:bg-indigo-200 disabled:opacity-50"
+                      >
+                        Open bootcamp
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!student?.email}
+                        onClick={() => openLearnerProgressProfile()}
+                        className="px-2.5 py-1 text-xs font-medium text-teal-800 bg-teal-100 rounded hover:bg-teal-200 disabled:opacity-50"
+                      >
+                        Open learner profile
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -5408,6 +5473,31 @@ const StudentProfile = () => {
           </div>
         </div>
       )}
+      <RemovePlanCyclesModal
+        open={Boolean(removePlanModal)}
+        title={`Remove ${removePlanModal?.plan?.planName || removePlanModal?.plan?.planCode || "plan"}`}
+        warning={removePlanModal?.warning}
+        thisPlan={removePlanModal?.thisPlan || []}
+        otherCycles={removePlanModal?.otherCycles || []}
+        selectedIds={removePlanModal?.selectedIds || []}
+        loading={Boolean(removePlanModal?.loading)}
+        confirming={Boolean(removePlanModal?.confirming)}
+        error={removePlanModal?.error || null}
+        onToggle={(id) =>
+          setRemovePlanModal((prev) => {
+            if (!prev) return prev;
+            const selectedIds = prev.selectedIds.includes(id)
+              ? prev.selectedIds.filter((row) => row !== id)
+              : [...prev.selectedIds, id];
+            return { ...prev, selectedIds };
+          })
+        }
+        onCancel={() => {
+          if (removePlanModal?.confirming) return;
+          setRemovePlanModal(null);
+        }}
+        onConfirm={confirmRemovePlanModal}
+      />
     </div>
   );
 };
