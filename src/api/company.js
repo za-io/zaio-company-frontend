@@ -1533,6 +1533,20 @@ export const setAssignmentInTalks = (bootcampId, courseWorkId, submissionUserId,
       message: err?.response?.data?.message || "Failed to set",
     }));
 
+/** Tutor: review a proposed mark. action: "approve" | "change" | "needs_resubmission". No emails are sent. */
+export const reviewProposedMarking = (bootcampId, courseWorkId, submissionUserId, { action, grade, feedback } = {}) =>
+  axios
+    .post(
+      `${BASE_URL}/tutor-booking/google-classroom/proposed-markings/review`,
+      { bootcampId, courseWorkId, submissionUserId, action, grade, feedback },
+      { headers: tutorBookingHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to save review",
+    }));
+
 export const linkClassroomUserManually = (zaioUserId, googleClassroomUserId, bootcampId) =>
   axios
     .post(

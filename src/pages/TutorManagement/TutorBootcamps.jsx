@@ -11,6 +11,7 @@ import {
   linkClassroomSubmissions,
   linkClassroomUserManually,
   setAssignmentInTalks,
+  reviewProposedMarking,
 } from "../../api/company";
 import Loader from "../../components/loader/loader";
 import { FiAlertCircle } from "react-icons/fi";
@@ -21,6 +22,223 @@ const IN_TALKS_EXTRA_DAYS = 3;
 const MARKINGS_PER_PAGE = 10;
 const UNMATCHED_PER_PAGE = 5;
 const RETURNED_PER_PAGE = 10;
+
+const PROPOSAL_STATUS_LABELS = {
+  proposed: "Proposed",
+  approved: "Approved",
+  changed: "Changed",
+  needs_resubmission: "Needs resubmission",
+  returned: "Returned",
+  stale: "Stale",
+};
+
+async function copyTextToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_) {}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Proposed mark (from the marking assistant) for one unmarked submission: badge + expandable review panel. */
+function ProposedMarkingPanel({ item, onUpdated }) {
+  const pm = item.proposedMarking;
+  const [expanded, setExpanded] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [grade, setGrade] = useState(pm?.approvedGrade ?? pm?.proposedGrade ?? "");
+  const [feedback, setFeedback] = useState(pm?.approvedFeedback || pm?.feedback || "");
+  const [saving, setSaving] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  if (!pm) return null;
+  const outOf = pm.maxPoints ?? item.assignment?.maxPoints;
+  const status = pm.status || "proposed";
+  const reviewed = ["approved", "changed", "needs_resubmission"].includes(status);
+  const shownGrade = reviewed && pm.approvedGrade != null ? pm.approvedGrade : pm.proposedGrade;
+
+  const submitReview = async (action) => {
+    setSaving(action);
+    setMessage(null);
+    try {
+      const res = await reviewProposedMarking(item.bootcampId, item.assignment?.courseWorkId, item.userId, {
+        action,
+        grade: action === "change" ? grade : undefined,
+        feedback,
+      });
+      if (!res?.success) {
+        setMessage({ type: "error", text: res?.message || "Failed to save" });
+        return;
+      }
+      onUpdated(res.data || {});
+      setChanging(false);
+      if (action === "approve" || action === "change") {
+        const copied = await copyTextToClipboard(res.data?.approvedFeedback || feedback);
+        let opened = null;
+        if (item.linkToMark) opened = window.open(item.linkToMark, "_blank", "noopener,noreferrer");
+        setMessage({
+          type: "success",
+          text: `Saved ${res.data?.approvedGrade ?? ""}${outOf != null ? `/${outOf}` : ""}. ${
+            copied ? "Feedback copied – paste it as a private comment." : "Copy the feedback manually."
+          }${item.linkToMark && !opened ? " Pop-up blocked: use 'Mark in Google Classroom'." : " Now enter the grade in Classroom and return it."}`,
+        });
+      } else {
+        setMessage({ type: "success", text: "Marked as needs resubmission (no email sent)." });
+      }
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const badgeClass =
+    status === "approved" || status === "changed"
+      ? "bg-green-700/40 text-green-300 border-green-700"
+      : status === "needs_resubmission"
+      ? "bg-red-700/30 text-red-300 border-red-700"
+      : "bg-purple-700/30 text-purple-200 border-purple-700";
+
+  return (
+    <div className="w-full basis-full">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className={`inline-flex items-center gap-2 px-2 py-0.5 rounded border text-xs font-medium ${badgeClass}`}
+        title="Proposed mark from the marking assistant – click to review"
+      >
+        {PROPOSAL_STATUS_LABELS[status] || status}: {shownGrade ?? "–"}
+        {outOf != null ? `/${outOf}` : ""}
+        {pm.followedInstructions ? ` · instructions: ${pm.followedInstructions}` : ""}
+        {pm.stale ? " · resubmitted since proposal" : ""}
+        <span>{expanded ? "▲" : "▼"}</span>
+      </button>
+      {expanded && (
+        <div className="mt-2 p-3 rounded-lg bg-gray-900/60 border border-gray-700 text-sm text-gray-300 space-y-2">
+          {pm.stale && (
+            <p className="text-amber-400">The student updated this submission after it was pre-marked. Check it before approving.</p>
+          )}
+          {pm.missed && (
+            <div>
+              <span className="text-gray-400 block text-xs uppercase">What was missed</span>
+              <p className="whitespace-pre-wrap">{pm.missed}</p>
+            </div>
+          )}
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 text-xs uppercase">Feedback for student</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await copyTextToClipboard(feedback);
+                  setMessage({ type: ok ? "success" : "error", text: ok ? "Feedback copied." : "Could not copy." });
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                Copy
+              </button>
+            </div>
+            <textarea
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              rows={3}
+              disabled={reviewed && !changing}
+              className="w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-sm disabled:opacity-70"
+            />
+          </div>
+          {pm.tutorNotes && (
+            <div>
+              <span className="text-gray-400 block text-xs uppercase">Notes for tutor</span>
+              <p className="whitespace-pre-wrap text-gray-400">{pm.tutorNotes}</p>
+            </div>
+          )}
+          {Array.isArray(pm.flags) && pm.flags.length > 0 && (
+            <p className="text-amber-400">⚠ {pm.flags.join(" · ")}</p>
+          )}
+          {changing && (
+            <div className="flex items-center gap-2">
+              <label className="text-gray-400 text-xs uppercase">Grade</label>
+              <input
+                type="number"
+                min={0}
+                max={outOf ?? undefined}
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                className="w-24 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white text-sm"
+              />
+              {outOf != null && <span className="text-gray-500">/ {outOf}</span>}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {!changing ? (
+              <>
+                <button
+                  type="button"
+                  disabled={!!saving}
+                  onClick={() => submitReview("approve")}
+                  className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {saving === "approve" ? "…" : `Approve ${pm.proposedGrade ?? ""}${outOf != null ? `/${outOf}` : ""}`}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!saving}
+                  onClick={() => setChanging(true)}
+                  className="px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  disabled={!!saving}
+                  onClick={() => submitReview("needs_resubmission")}
+                  className="px-3 py-1.5 rounded-lg bg-red-700/80 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {saving === "needs_resubmission" ? "…" : "Needs resubmission"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={!!saving}
+                  onClick={() => submitReview("change")}
+                  className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium disabled:opacity-50"
+                >
+                  {saving === "change" ? "…" : "Save changed mark"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!saving}
+                  onClick={() => setChanging(false)}
+                  className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+          {message && (
+            <p className={message.type === "error" ? "text-red-400" : "text-green-400"}>{message.text}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function UnmatchedLinkRow({ gcStudent, bootcampId, zaioStudents, linkingRow, setLinkingRow, onLinked, linkClassroomUserManually }) {
   const [selectedZaioId, setSelectedZaioId] = useState("");
@@ -172,6 +390,7 @@ export default function TutorBootcamps() {
   const [unmatchedPage, setUnmatchedPage] = useState(1);
   const [markingsBootcampFilter, setMarkingsBootcampFilter] = useState("");
   const [markingsInTalksFilter, setMarkingsInTalksFilter] = useState("all");
+  const [markingsProposalFilter, setMarkingsProposalFilter] = useState("all");
   const [returnedPage, setReturnedPage] = useState(1);
   const [unmatchedStudents, setUnmatchedStudents] = useState([]);
   const [linkingRow, setLinkingRow] = useState(null);
@@ -264,7 +483,7 @@ export default function TutorBootcamps() {
 
   useEffect(() => {
     setMarkingsPage(1);
-  }, [unmarkedAssignments.length, markingsBootcampFilter, markingsInTalksFilter]);
+  }, [unmarkedAssignments.length, markingsBootcampFilter, markingsInTalksFilter, markingsProposalFilter]);
   useEffect(() => {
     setReturnedPage(1);
   }, [returnedAssignments.length, markingsBootcampFilter]);
@@ -286,6 +505,10 @@ export default function TutorBootcamps() {
     if (markingsBootcampFilter && String(item.bootcampId) !== markingsBootcampFilter) return false;
     if (markingsInTalksFilter === "in_talks" && !item.inTalks) return false;
     if (markingsInTalksFilter === "not_in_talks" && item.inTalks) return false;
+    const pmStatus = item.proposedMarking?.status;
+    if (markingsProposalFilter === "pending" && pmStatus !== "proposed") return false;
+    if (markingsProposalFilter === "reviewed" && !["approved", "changed", "needs_resubmission"].includes(pmStatus)) return false;
+    if (markingsProposalFilter === "none" && item.proposedMarking) return false;
     return true;
   });
   const markingsBootcamps = [
@@ -801,6 +1024,22 @@ getTutorClassroomSubmissions()
                         <option value="not_in_talks">Not in talks</option>
                       </select>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="markings-proposal-filter" className="text-gray-400 text-sm">
+                        Proposed mark
+                      </label>
+                      <select
+                        id="markings-proposal-filter"
+                        value={markingsProposalFilter}
+                        onChange={(e) => setMarkingsProposalFilter(e.target.value)}
+                        className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-white text-sm min-w-[140px]"
+                      >
+                        <option value="all">All</option>
+                        <option value="pending">Pending review</option>
+                        <option value="reviewed">Reviewed</option>
+                        <option value="none">No proposal</option>
+                      </select>
+                    </div>
                     <span className="text-gray-500 text-sm">
                       {markingsTotal} assignment{markingsTotal !== 1 ? "s" : ""}
                     </span>
@@ -822,7 +1061,7 @@ getTutorClassroomSubmissions()
                       return (
                       <li
                         key={`${item.userId || item.userid}-${item.assignment?.courseWorkId}-${index}`}
-                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 first:pt-0 last:pb-0"
+                        className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2 py-3 first:pt-0 last:pb-0"
                       >
                         <div className="flex-1 min-w-0 flex items-start gap-2">
                           <div>
@@ -902,6 +1141,20 @@ getTutorClassroomSubmissions()
                             </span>
                           )}
                         </div>
+                        <ProposedMarkingPanel
+                          item={item}
+                          onUpdated={(data) =>
+                            setUnmarkedAssignments((prev) =>
+                              prev.map((a) =>
+                                a.bootcampId === item.bootcampId &&
+                                a.assignment?.courseWorkId === item.assignment?.courseWorkId &&
+                                a.userId === item.userId
+                                  ? { ...a, proposedMarking: { ...a.proposedMarking, ...data } }
+                                  : a
+                              )
+                            )
+                          }
+                        />
                       </li>
                     );
                     })}
