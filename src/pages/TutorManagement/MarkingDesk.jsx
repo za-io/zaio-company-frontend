@@ -682,6 +682,7 @@ export default function MarkingDesk({
   bootcamps,
   onTimeScore,
   unmatchedCount,
+  returnedLoading,
   onProposalUpdated,
   onInTalks,
   emptyMessage,
@@ -783,7 +784,7 @@ export default function MarkingDesk({
           ))}
         <div
           className="ml-auto flex items-center gap-3 pl-3"
-          title="Score = assignments returned within 48 hours ÷ total returned, out of 10. In talks extends the deadline by 3 days."
+          title="On time for the bootcamp open under Returned. Returned within 48 hours, out of 10. In talks adds 3 days."
         >
           <span className="text-[11px] uppercase tracking-wide text-gray-500">On time</span>
           <span className="text-lg font-semibold tabular-nums text-white">
@@ -824,8 +825,20 @@ export default function MarkingDesk({
 
       {view === "unmatched" ? null : view === "returned" ? (
         <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-gray-700/80 bg-gray-900/40">
-          {returnedItems.length === 0 ? (
-            <p className="text-gray-400 text-sm p-6">No returned assignments{bootcampFilter ? " for this bootcamp" : ""}.</p>
+          <div className="px-4 py-3 border-b border-gray-800">
+            <select value={bootcampFilter} onChange={(e) => onBootcampFilter(e.target.value)} className={selectClass()} aria-label="Bootcamp">
+              <option value="">Choose a bootcamp</option>
+              {bootcamps.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+          {returnedLoading ? (
+            <p className="text-gray-400 text-sm p-6">Loading returned assignments…</p>
+          ) : !bootcampFilter ? (
+            <p className="text-gray-400 text-sm p-6">Choose a bootcamp to load returned assignments.</p>
+          ) : returnedItems.length === 0 ? (
+            <p className="text-gray-400 text-sm p-6">No returned assignments for this bootcamp.</p>
           ) : (
             <ul>
               {returnedItems.map((item, index) => (

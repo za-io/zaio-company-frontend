@@ -1486,14 +1486,20 @@ export const exchangeTutorGoogleClassroomCode = (code) =>
       return { success: false, message: err?.response?.data?.message || "Failed to connect" };
     });
 
-export const getTutorClassroomSubmissions = () =>
-  axios
-    .get(`${BASE_URL}/tutor-booking/google-classroom/submissions`, { headers: tutorBookingHeaders() })
+export const getTutorClassroomSubmissions = ({ scope = "queue", bootcampId, refresh } = {}) => {
+  const params = new URLSearchParams();
+  if (scope) params.set("scope", scope);
+  if (bootcampId) params.set("bootcampId", bootcampId);
+  if (refresh) params.set("refresh", "1");
+  const query = params.toString();
+  return axios
+    .get(`${BASE_URL}/tutor-booking/google-classroom/submissions${query ? `?${query}` : ""}`, { headers: tutorBookingHeaders() })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
       return { success: false, data: [], message: err?.response?.data?.message };
     });
+};
 
 export const getTutorClassroomConnectionStatus = () =>
   axios

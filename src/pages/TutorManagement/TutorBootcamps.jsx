@@ -151,6 +151,8 @@ export default function TutorBootcamps() {
   const [bootcampsWithProgress, setBootcampsWithProgress] = useState([]);
   const [unmarkedAssignments, setUnmarkedAssignments] = useState([]);
   const [returnedAssignments, setReturnedAssignments] = useState([]);
+  const [linkedBootcamps, setLinkedBootcamps] = useState([]);
+  const [returnedLoading, setReturnedLoading] = useState(false);
   const [onTimeScore, setOnTimeScore] = useState(null);
   const [markingsLoading, setMarkingsLoading] = useState(false);
   const [markingsMessage, setMarkingsMessage] = useState(null);
@@ -239,25 +241,51 @@ export default function TutorBootcamps() {
     if (activeTab !== "markings" || !classroomConnected) {
       setUnmarkedAssignments([]);
       setReturnedAssignments([]);
+      setLinkedBootcamps([]);
       setOnTimeScore(null);
       return;
     }
     setMarkingsLoading(true);
     setMarkingsMessage(null);
-    getTutorClassroomSubmissions()
+    getTutorClassroomSubmissions({ scope: "queue" })
       .then((res) => {
         setUnmarkedAssignments(Array.isArray(res?.data) ? res.data : []);
+        setLinkedBootcamps(Array.isArray(res?.bootcamps) ? res.bootcamps : []);
+        if (res?.message) setMarkingsMessage(res.message);
+      })
+      .catch(() => {
+        setUnmarkedAssignments([]);
+        setLinkedBootcamps([]);
+      })
+      .finally(() => setMarkingsLoading(false));
+  }, [user?._id, activeTab, classroomConnected]);
+
+  useEffect(() => {
+    if (activeTab !== "markings" || !classroomConnected || deskView !== "returned") return;
+    if (!markingsBootcampFilter) {
+      setReturnedAssignments([]);
+      setReturnedLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setReturnedLoading(true);
+    getTutorClassroomSubmissions({ scope: "returned", bootcampId: markingsBootcampFilter })
+      .then((res) => {
+        if (cancelled) return;
         setReturnedAssignments(Array.isArray(res?.returned) ? res.returned : []);
         setOnTimeScore(res?.onTimeScore ?? null);
         if (res?.message) setMarkingsMessage(res.message);
       })
       .catch(() => {
-        setUnmarkedAssignments([]);
-        setReturnedAssignments([]);
-        setOnTimeScore(null);
+        if (!cancelled) setReturnedAssignments([]);
       })
-      .finally(() => setMarkingsLoading(false));
-  }, [user?._id, activeTab, classroomConnected]);
+      .finally(() => {
+        if (!cancelled) setReturnedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, classroomConnected, deskView, markingsBootcampFilter]);
 
   useEffect(() => {
     setUnmatchedPage(1);
@@ -285,9 +313,12 @@ export default function TutorBootcamps() {
   });
   const markingsBootcamps = [
     ...new Map(
-      unmarkedAssignments
-        .filter((i) => i.bootcampId && i.bootcampName)
-        .map((i) => [String(i.bootcampId), { id: String(i.bootcampId), name: i.bootcampName }])
+      [
+        ...linkedBootcamps.filter((b) => b.id && b.name).map((b) => [String(b.id), { id: String(b.id), name: b.name }]),
+        ...unmarkedAssignments
+          .filter((i) => i.bootcampId && i.bootcampName)
+          .map((i) => [String(i.bootcampId), { id: String(i.bootcampId), name: i.bootcampName }]),
+      ]
     ).values(),
   ].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -583,11 +614,10 @@ export default function TutorBootcamps() {
                                       if (res?.success) {
                                         setConnectModalOpen(false);
                                         setMarkingsLoading(true);
-getTutorClassroomSubmissions()
+getTutorClassroomSubmissions({ scope: "queue", refresh: true })
                                         .then((r) => {
                                           setUnmarkedAssignments(Array.isArray(r?.data) ? r.data : []);
-                                          setReturnedAssignments(Array.isArray(r?.returned) ? r.returned : []);
-                                          setOnTimeScore(r?.onTimeScore ?? null);
+                                          setLinkedBootcamps(Array.isArray(r?.bootcamps) ? r.bootcamps : []);
                                         })
                                           .catch(() => {
                                     setUnmarkedAssignments([]);
@@ -665,7 +695,13 @@ getTutorClassroomSubmissions()
                     selectedKey={selectedMarkingKey}
                     onSelect={setSelectedMarkingKey}
                     view={deskView}
-                    onViewChange={setDeskView}
+                    onViewChange={(next) => {
+                      setDeskView(next);
+                      if (next === "returned" && !markingsBootcampFilter && markingsBootcamps.length === 1) {
+                        setMarkingsBootcampFilter(markingsBootcamps[0].id);
+                      }
+                    }}
+                    returnedLoading={returnedLoading}
                     bootcampFilter={markingsBootcampFilter}
                     onBootcampFilter={setMarkingsBootcampFilter}
                     inTalksFilter={markingsInTalksFilter}
@@ -747,11 +783,10 @@ getTutorClassroomSubmissions()
                                         .filter((b) => b.students.length > 0)
                                     );
                                     setMarkingsLoading(true);
-getTutorClassroomSubmissions()
+getTutorClassroomSubmissions({ scope: "queue", refresh: true })
                                   .then((r) => {
                                     setUnmarkedAssignments(Array.isArray(r?.data) ? r.data : []);
-                                    setReturnedAssignments(Array.isArray(r?.returned) ? r.returned : []);
-                                    setOnTimeScore(r?.onTimeScore ?? null);
+                                    setLinkedBootcamps(Array.isArray(r?.bootcamps) ? r.bootcamps : []);
                                   })
                                       .catch(() => {
                                     setUnmarkedAssignments([]);
