@@ -1533,12 +1533,26 @@ export const setAssignmentInTalks = (bootcampId, courseWorkId, submissionUserId,
       message: err?.response?.data?.message || "Failed to set",
     }));
 
-/** Tutor: review a proposed mark. action: "approve" | "change" | "needs_resubmission". No emails are sent. */
-export const reviewProposedMarking = (bootcampId, courseWorkId, submissionUserId, { action, grade, feedback } = {}) =>
+/** Tutor: draft the resubmission email and load the send log. Does not send. */
+export const getResubmissionEmailDraft = (bootcampId, courseWorkId, submissionUserId, details = {}) =>
+  axios
+    .post(
+      `${BASE_URL}/tutor-booking/google-classroom/proposed-markings/resubmission-email`,
+      { bootcampId, courseWorkId, submissionUserId, ...details },
+      { headers: tutorBookingHeaders() }
+    )
+    .then((res) => res.data)
+    .catch((err) => ({
+      success: false,
+      message: err?.response?.data?.message || "Failed to prepare email",
+    }));
+
+/** Tutor: review a proposed mark. action: "approve" | "change" | "needs_resubmission". */
+export const reviewProposedMarking = (bootcampId, courseWorkId, submissionUserId, { action, grade, feedback, email } = {}) =>
   axios
     .post(
       `${BASE_URL}/tutor-booking/google-classroom/proposed-markings/review`,
-      { bootcampId, courseWorkId, submissionUserId, action, grade, feedback },
+      { bootcampId, courseWorkId, submissionUserId, action, grade, feedback, email },
       { headers: tutorBookingHeaders() }
     )
     .then((res) => res.data)

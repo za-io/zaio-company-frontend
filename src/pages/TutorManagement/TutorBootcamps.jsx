@@ -10,235 +10,13 @@ import {
   getLinkableBootcamps,
   linkClassroomSubmissions,
   linkClassroomUserManually,
-  setAssignmentInTalks,
-  reviewProposedMarking,
 } from "../../api/company";
 import Loader from "../../components/loader/loader";
-import { FiAlertCircle } from "react-icons/fi";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import MarkingDesk from "./MarkingDesk";
 
-const OVERDUE_HOURS = 48;
-const IN_TALKS_EXTRA_DAYS = 3;
-const MARKINGS_PER_PAGE = 10;
 const UNMATCHED_PER_PAGE = 5;
-const RETURNED_PER_PAGE = 10;
 
-const PROPOSAL_STATUS_LABELS = {
-  proposed: "Proposed",
-  approved: "Approved",
-  changed: "Changed",
-  needs_resubmission: "Needs resubmission",
-  returned: "Returned",
-  stale: "Stale",
-};
-
-async function copyTextToClipboard(text) {
-  if (!text) return false;
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch (_) {}
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch (_) {
-    return false;
-  }
-}
-
-/** Proposed mark (from the marking assistant) for one unmarked submission: badge + expandable review panel. */
-function ProposedMarkingPanel({ item, onUpdated }) {
-  const pm = item.proposedMarking;
-  const [expanded, setExpanded] = useState(false);
-  const [changing, setChanging] = useState(false);
-  const [grade, setGrade] = useState(pm?.approvedGrade ?? pm?.proposedGrade ?? "");
-  const [feedback, setFeedback] = useState(pm?.approvedFeedback || pm?.feedback || "");
-  const [saving, setSaving] = useState(null);
-  const [message, setMessage] = useState(null);
-
-  if (!pm) return null;
-  const outOf = pm.maxPoints ?? item.assignment?.maxPoints;
-  const status = pm.status || "proposed";
-  const reviewed = ["approved", "changed", "needs_resubmission"].includes(status);
-  const shownGrade = reviewed && pm.approvedGrade != null ? pm.approvedGrade : pm.proposedGrade;
-
-  const submitReview = async (action) => {
-    setSaving(action);
-    setMessage(null);
-    try {
-      const res = await reviewProposedMarking(item.bootcampId, item.assignment?.courseWorkId, item.userId, {
-        action,
-        grade: action === "change" ? grade : undefined,
-        feedback,
-      });
-      if (!res?.success) {
-        setMessage({ type: "error", text: res?.message || "Failed to save" });
-        return;
-      }
-      onUpdated(res.data || {});
-      setChanging(false);
-      if (action === "approve" || action === "change") {
-        const copied = await copyTextToClipboard(res.data?.approvedFeedback || feedback);
-        let opened = null;
-        if (item.linkToMark) opened = window.open(item.linkToMark, "_blank", "noopener,noreferrer");
-        setMessage({
-          type: "success",
-          text: `Saved ${res.data?.approvedGrade ?? ""}${outOf != null ? `/${outOf}` : ""}. ${
-            copied ? "Feedback copied – paste it as a private comment." : "Copy the feedback manually."
-          }${item.linkToMark && !opened ? " Pop-up blocked: use 'Mark in Google Classroom'." : " Now enter the grade in Classroom and return it."}`,
-        });
-      } else {
-        setMessage({ type: "success", text: "Marked as needs resubmission (no email sent)." });
-      }
-    } finally {
-      setSaving(null);
-    }
-  };
-
-  const badgeClass =
-    status === "approved" || status === "changed"
-      ? "bg-green-700/40 text-green-300 border-green-700"
-      : status === "needs_resubmission"
-      ? "bg-red-700/30 text-red-300 border-red-700"
-      : "bg-purple-700/30 text-purple-200 border-purple-700";
-
-  return (
-    <div className="w-full basis-full">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className={`inline-flex items-center gap-2 px-2 py-0.5 rounded border text-xs font-medium ${badgeClass}`}
-        title="Proposed mark from the marking assistant – click to review"
-      >
-        {PROPOSAL_STATUS_LABELS[status] || status}: {shownGrade ?? "–"}
-        {outOf != null ? `/${outOf}` : ""}
-        {pm.followedInstructions ? ` · instructions: ${pm.followedInstructions}` : ""}
-        {pm.stale ? " · resubmitted since proposal" : ""}
-        <span>{expanded ? "▲" : "▼"}</span>
-      </button>
-      {expanded && (
-        <div className="mt-2 p-3 rounded-lg bg-gray-900/60 border border-gray-700 text-sm text-gray-300 space-y-2">
-          {pm.stale && (
-            <p className="text-amber-400">The student updated this submission after it was pre-marked. Check it before approving.</p>
-          )}
-          {pm.missed && (
-            <div>
-              <span className="text-gray-400 block text-xs uppercase">What was missed</span>
-              <p className="whitespace-pre-wrap">{pm.missed}</p>
-            </div>
-          )}
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400 text-xs uppercase">Feedback for student</span>
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await copyTextToClipboard(feedback);
-                  setMessage({ type: ok ? "success" : "error", text: ok ? "Feedback copied." : "Could not copy." });
-                }}
-                className="text-xs text-blue-400 hover:text-blue-300"
-              >
-                Copy
-              </button>
-            </div>
-            <textarea
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              rows={3}
-              disabled={reviewed && !changing}
-              className="w-full mt-1 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1.5 text-white text-sm disabled:opacity-70"
-            />
-          </div>
-          {pm.tutorNotes && (
-            <div>
-              <span className="text-gray-400 block text-xs uppercase">Notes for tutor</span>
-              <p className="whitespace-pre-wrap text-gray-400">{pm.tutorNotes}</p>
-            </div>
-          )}
-          {Array.isArray(pm.flags) && pm.flags.length > 0 && (
-            <p className="text-amber-400">⚠ {pm.flags.join(" · ")}</p>
-          )}
-          {changing && (
-            <div className="flex items-center gap-2">
-              <label className="text-gray-400 text-xs uppercase">Grade</label>
-              <input
-                type="number"
-                min={0}
-                max={outOf ?? undefined}
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                className="w-24 bg-gray-800 border border-gray-600 rounded-lg px-2 py-1 text-white text-sm"
-              />
-              {outOf != null && <span className="text-gray-500">/ {outOf}</span>}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {!changing ? (
-              <>
-                <button
-                  type="button"
-                  disabled={!!saving}
-                  onClick={() => submitReview("approve")}
-                  className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium disabled:opacity-50"
-                >
-                  {saving === "approve" ? "…" : `Approve ${pm.proposedGrade ?? ""}${outOf != null ? `/${outOf}` : ""}`}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!saving}
-                  onClick={() => setChanging(true)}
-                  className="px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium disabled:opacity-50"
-                >
-                  Change
-                </button>
-                <button
-                  type="button"
-                  disabled={!!saving}
-                  onClick={() => submitReview("needs_resubmission")}
-                  className="px-3 py-1.5 rounded-lg bg-red-700/80 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50"
-                >
-                  {saving === "needs_resubmission" ? "…" : "Needs resubmission"}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  disabled={!!saving}
-                  onClick={() => submitReview("change")}
-                  className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium disabled:opacity-50"
-                >
-                  {saving === "change" ? "…" : "Save changed mark"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!!saving}
-                  onClick={() => setChanging(false)}
-                  className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-          </div>
-          {message && (
-            <p className={message.type === "error" ? "text-red-400" : "text-green-400"}>{message.text}</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function UnmatchedLinkRow({ gcStudent, bootcampId, zaioStudents, linkingRow, setLinkingRow, onLinked, linkClassroomUserManually }) {
   const [selectedZaioId, setSelectedZaioId] = useState("");
@@ -386,15 +164,15 @@ export default function TutorBootcamps() {
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [linkableBootcamps, setLinkableBootcamps] = useState([]);
   const [selectedBootcampIds, setSelectedBootcampIds] = useState([]);
-  const [markingsPage, setMarkingsPage] = useState(1);
   const [unmatchedPage, setUnmatchedPage] = useState(1);
   const [markingsBootcampFilter, setMarkingsBootcampFilter] = useState("");
   const [markingsInTalksFilter, setMarkingsInTalksFilter] = useState("all");
   const [markingsProposalFilter, setMarkingsProposalFilter] = useState("all");
-  const [returnedPage, setReturnedPage] = useState(1);
   const [unmatchedStudents, setUnmatchedStudents] = useState([]);
   const [linkingRow, setLinkingRow] = useState(null);
-  const [inTalksLoading, setInTalksLoading] = useState(null);
+  const [deskView, setDeskView] = useState("queue");
+  const [selectedMarkingKey, setSelectedMarkingKey] = useState(null);
+  const [showClassroomTools, setShowClassroomTools] = useState(false);
   const [params, setParams] = useSearchParams();
   const { user } = useUserStore();
   const navigate = useNavigate();
@@ -482,12 +260,6 @@ export default function TutorBootcamps() {
   }, [user?._id, activeTab, classroomConnected]);
 
   useEffect(() => {
-    setMarkingsPage(1);
-  }, [unmarkedAssignments.length, markingsBootcampFilter, markingsInTalksFilter, markingsProposalFilter]);
-  useEffect(() => {
-    setReturnedPage(1);
-  }, [returnedAssignments.length, markingsBootcampFilter]);
-  useEffect(() => {
     setUnmatchedPage(1);
   }, [unmatchedStudents.length]);
 
@@ -518,23 +290,11 @@ export default function TutorBootcamps() {
         .map((i) => [String(i.bootcampId), { id: String(i.bootcampId), name: i.bootcampName }])
     ).values(),
   ].sort((a, b) => a.name.localeCompare(b.name));
-  const markingsTotal = markingsFiltered.length;
-  const markingsPaginated = markingsFiltered.slice(
-    (markingsPage - 1) * MARKINGS_PER_PAGE,
-    markingsPage * MARKINGS_PER_PAGE
-  );
-  const markingsTotalPages = Math.max(1, Math.ceil(markingsTotal / MARKINGS_PER_PAGE));
 
   const returnedFiltered = returnedAssignments.filter((item) => {
     if (markingsBootcampFilter && String(item.bootcampId) !== markingsBootcampFilter) return false;
     return true;
   });
-  const returnedTotal = returnedFiltered.length;
-  const returnedPaginated = returnedFiltered.slice(
-    (returnedPage - 1) * RETURNED_PER_PAGE,
-    returnedPage * RETURNED_PER_PAGE
-  );
-  const returnedTotalPages = Math.max(1, Math.ceil(returnedTotal / RETURNED_PER_PAGE));
 
   const list = bootcampsWithProgress.length > 0
     ? bootcampsWithProgress
@@ -546,10 +306,21 @@ export default function TutorBootcamps() {
       }));
 
   return (
-    <div className="flex h-screen bg-gray-800 text-gray-100">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-gray-800 text-gray-100">
       {/* Sidebar - match image: selected item with blue border */}
       <div className="w-1/6 min-w-[200px] bg-gray-900 p-4">
         <h2 className="text-lg font-bold text-white">Tutor Platform</h2>
+        <button
+          type="button"
+          className={`block w-full text-left p-2 my-2 rounded text-gray-100 transition ${
+            activeTab === "markings"
+              ? "bg-gray-700 ring-1 ring-blue-500 border border-blue-500/50"
+              : "hover:bg-gray-700/70"
+          }`}
+          onClick={() => setActiveTab("markings")}
+        >
+          Bootcamp markings
+        </button>
         <button
           type="button"
           className={`block w-full text-left p-2 my-2 rounded text-gray-100 transition ${
@@ -572,21 +343,10 @@ export default function TutorBootcamps() {
         >
           My KPIs
         </button>
-        <button
-          type="button"
-          className={`block w-full text-left p-2 my-2 rounded text-gray-100 transition ${
-            activeTab === "markings"
-              ? "bg-gray-700 ring-1 ring-blue-500 border border-blue-500/50"
-              : "hover:bg-gray-700/70"
-          }`}
-          onClick={() => setActiveTab("markings")}
-        >
-          Bootcamp markings
-        </button>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-6 overflow-auto">
+      <div className={`flex-1 min-h-0 p-6 flex flex-col ${activeTab === "markings" ? "overflow-hidden" : "overflow-auto"}`}>
         <div className="flex justify-between items-center flex-wrap gap-4 mb-4">
           <h2 className="text-xl font-bold text-white">
             {activeTab === "students"
@@ -667,14 +427,27 @@ export default function TutorBootcamps() {
 
             {/* Bootcamp markings - unmarked Google Classroom assignments (tutor connects and pulls from their Classroom) */}
             {activeTab === "markings" && (
-              <div className="flex gap-6 max-w-6xl">
-                <div className="flex-1 min-w-0 border border-gray-600 rounded-xl bg-gray-900/40 p-4">
-                <p className="text-gray-400 mb-4">
-                  Connect your Google Classroom and ensure an admin has linked Classroom courses to your bootcamps. You will only see submissions from students in your allocated bootcamps.
-                </p>
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <p className="text-gray-400 text-sm">
+                    {classroomConnected
+                      ? "Pick a submission, check the proposed mark, then enter it in Classroom."
+                      : "Connect Google Classroom to load submissions from your bootcamps."}
+                  </p>
+                  {classroomConnected && (
+                    <button
+                      type="button"
+                      onClick={() => setShowClassroomTools((open) => !open)}
+                      className="shrink-0 text-sm text-gray-300 hover:text-white"
+                    >
+                      {showClassroomTools ? "Hide setup" : "Classroom setup"}
+                    </button>
+                  )}
+                </div>
 
-                {/* Google Classroom auth – always visible (redirect flow to avoid popup/CSP issues) */}
-                <div className="mb-6 p-4 rounded-lg bg-gray-800/80 border border-gray-600">
+                {(!classroomConnected || showClassroomTools) && (
+                <div className="mb-3 p-4 rounded-lg bg-gray-800/80 border border-gray-600">
                   <h3 className="text-white font-medium mb-2">Google Classroom</h3>
                   {classroomConfigLoading ? (
                     <div className="flex items-center gap-2 text-gray-400">
@@ -883,9 +656,59 @@ getTutorClassroomSubmissions()
                     </div>
                   )}
                 </div>
+                )}
 
-                {classroomConnected && unmatchedStudents.length > 0 && (
-                  <div className="mt-6 p-4 rounded-lg bg-gray-800/80 border border-gray-600">
+                {classroomConnected && !markingsLoading && (
+                  <MarkingDesk
+                    items={markingsFiltered}
+                    returnedItems={returnedFiltered}
+                    selectedKey={selectedMarkingKey}
+                    onSelect={setSelectedMarkingKey}
+                    view={deskView}
+                    onViewChange={setDeskView}
+                    bootcampFilter={markingsBootcampFilter}
+                    onBootcampFilter={setMarkingsBootcampFilter}
+                    inTalksFilter={markingsInTalksFilter}
+                    onInTalksFilter={setMarkingsInTalksFilter}
+                    proposalFilter={markingsProposalFilter}
+                    onProposalFilter={setMarkingsProposalFilter}
+                    bootcamps={markingsBootcamps}
+                    onTimeScore={onTimeScore}
+                    unmatchedCount={unmatchedTotal}
+                    emptyMessage={markingsMessage}
+                    onInTalks={(item) =>
+                      setUnmarkedAssignments((prev) =>
+                        prev.map((a) =>
+                          a.bootcampId === item.bootcampId &&
+                          a.assignment?.courseWorkId === item.assignment?.courseWorkId &&
+                          a.userId === item.userId
+                            ? { ...a, inTalks: true }
+                            : a
+                        )
+                      )
+                    }
+                    onProposalUpdated={(item, data) =>
+                      setUnmarkedAssignments((prev) =>
+                        prev.map((a) =>
+                          a.bootcampId === item.bootcampId &&
+                          a.assignment?.courseWorkId === item.assignment?.courseWorkId &&
+                          a.userId === item.userId
+                            ? { ...a, proposedMarking: { ...a.proposedMarking, ...data } }
+                            : a
+                        )
+                      )
+                    }
+                  />
+                )}
+                {classroomConnected && markingsLoading && (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader />
+                    <p className="text-gray-400 mt-2">Loading unmarked assignments…</p>
+                  </div>
+                )}
+
+                {deskView === "unmatched" && unmatchedStudents.length > 0 && (
+                  <div className="flex-1 min-h-0 overflow-auto mt-3 p-4 rounded-lg bg-gray-800/80 border border-gray-600">
                     <h3 className="text-white font-medium mb-2">Unmatched Classroom students</h3>
                     <p className="text-gray-400 text-sm mb-4">
                       These Classroom students could not be matched by email. Link them to a Zaio student below.
@@ -977,322 +800,8 @@ getTutorClassroomSubmissions()
           </div>
         )}
 
-                {!classroomConnected ? (
-                  <p className="text-gray-500 text-sm">Connect above to see unmarked assignments.</p>
-                ) : markingsLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader />
-                    <p className="text-gray-400 mt-2">Loading unmarked assignments…</p>
-                  </div>
-                ) : unmarkedAssignments.length === 0 ? (
-                  <p className="text-gray-400 py-4">
-                    {markingsMessage || "No unmarked assignments at the moment."}
-                  </p>
-                ) : (
-                  <>
-                  <div className="flex flex-wrap items-center gap-4 mb-4">
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="markings-bootcamp-filter" className="text-gray-400 text-sm">
-                        Bootcamp
-                      </label>
-                      <select
-                        id="markings-bootcamp-filter"
-                        value={markingsBootcampFilter}
-                        onChange={(e) => setMarkingsBootcampFilter(e.target.value)}
-                        className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-white text-sm min-w-[160px]"
-                      >
-                        <option value="">All bootcamps</option>
-                        {markingsBootcamps.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="markings-intalks-filter" className="text-gray-400 text-sm">
-                        In talks
-                      </label>
-                      <select
-                        id="markings-intalks-filter"
-                        value={markingsInTalksFilter}
-                        onChange={(e) => setMarkingsInTalksFilter(e.target.value)}
-                        className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-white text-sm min-w-[140px]"
-                      >
-                        <option value="all">All</option>
-                        <option value="in_talks">In talks</option>
-                        <option value="not_in_talks">Not in talks</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="markings-proposal-filter" className="text-gray-400 text-sm">
-                        Proposed mark
-                      </label>
-                      <select
-                        id="markings-proposal-filter"
-                        value={markingsProposalFilter}
-                        onChange={(e) => setMarkingsProposalFilter(e.target.value)}
-                        className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-white text-sm min-w-[140px]"
-                      >
-                        <option value="all">All</option>
-                        <option value="pending">Pending review</option>
-                        <option value="reviewed">Reviewed</option>
-                        <option value="none">No proposal</option>
-                      </select>
-                    </div>
-                    <span className="text-gray-500 text-sm">
-                      {markingsTotal} assignment{markingsTotal !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  {markingsFiltered.length === 0 ? (
-                    <p className="text-gray-400 py-4">No assignments match the current filters.</p>
-                  ) : (
-                  <>
-                  <ul className="divide-y divide-gray-700">
-                    {markingsPaginated.map((item, index) => {
-                      const submittedAt = item.assignment?.submittedAt;
-                      const extraMs = item.inTalks ? IN_TALKS_EXTRA_DAYS * 24 * 60 * 60 * 1000 : 0;
-                      const deadlineMs = OVERDUE_HOURS * 60 * 60 * 1000 + extraMs;
-                      const isOverdue =
-                        submittedAt &&
-                        new Date(submittedAt).getTime() + deadlineMs < Date.now();
-                      const rowKey = `${item.bootcampId}-${item.assignment?.courseWorkId}-${item.userId}`;
-                      const isInTalksBtnLoading = inTalksLoading === rowKey;
-                      return (
-                      <li
-                        key={`${item.userId || item.userid}-${item.assignment?.courseWorkId}-${index}`}
-                        className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2 py-3 first:pt-0 last:pb-0"
-                      >
-                        <div className="flex-1 min-w-0 flex items-start gap-2">
-                          <div>
-                            <span className="text-white font-medium block truncate">
-                              {item.assignment?.title || "Untitled assignment"}
-                            </span>
-                            <span className="text-sm text-gray-400">
-                              {item.userName || item.userEmail || item.userId} · {item.bootcampName || item.courseName || "Course"}
-                            </span>
-                            {submittedAt && (
-                              <span className="text-xs text-gray-500 ml-1">
-                                Submitted {new Date(submittedAt).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                          {isOverdue && (
-                            <FiAlertCircle
-                              size={20}
-                              className="shrink-0 text-amber-500 mt-0.5"
-                              title="Not marked within 48 hours of submission"
-                            />
-                          )}
-                        </div>
-                        <div className="shrink-0 flex items-center gap-2 flex-wrap">
-                          {!item.inTalks && (
-                            <button
-                              type="button"
-                              disabled={isInTalksBtnLoading}
-                              onClick={async () => {
-                                setInTalksLoading(rowKey);
-                                try {
-                                  const res = await setAssignmentInTalks(
-                                    item.bootcampId,
-                                    item.assignment?.courseWorkId,
-                                    item.userId,
-                                    {
-                                      studentEmail: item.userEmail,
-                                      assignmentTitle: item.assignment?.title,
-                                      submissionLink: item.linkToMark,
-                                    }
-                                  );
-                                  if (res?.success) {
-                                    setUnmarkedAssignments((prev) =>
-                                      prev.map((a) =>
-                                        a.bootcampId === item.bootcampId &&
-                                        a.assignment?.courseWorkId === item.assignment?.courseWorkId &&
-                                        a.userId === item.userId
-                                          ? { ...a, inTalks: true }
-                                          : a
-                                      )
-                                    );
-                                  }
-                                } finally {
-                                  setInTalksLoading(null);
-                                }
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 rounded-lg bg-amber-600/80 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
-                            >
-                              {isInTalksBtnLoading ? "…" : "In talks with student"}
-                            </button>
-                          )}
-                          {item.inTalks && (
-                            <span className="text-amber-400 text-sm">+3 days</span>
-                          )}
-                          {item.linkToMark ? (
-                            <a
-                              href={item.linkToMark}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
-                            >
-                              Mark in Google Classroom
-                            </a>
-                          ) : (
-                            <span className="text-gray-500 text-sm">
-                              Open Google Classroom to mark
-                            </span>
-                          )}
-                        </div>
-                        <ProposedMarkingPanel
-                          item={item}
-                          onUpdated={(data) =>
-                            setUnmarkedAssignments((prev) =>
-                              prev.map((a) =>
-                                a.bootcampId === item.bootcampId &&
-                                a.assignment?.courseWorkId === item.assignment?.courseWorkId &&
-                                a.userId === item.userId
-                                  ? { ...a, proposedMarking: { ...a.proposedMarking, ...data } }
-                                  : a
-                              )
-                            )
-                          }
-                        />
-                      </li>
-                    );
-                    })}
-                  </ul>
-                  {markingsTotalPages > 1 && markingsFiltered.length > 0 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                      <span className="text-gray-400 text-sm">
-                        Showing {(markingsPage - 1) * MARKINGS_PER_PAGE + 1}–
-                        {Math.min(markingsPage * MARKINGS_PER_PAGE, markingsTotal)} of {markingsTotal}
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          disabled={markingsPage <= 1}
-                          onClick={() => setMarkingsPage((p) => Math.max(1, p - 1))}
-                          className="px-3 py-1.5 rounded-lg bg-gray-700 text-white text-sm disabled:opacity-50 hover:bg-gray-600"
-                        >
-                          Previous
-                        </button>
-                        <span className="text-gray-400 text-sm">
-                          Page {markingsPage} of {markingsTotalPages}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={markingsPage >= markingsTotalPages}
-                          onClick={() => setMarkingsPage((p) => Math.min(markingsTotalPages, p + 1))}
-                          className="px-3 py-1.5 rounded-lg bg-gray-700 text-white text-sm disabled:opacity-50 hover:bg-gray-600"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  </>
-                  )}
-                  </>
-                )}
-
-                {classroomConnected && !markingsLoading && returnedAssignments.length > 0 && (
-                  <div className="mt-8 pt-6 border-t border-gray-600">
-                    <h3 className="text-white font-medium mb-3">Returned assignments</h3>
-                    <p className="text-gray-400 text-sm mb-4">
-                      Assignments you have graded and returned to students.
-                      {returnedTotal > 0 && ` ${returnedTotal} total.`}
-                    </p>
-                    {returnedFiltered.length === 0 ? (
-                      <p className="text-gray-400 py-2">No returned assignments match the bootcamp filter.</p>
-                    ) : (
-                      <>
-                        <ul className="divide-y divide-gray-700">
-                          {returnedPaginated.map((item, index) => (
-                            <li
-                              key={`ret-${item.userId}-${item.assignment?.courseWorkId}-${index}`}
-                              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 first:pt-0 last:pb-0"
-                            >
-                              <div>
-                                <span className="text-white font-medium block truncate">
-                                  {item.assignment?.title || "Untitled assignment"}
-                                </span>
-                                <span className="text-sm text-gray-400">
-                                  {item.userName || item.userEmail || item.userId} · {item.bootcampName || "Course"}
-                                </span>
-                                {item.assignment?.returnedAt && (
-                                  <span className="text-xs text-gray-500 ml-1 block">
-                                    Returned {new Date(item.assignment.returnedAt).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-                              {item.linkToMark && (
-                                <a
-                                  href={item.linkToMark}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium shrink-0"
-                                >
-                                  View in Google Classroom
-                                </a>
-                              )}
-                </li>
-              ))}
-              </ul>
-                        {returnedTotalPages > 1 && (
-                          <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                            <span className="text-gray-400 text-sm">
-                              Showing {(returnedPage - 1) * RETURNED_PER_PAGE + 1}–
-                              {Math.min(returnedPage * RETURNED_PER_PAGE, returnedTotal)} of {returnedTotal}
-                            </span>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                disabled={returnedPage <= 1}
-                                onClick={() => setReturnedPage((p) => Math.max(1, p - 1))}
-                                className="px-3 py-1.5 rounded-lg bg-gray-700 text-white text-sm disabled:opacity-50 hover:bg-gray-600"
-                              >
-                                Previous
-                              </button>
-                              <span className="text-gray-400 text-sm flex items-center">
-                                Page {returnedPage} of {returnedTotalPages}
-                              </span>
-                              <button
-                                type="button"
-                                disabled={returnedPage >= returnedTotalPages}
-                                onClick={() => setReturnedPage((p) => Math.min(returnedTotalPages, p + 1))}
-                                className="px-3 py-1.5 rounded-lg bg-gray-700 text-white text-sm disabled:opacity-50 hover:bg-gray-600"
-                              >
-                                Next
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
                 </div>
 
-                {classroomConnected && !markingsLoading && (
-                  <div className="shrink-0 w-56">
-                    <div className="sticky top-4 p-4 rounded-xl bg-gray-800/80 border border-gray-600">
-                      <h3 className="text-white font-medium mb-2 text-sm">Returned on time</h3>
-                      <span
-                        className="text-3xl font-bold text-white cursor-help block mb-1"
-                        title="Score = (assignments returned within 48 hours of submission ÷ total returned) × 10. If 'In talks with student' was set, the deadline extends to 48h + 3 days."
-                      >
-                        {onTimeScore?.totalReturned != null && onTimeScore.totalReturned > 0
-                          ? `${onTimeScore.scoreOutOf10 ?? 0}/10`
-                          : "—"}
-                      </span>
-                      {onTimeScore?.totalReturned != null && onTimeScore.totalReturned > 0 ? (
-                        <p className="text-gray-400 text-sm">
-                          {onTimeScore.onTime ?? 0} of {onTimeScore.totalReturned} on time
-                        </p>
-                      ) : (
-                        <p className="text-gray-500 text-sm">No returns yet</p>
-              )}
-            </div>
-                  </div>
-                )}
           </div>
         )}
 
