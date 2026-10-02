@@ -1,0 +1,217 @@
+/* Zaio 2026 brand skin for the company LMS.
+   Tokens follow zaio-brand-guide (dark operational theme).
+   Existing screens keep their structure; these rules only retint them. */
+
+:root {
+  --zaio-future-blue: #2b2ecf;
+  --zaio-future-blue-dark: #5a5de8;
+  --zaio-true-black: #121212;
+  --zaio-quiet-ink: #2a2a2a;
+  --zaio-soft-white: #f5f5f5;
+  --zaio-pale-sky: #6f6f6f;
+  --zaio-soft-stone: #9c9c9c;
+  --zaio-warm-fog: #e6e6e6;
+  --zaio-fresh-mint: #7ed957;
+  --zaio-warm-sand: #f2b766;
+  --zaio-digital-violet: #7a6cf6;
+  --zaio-radius: 0.625rem;
+  --bs-primary: #2b2ecf;
+  --bs-primary-rgb: 43, 46, 207;
+  --bs-body-font-family: "Inter", system-ui, -apple-system, sans-serif;
+  --bs-border-radius: 0.625rem;
+}
+
+body {
+  background-color: var(--zaio-true-black);
+  color: var(--zaio-soft-white);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(90, 93, 232, 0.7);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Light cards stay readable on the dark ground. */
+.bg-white,
+.bg-gray-100,
+.bg-gray-50 {
+  color: var(--zaio-true-black);
+}
+
+.bg-white .text-gray-300,
+.bg-gray-100 .text-gray-300,
+.bg-gray-50 .text-gray-300 {
+  color: #4b5563;
+}
+
+.bg-white .text-gray-400,
+.bg-gray-100 .text-gray-400,
+.bg-gray-50 .text-gray-400 {
+  color: #6b7280;
+}
+
+.bg-white .text-gray-500,
+.bg-gray-100 .text-gray-500,
+.bg-gray-50 .text-gray-500 {
+  color: #6b7280;
+}
+
+.bg-white .text-green-400,
+.bg-gray-100 .text-green-400,
+.bg-gray-50 .text-green-400,
+.bg-white .text-emerald-400,
+.bg-gray-100 .text-emerald-400,
+.bg-gray-50 .text-emerald-400 {
+  color: #1c8742;
+}
+
+.bg-white .text-amber-400,
+.bg-gray-100 .text-amber-400,
+.bg-gray-50 .text-amber-400,
+.bg-white .text-yellow-400,
+.bg-gray-100 .text-yellow-400,
+.bg-gray-50 .text-yellow-400 {
+  color: #af6310;
+}
+
+/* GitHub-dark surfaces used across the panel → Zaio dark theme. */
+.bg-\[\#0D1117\],
+.bg-\[\#0d1117\] {
+  background-color: var(--zaio-true-black);
+  color: var(--zaio-soft-white);
+}
+
+.bg-\[\#161B22\],
+.bg-\[\#161b22\] {
+  background-color: var(--zaio-quiet-ink);
+  color: var(--zaio-soft-white);
+}
+
+.hover\:bg-\[\#1C2128\]:hover,
+.hover\:bg-\[\#1c2128\]:hover {
+  background-color: #333333;
+}
+
+.border-gray-800 {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.border-gray-700 {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.bg-gray-800 {
+  background-color: var(--zaio-quiet-ink);
+}
+
+.bg-gray-700,
+.hover\:bg-gray-700:hover,
+.hover\:bg-gray-800:hover {
+  background-color: #333333;
+}
+
+.hover\:bg-gray-600:hover {
+  background-color: #3a3a3a;
+}
+
+.text-gray-300 {
+  color: var(--zaio-soft-white);
+}
+
+.text-gray-400,
+.text-gray-500 {
+  color: var(--zaio-soft-stone);
+}
+
+/* Primary actions: Future Blue. Text on dark uses the lifted blue. */
+.bg-blue-600,
+.bg-blue-700,
+.bg-violet-600,
+.bg-violet-700,
+.hover\:bg-blue-600:hover,
+.hover\:bg-blue-700:hover,
+.hover\:bg-violet-600:hover,
+.hover\:bg-violet-700:hover {
+  background-color: var(--zaio-future-blue);
+}
+
+.bg-blue-600\/20,
+.bg-blue-600\/30,
+.hover\:bg-blue-600\/20:hover,
+.hover\:bg-blue-600\/30:hover {
+  background-color: rgba(90, 93, 232, 0.18);
+}
+
+.text-blue-300,
+.text-blue-400,
+.text-blue-500,
+.hover\:text-blue-300:hover,
+.hover\:text-blue-400:hover {
+  color: var(--zaio-future-blue-dark);
+}
+
+.focus\:ring-blue-500:focus,
+.focus\:ring-violet-500:focus {
+  --tw-ring-color: rgba(90, 93, 232, 0.6);
+}
+
+/* Success and warning stay distinct, in brand hues. */
+.text-green-400,
+.text-emerald-400,
+.hover\:text-emerald-400:hover,
+.hover\:text-green-400:hover {
+  color: var(--zaio-fresh-mint);
+}
+
+.bg-emerald-600,
+.bg-green-600 {
+  background-color: #1c8742;
+}
+
+.text-amber-200,
+.text-amber-300,
+.text-amber-400,
+.text-yellow-400,
+.hover\:text-yellow-400:hover {
+  color: var(--zaio-warm-sand);
+}
+
+.bg-yellow-600,
+.bg-amber-600 {
+  background-color: #af6310;
+}
+
+.btn-primary {
+  background-color: var(--zaio-future-blue);
+  border-color: var(--zaio-future-blue);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: #2426b0;
+  border-color: #2426b0;
+}

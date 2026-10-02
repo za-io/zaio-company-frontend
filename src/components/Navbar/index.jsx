@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import logo from "../../assets/img/logo/zaio-logo-light.png";
+import { ReactComponent as ZaioLogo } from "../../assets/brand/zaio-logo-current.svg";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../../store/UserProvider";
 import { getAssessorLateSubmissions, getTutorLateVerifications } from "../../api/company";
@@ -227,7 +227,7 @@ const Navbar = () => {
         <div className="flex justify-between items-center h-16">
           {/* Left: Logo & User */}
           <Link to="/" className="flex items-center gap-3">
-            <img className="h-8" src={logo} alt="Zaio" />
+            <ZaioLogo className="h-8 w-auto text-[#F5F5F5]" role="img" aria-label="Zaio" />
           {user?.email && user?.role !== "TUTOR" && (
               <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-gray-700">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold">
