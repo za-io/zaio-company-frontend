@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { Modal } from "react-bootstrap";
 import { pingStudent, sendDiscordDM, trackWhatsAppMessage } from "../../api/company";
+import { setStudentOutcome } from "../../api/student";
+
+const OUTCOME_OPTIONS = [
+  { value: "taken_over", label: "Take over", color: "bg-purple-600 hover:bg-purple-500", confirmRequired: false },
+  { value: "catching_up", label: "Catching up", color: "bg-teal-600 hover:bg-teal-500", confirmRequired: false },
+  { value: "transferred", label: "Transfer", color: "bg-gray-600 hover:bg-gray-500", confirmRequired: true },
+  { value: "leaving", label: "Leaving", color: "bg-gray-800 hover:bg-gray-700", confirmRequired: true },
+  { value: "clear", label: "Clear", color: "bg-gray-700/50 text-gray-300 hover:bg-gray-700", confirmRequired: false },
+];
 import { useUserStore } from "../../store/UserProvider";
 import { formatDate, formatTime } from "../../utils/dateUtils";
 
@@ -612,11 +621,52 @@ const getChannelLabel = (channel) => {
   }
 };
 
-const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics }) => {
-    const handleClose = () => {
-      setShowModal(false);
-    };
-  
+const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics, refreshEngagement }) => {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [outcomeNote, setOutcomeNote] = useState("");
+  const [confirmOutcome, setConfirmOutcome] = useState(null);
+
+  const handleClose = () => {
+    setShowModal(false);
+    setConfirmOutcome(null);
+    setOutcomeNote("");
+    setMsg(null);
+  };
+
+  const handleSetOutcome = async (outcome) => {
+    const option = OUTCOME_OPTIONS.find((o) => o.value === outcome);
+    if (option?.confirmRequired && confirmOutcome !== outcome) {
+      setConfirmOutcome(outcome);
+      return;
+    }
+
+    setLoading(true);
+    setMsg(null);
+    try {
+      await setStudentOutcome(bootcampId, {
+        userid: showModal?.userid?._id,
+        outcome,
+        note: outcomeNote || undefined,
+      });
+      setMsg(`Outcome set to "${option?.label || outcome}"`);
+      setConfirmOutcome(null);
+      setOutcomeNote("");
+      if (refreshEngagement) {
+        await refreshEngagement();
+      }
+      if (getAnalytics) {
+        getAnalytics();
+      }
+    } catch (err) {
+      setMsg(`Failed to set outcome: ${err?.response?.data?.message || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const currentOutcome = showModal?.engagementData?.suhanasOutcome;
+
   // Count messages by channel
   const messageCounts = showModal?.pingStatusDetails?.reduce((acc, item) => {
     const channel = item.channel || "email";
@@ -680,6 +730,86 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics 
             </div>
           </div>
         )}
+
+        <div className="px-5 py-4 border-b border-gray-800 bg-[#0D1117]/50">
+          <h3 className="text-sm font-semibold text-white mb-3">Suhana&apos;s outcome</h3>
+
+          {currentOutcome?.value && (
+            <div className="bg-purple-600/10 border border-purple-500/30 rounded-lg p-3 mb-3">
+              <p className="text-sm font-semibold text-purple-300 capitalize">
+                Current: {String(currentOutcome.value).replace(/_/g, " ")}
+              </p>
+              {currentOutcome.note && (
+                <p className="text-sm text-purple-200/80 mt-1">{currentOutcome.note}</p>
+              )}
+              {currentOutcome.setBy && (
+                <p className="text-xs text-purple-300/70 mt-1">
+                  Set by {currentOutcome.setBy} · {formatDate(currentOutcome.setAt)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {confirmOutcome && (
+            <div className="bg-amber-600/10 border border-amber-500/30 rounded-lg p-3 mb-3">
+              <p className="text-sm text-amber-200">
+                Confirm marking as &quot;
+                {OUTCOME_OPTIONS.find((o) => o.value === confirmOutcome)?.label}&quot;?
+              </p>
+              <div className="flex gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => handleSetOutcome(confirmOutcome)}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+                >
+                  {loading ? "Saving…" : "Yes, confirm"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmOutcome(null)}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2 mb-3">
+            {OUTCOME_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleSetOutcome(option.value)}
+                disabled={loading}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${option.color}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+            Note (optional)
+          </label>
+          <textarea
+            value={outcomeNote}
+            onChange={(e) => setOutcomeNote(e.target.value)}
+            placeholder="Add a note about this outcome…"
+            className="w-full bg-[#0D1117] text-gray-200 border border-gray-700 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+            rows={2}
+          />
+
+          {msg && (
+            <p
+              className={`text-sm mt-2 ${msg.includes("Failed") ? "text-red-400" : "text-green-400"}`}
+            >
+              {msg}
+            </p>
+          )}
+        </div>
 
         {/* History List */}
         <div className="p-5">
@@ -761,6 +891,7 @@ export const StudentPingModal = ({
   setShowModal,
   bootcampId,
   getAnalytics,
+  refreshEngagement,
 }) => {
   return !showModal?.viewHistory ? (
     <PingStudent
@@ -775,6 +906,7 @@ export const StudentPingModal = ({
       setShowModal={setShowModal}
       bootcampId={bootcampId}
       getAnalytics={getAnalytics}
+      refreshEngagement={refreshEngagement}
     />
   );
 };

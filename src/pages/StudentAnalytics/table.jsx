@@ -1,11 +1,23 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
-import { blockUser, unblockUser, updateTutor, updateBootcampEnrollmentStatus, ENROLLMENT_STATUS_OPTIONS } from "../../api/student";
+import {
+  blockUser,
+  unblockUser,
+  updateTutor,
+  updateBootcampEnrollmentStatus,
+  ENROLLMENT_STATUS_OPTIONS,
+  getEngagementStatus,
+} from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
+import { EngagementBadge, isNeedsAttention, getEngagementSortRank } from "./EngagementBadge";
+
+const SORTING_ENGAGEMENT = {
+  ENGAGEMENT_ASC: "ENGAGEMENT_ASC",
+};
 import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors, syncStudentToAthena } from "../../api/company";
 import { checkStudentGraduateEligibility, overrideStudentGraduateEligibility } from "../../api/student";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
@@ -252,6 +264,38 @@ const AnalyticsTable = ({
   const [showMoreActionsModal, setShowMoreActionsModal] = useState(null);
 
   const [studentPingModalConfig, setStudentPingModalConfig] = useState(null);
+  const [engagementData, setEngagementData] = useState({});
+  const [showNeedsAttentionOnly, setShowNeedsAttentionOnly] = useState(false);
+  const bootcampIdForEngagement = data?.bootcampDetails?._id;
+
+  const fetchEngagementStatus = async () => {
+    if (!bootcampIdForEngagement) return;
+    try {
+      const result = await getEngagementStatus(bootcampIdForEngagement);
+      if (result && Array.isArray(result)) {
+        const engagementMap = {};
+        result.forEach((item) => {
+          if (item.userid) {
+            engagementMap[item.userid] = item;
+          }
+        });
+        setEngagementData(engagementMap);
+      }
+    } catch (err) {
+      console.error("Failed to fetch engagement status:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchEngagementStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootcampIdForEngagement]);
+
+  const needsAttentionCount = useMemo(
+    () => Object.values(engagementData).filter((e) => isNeedsAttention(e.state)).length,
+    [engagementData]
+  );
+
   /** Full tutor directory (for “Add to bootcamp” picker only). */
   const [allTutorsCatalog, setAllTutorsCatalog] = useState([]);
   const [allocateSaving, setAllocateSaving] = useState(false);
@@ -369,9 +413,11 @@ const AnalyticsTable = ({
     const raw = data?.analytics || [];
     const filtered = raw.filter(
       (ba) =>
-        ba?.userid?.username?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
-        ba?.userid?.email?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
-        (ba?.userid?.studentNumber || "")?.toLowerCase()?.includes(searchQuery?.toLowerCase())
+        (ba?.userid?.username?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
+          ba?.userid?.email?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
+          (ba?.userid?.studentNumber || "")?.toLowerCase()?.includes(searchQuery?.toLowerCase())) &&
+        (!showNeedsAttentionOnly ||
+          isNeedsAttention(engagementData[ba?.userid?._id]?.state))
     );
     return [...filtered].sort((a, b) => {
       const aTotalProgress = a?.isbootCampPassed ? 100 : (a?.completedPercentage || 0);
@@ -389,9 +435,14 @@ const AnalyticsTable = ({
       if (sortBy === SORTING.DEFERRED_DESC) {
         return Number(isDeferredEnrollment(a)) - Number(isDeferredEnrollment(b));
       }
+      if (sortBy === SORTING_ENGAGEMENT.ENGAGEMENT_ASC) {
+        const aRank = getEngagementSortRank(engagementData[a?.userid?._id]);
+        const bRank = getEngagementSortRank(engagementData[b?.userid?._id]);
+        return aRank - bRank;
+      }
       return 0;
     });
-  }, [data?.analytics, searchQuery, sortBy]);
+  }, [data?.analytics, searchQuery, sortBy, showNeedsAttentionOnly, engagementData]);
 
   const showBulkTutorTools =
     searchType === "bootcamp" && !["TUTOR", "COMPANY_ADMIN"]?.includes(user?.role);
@@ -491,6 +542,7 @@ const AnalyticsTable = ({
         showModal={studentPingModalConfig}
         setShowModal={setStudentPingModalConfig}
         getAnalytics={getAnalytics}
+        refreshEngagement={fetchEngagementStatus}
       />
 
       <GraduateReportModal
@@ -689,7 +741,24 @@ const AnalyticsTable = ({
                   <option value={SORTING.DEFERRED_DESC} className="bg-[#161B22]">
                     Active First
                   </option>
+                  <option value={SORTING_ENGAGEMENT.ENGAGEMENT_ASC} className="bg-[#161B22]">
+                    Engagement (worst first)
+                  </option>
                 </select>
+
+                {Object.keys(engagementData).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNeedsAttentionOnly(!showNeedsAttentionOnly)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                      showNeedsAttentionOnly
+                        ? "bg-red-600/30 text-red-300 border-red-500/50"
+                        : "bg-[#0D1117] text-gray-300 border-gray-700 hover:border-gray-500"
+                    }`}
+                  >
+                    Needs attention ({needsAttentionCount})
+                  </button>
+                )}
               </div>
             </div>
 
@@ -762,6 +831,11 @@ const AnalyticsTable = ({
                   <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Progress
                   </th>
+                  {Object.keys(engagementData).length > 0 && (
+                    <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
+                      Engagement
+                    </th>
+                  )}
                   <th className="px-2 py-2 text-left text-[10px] font-semibold text-gray-400 uppercase">
                     Enrollment
                   </th>
@@ -951,6 +1025,21 @@ const AnalyticsTable = ({
                           </div>
                         </td>
 
+                        {Object.keys(engagementData).length > 0 && (
+                          <td className="px-2 py-2">
+                            <EngagementBadge
+                              engagement={engagementData[ba?.userid?._id]}
+                              onClick={() => {
+                                setStudentPingModalConfig({
+                                  ...ba,
+                                  viewHistory: true,
+                                  engagementData: engagementData[ba?.userid?._id],
+                                });
+                              }}
+                            />
+                          </td>
+                        )}
+
                         {/* Enrollment lifecycle status */}
                         <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                           {searchType === "bootcamp" && !["TUTOR"]?.includes(user?.role) ? (
@@ -1125,6 +1214,7 @@ const AnalyticsTable = ({
                                   setStudentPingModalConfig({
                                     ...ba,
                                     viewHistory: true,
+                                    engagementData: engagementData[ba?.userid?._id],
                                   });
                                 }}
                               >
