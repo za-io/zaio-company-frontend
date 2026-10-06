@@ -294,7 +294,7 @@ const AnalyticsTable = ({
   }, [bootcampIdForEngagement]);
 
   const needsAttentionCount = useMemo(
-    () => Object.values(engagementData).filter((e) => isNeedsAttention(e.state)).length,
+    () => Object.values(engagementData).filter((e) => isNeedsAttention(e)).length,
     [engagementData]
   );
 
@@ -419,7 +419,7 @@ const AnalyticsTable = ({
           ba?.userid?.email?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
           (ba?.userid?.studentNumber || "")?.toLowerCase()?.includes(searchQuery?.toLowerCase())) &&
         (!showNeedsAttentionOnly ||
-          isNeedsAttention(engagementData[String(ba?.userid?._id)]?.state))
+          isNeedsAttention(engagementData[String(ba?.userid?._id)]))
     );
     return [...filtered].sort((a, b) => {
       const aTotalProgress = a?.isbootCampPassed ? 100 : (a?.completedPercentage || 0);

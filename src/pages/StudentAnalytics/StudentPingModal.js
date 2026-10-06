@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Modal } from "react-bootstrap";
 import { pingStudent, sendDiscordDM, trackWhatsAppMessage } from "../../api/company";
-import { setStudentOutcome, getBootcampCommsLogs } from "../../api/student";
+import { setStudentOutcome, getBootcampCommsLogs, getCoachingThread } from "../../api/student";
 import { formatDate, formatTime } from "../../utils/dateUtils";
 
 const OUTCOME_OPTIONS = [
@@ -623,6 +623,166 @@ const getChannelLabel = (channel) => {
   }
 };
 
+const formatSASTTime = (dateStr) => {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  return date.toLocaleString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
+  });
+};
+
+/** Outbound coaching bubble styles by message kind (dark brand skin). */
+const MESSAGE_KIND_STYLES = {
+  coaching: { bg: "bg-indigo-600/10", border: "border-indigo-500/30" },
+  coaching_redirect: { bg: "bg-purple-600/10", border: "border-purple-500/30" },
+  inbound: { bg: "bg-blue-600/10", border: "border-blue-500/30" },
+  tutor_tag: { bg: "bg-amber-600/10", border: "border-amber-500/40" },
+};
+
+const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchThread = async () => {
+      if (!bootcampId || !userid) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await getCoachingThread(bootcampId, userid);
+        if (result && Array.isArray(result.data)) {
+          setMessages(result.data);
+        } else if (result && Array.isArray(result.messages)) {
+          setMessages(result.messages);
+        } else if (result && Array.isArray(result)) {
+          setMessages(result);
+        } else {
+          setMessages([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch coaching thread:", err);
+        setError("Unable to load coaching chat. The endpoint may not be available yet.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchThread();
+  }, [bootcampId, userid]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+        <span className="ml-3 text-gray-400 text-sm">Loading coaching chat…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-amber-600/10 border border-amber-500/30 rounded-lg p-4 text-amber-200">
+        <p className="font-medium">Coaching chat unavailable</p>
+        <p className="text-sm mt-1 text-amber-200/80">{error}</p>
+      </div>
+    );
+  }
+
+  if (!hasCoaching) {
+    return (
+      <div className="bg-[#0D1117] border border-gray-800 rounded-lg p-4 text-gray-400 text-center">
+        <p className="font-medium text-gray-300">No coaching session</p>
+        <p className="text-sm mt-1">This student is not currently in a coaching session.</p>
+      </div>
+    );
+  }
+
+  if (messages.length === 0) {
+    return (
+      <div className="bg-[#0D1117] border border-gray-800 rounded-lg p-4 text-gray-400 text-center">
+        <p className="font-medium text-gray-300">No messages yet</p>
+        <p className="text-sm mt-1">The coaching conversation has not started.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+      {messages.map((msg, idx) => {
+        const isOutbound = msg.direction === "outbound";
+        const isInternal = msg.direction === "internal";
+        const isTutorTag = msg.kind === "tutor_tag";
+
+        const kindStyle = MESSAGE_KIND_STYLES[msg.kind] || MESSAGE_KIND_STYLES.coaching;
+        const channelInfo = getChannelLabel(msg.channel);
+
+        const senderName = msg.sentBy ?? msg.from;
+        const messageBody = msg.messageText ?? msg.text;
+
+        return (
+          <div key={msg._id || msg.externalMessageId || idx}>
+            {msg.stepDeadline && (
+              <div className="text-center my-2">
+                <span className="inline-block bg-red-600/20 text-red-300 text-xs px-3 py-1 rounded-full">
+                  Step deadline: {formatSASTTime(msg.stepDeadline)}
+                </span>
+              </div>
+            )}
+
+            <div className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`max-w-xs sm:max-w-md rounded-lg p-3 ${
+                  isTutorTag
+                    ? "bg-amber-600/10 border-2 border-amber-500/40"
+                    : isInternal
+                    ? "bg-gray-700/40 border border-gray-600"
+                    : isOutbound
+                    ? `${kindStyle.bg} ${kindStyle.border} border`
+                    : "bg-blue-600/10 border border-blue-500/30"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  {isTutorTag && (
+                    <span className="text-xs font-semibold text-amber-300 bg-amber-600/30 px-2 py-0.5 rounded">
+                      Tutor Tag
+                    </span>
+                  )}
+                  {isInternal && (
+                    <span className="text-xs font-semibold text-gray-300 bg-gray-600/40 px-2 py-0.5 rounded">
+                      Internal
+                    </span>
+                  )}
+                  {msg.channel && (
+                    <span className={`text-xs px-2 py-0.5 rounded ${channelInfo.color}`}>
+                      {channelInfo.text}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">{formatSASTTime(msg.time)}</span>
+                </div>
+
+                {senderName && (
+                  <p className="text-xs text-gray-400 font-medium mb-1">{senderName}</p>
+                )}
+
+                <p className="text-sm text-gray-200 whitespace-pre-wrap break-words">{messageBody}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 function parseHistoryTime(value, fallbackMs) {
   if (value == null || value === "") return fallbackMs;
   const t = new Date(value).getTime();
@@ -674,8 +834,12 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
   const [confirmOutcome, setConfirmOutcome] = useState(null);
   const [commsLogs, setCommsLogs] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("history");
 
   const studentUserId = showModal?.userid?._id;
+  const hasCoaching =
+    showModal?.engagementData?.coaching?.active ||
+    showModal?.engagementData?.state === "coaching";
 
   useEffect(() => {
     if (!showModal || !bootcampId || !studentUserId) {
@@ -712,6 +876,7 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
     setConfirmOutcome(null);
     setOutcomeNote("");
     setMsg(null);
+    setActiveTab("history");
   };
 
   const handleSetOutcome = async (outcome) => {
@@ -781,203 +946,252 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
           </button>
         </div>
 
-        {/* Stats Bar */}
-        {historyItems.length > 0 && (
-          <div className="px-5 py-3 bg-[#0D1117] border-b border-gray-800">
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-500">Total:</span>
-                <span className="text-white font-medium">{historyItems.length} entries</span>
-              </div>
-              {messageCounts.email > 0 && (
-                <div className="flex items-center gap-1.5 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  <span className="text-blue-400">{messageCounts.email} Email</span>
-                </div>
+        {/* Tab switcher */}
+        <div className="px-5 py-4 border-b border-gray-800">
+          <div className="flex gap-1 p-1 bg-[#0D1117] rounded-lg">
+            <button
+              type="button"
+              onClick={() => setActiveTab("history")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                activeTab === "history"
+                  ? "bg-purple-600 text-white"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+              }`}
+            >
+              History &amp; Outcomes
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("coaching")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                activeTab === "coaching"
+                  ? "bg-indigo-600 text-white"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+              }`}
+            >
+              Coaching Chat
+              {hasCoaching && (
+                <span
+                  className={`inline-block w-2 h-2 rounded-full ${
+                    activeTab === "coaching" ? "bg-white" : "bg-indigo-500"
+                  }`}
+                ></span>
               )}
-              {messageCounts.whatsapp > 0 && (
-                <div className="flex items-center gap-1.5 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-green-400">{messageCounts.whatsapp} WhatsApp</span>
-                </div>
-              )}
-              {messageCounts.discord > 0 && (
-                <div className="flex items-center gap-1.5 text-sm">
-                  <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                  <span className="text-indigo-400">{messageCounts.discord} Discord</span>
-                </div>
-              )}
-            </div>
+            </button>
+          </div>
+        </div>
+
+        {activeTab === "coaching" && (
+          <div className="p-5">
+            <CoachingChatView
+              bootcampId={bootcampId}
+              userid={studentUserId}
+              hasCoaching={hasCoaching}
+            />
           </div>
         )}
 
-        <div className="px-5 py-4 border-b border-gray-800 bg-[#0D1117]/50">
-          <h3 className="text-sm font-semibold text-white mb-3">Suhana&apos;s outcome</h3>
+        {activeTab === "history" && (
+          <>
+            {/* Stats Bar */}
+            {historyItems.length > 0 && (
+              <div className="px-5 py-3 bg-[#0D1117] border-b border-gray-800">
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500">Total:</span>
+                    <span className="text-white font-medium">{historyItems.length} entries</span>
+                  </div>
+                  {messageCounts.email > 0 && (
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                      <span className="text-blue-400">{messageCounts.email} Email</span>
+                    </div>
+                  )}
+                  {messageCounts.whatsapp > 0 && (
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      <span className="text-green-400">{messageCounts.whatsapp} WhatsApp</span>
+                    </div>
+                  )}
+                  {messageCounts.discord > 0 && (
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                      <span className="text-indigo-400">{messageCounts.discord} Discord</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-          {currentOutcome?.value && (
-            <div className="bg-purple-600/10 border border-purple-500/30 rounded-lg p-3 mb-3">
-              <p className="text-sm font-semibold text-purple-300 capitalize">
-                Current: {String(currentOutcome.value).replace(/_/g, " ")}
-              </p>
-              {currentOutcome.note && (
-                <p className="text-sm text-purple-200/80 mt-1">{currentOutcome.note}</p>
+            <div className="px-5 py-4 border-b border-gray-800 bg-[#0D1117]/50">
+              <h3 className="text-sm font-semibold text-white mb-3">Suhana&apos;s outcome</h3>
+
+              {currentOutcome?.value && (
+                <div className="bg-purple-600/10 border border-purple-500/30 rounded-lg p-3 mb-3">
+                  <p className="text-sm font-semibold text-purple-300 capitalize">
+                    Current: {String(currentOutcome.value).replace(/_/g, " ")}
+                  </p>
+                  {currentOutcome.note && (
+                    <p className="text-sm text-purple-200/80 mt-1">{currentOutcome.note}</p>
+                  )}
+                  {currentOutcome.setBy && (
+                    <p className="text-xs text-purple-300/70 mt-1">
+                      Set by {currentOutcome.setBy} · {formatDate(currentOutcome.setAt)}
+                    </p>
+                  )}
+                </div>
               )}
-              {currentOutcome.setBy && (
-                <p className="text-xs text-purple-300/70 mt-1">
-                  Set by {currentOutcome.setBy} · {formatDate(currentOutcome.setAt)}
+
+              {confirmOutcome && (
+                <div className="bg-amber-600/10 border border-amber-500/30 rounded-lg p-3 mb-3">
+                  <p className="text-sm text-amber-200">
+                    Confirm marking as &quot;
+                    {OUTCOME_OPTIONS.find((o) => o.value === confirmOutcome)?.label}&quot;?
+                  </p>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSetOutcome(confirmOutcome)}
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      {loading ? "Saving…" : "Yes, confirm"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmOutcome(null)}
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 mb-3">
+                {OUTCOME_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleSetOutcome(option.value)}
+                    disabled={loading}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${option.color}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                Note (optional)
+              </label>
+              <textarea
+                value={outcomeNote}
+                onChange={(e) => setOutcomeNote(e.target.value)}
+                placeholder="Add a note about this outcome…"
+                className="w-full bg-[#0D1117] text-gray-200 border border-gray-700 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                rows={2}
+              />
+
+              {msg && (
+                <p
+                  className={`text-sm mt-2 ${msg.includes("Failed") ? "text-red-400" : "text-green-400"}`}
+                >
+                  {msg}
                 </p>
               )}
             </div>
-          )}
 
-          {confirmOutcome && (
-            <div className="bg-amber-600/10 border border-amber-500/30 rounded-lg p-3 mb-3">
-              <p className="text-sm text-amber-200">
-                Confirm marking as &quot;
-                {OUTCOME_OPTIONS.find((o) => o.value === confirmOutcome)?.label}&quot;?
-              </p>
-              <div className="flex gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => handleSetOutcome(confirmOutcome)}
-                  disabled={loading}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
-                >
-                  {loading ? "Saving…" : "Yes, confirm"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmOutcome(null)}
-                  disabled={loading}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+            {/* History List */}
+            <div className="p-5">
+              <h3 className="text-sm font-semibold text-white mb-3">Ping &amp; comms history</h3>
+              {historyLoading ? (
+                <p className="text-gray-400 text-sm py-6 text-center">Loading comms log…</p>
+              ) : historyItems.length ? (
+                <div className="space-y-3">
+                  {historyItems.map((item) => {
+                    const channel = item.channel || "email";
+                    const channelInfo = getChannelLabel(channel);
+                    const body = (item.message || "").split("Best regards")[0].trim();
 
-          <div className="flex flex-wrap gap-2 mb-3">
-            {OUTCOME_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => handleSetOutcome(option.value)}
-                disabled={loading}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${option.color}`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-            Note (optional)
-          </label>
-          <textarea
-            value={outcomeNote}
-            onChange={(e) => setOutcomeNote(e.target.value)}
-            placeholder="Add a note about this outcome…"
-            className="w-full bg-[#0D1117] text-gray-200 border border-gray-700 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-            rows={2}
-          />
-
-          {msg && (
-            <p
-              className={`text-sm mt-2 ${msg.includes("Failed") ? "text-red-400" : "text-green-400"}`}
-            >
-              {msg}
-            </p>
-          )}
-        </div>
-
-        {/* History List */}
-        <div className="p-5">
-          <h3 className="text-sm font-semibold text-white mb-3">Ping &amp; comms history</h3>
-          {historyLoading ? (
-            <p className="text-gray-400 text-sm py-6 text-center">Loading comms log…</p>
-          ) : historyItems.length ? (
-            <div className="space-y-3">
-              {historyItems.map((item) => {
-                const channel = item.channel || "email";
-                const channelInfo = getChannelLabel(channel);
-                const body = (item.message || "").split("Best regards")[0].trim();
-
-                return (
-                  <div
-                    key={item.id}
-                    className="bg-[#0D1117] rounded-lg border border-gray-800 overflow-hidden"
-                  >
-                    <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <ChannelIcon channel={channel === "phone" || channel === "in_person" ? "email" : channel} />
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${channelInfo.color}`}>
-                              {channelInfo.text}
-                            </span>
-                            {item.direction === "inbound" && (
-                              <span className="text-xs font-medium px-2 py-0.5 rounded-full text-cyan-300 bg-cyan-600/20">
-                                Inbound
-                              </span>
-                            )}
-                            {item.source === "bot" && (
-                              <span className="text-xs font-medium px-2 py-0.5 rounded-full text-gray-300 bg-gray-600/30">
-                                Bot
-                              </span>
-                            )}
-                            {item.category && (
-                              <span className="text-xs text-gray-500 capitalize">
-                                {String(item.category).replace(/_/g, " ")}
-                              </span>
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-[#0D1117] rounded-lg border border-gray-800 overflow-hidden"
+                      >
+                        <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <ChannelIcon channel={channel === "phone" || channel === "in_person" ? "email" : channel} />
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${channelInfo.color}`}>
+                                  {channelInfo.text}
+                                </span>
+                                {item.direction === "inbound" && (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full text-cyan-300 bg-cyan-600/20">
+                                    Inbound
+                                  </span>
+                                )}
+                                {item.source === "bot" && (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full text-gray-300 bg-gray-600/30">
+                                    Bot
+                                  </span>
+                                )}
+                                {item.category && (
+                                  <span className="text-xs text-gray-500 capitalize">
+                                    {String(item.category).replace(/_/g, " ")}
+                                  </span>
+                                )}
+                              </div>
+                              {item.subject && (
+                                <p className="text-sm text-gray-300 mt-1 font-medium truncate">{item.subject}</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="flex items-center gap-1.5 text-sm text-gray-400">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {formatTime(item.pingedAt)}
+                            </div>
+                            {item.sentBy && (
+                              <p className="text-xs text-gray-500 mt-0.5">by {item.sentBy}</p>
                             )}
                           </div>
-                          {item.subject && (
-                            <p className="text-sm text-gray-300 mt-1 font-medium truncate">{item.subject}</p>
-                          )}
                         </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="flex items-center gap-1.5 text-sm text-gray-400">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          {formatTime(item.pingedAt)}
-                        </div>
-                        {item.sentBy && (
-                          <p className="text-xs text-gray-500 mt-0.5">by {item.sentBy}</p>
+                        {body && (
+                          <div className="px-4 py-3">
+                            <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
+                          </div>
+                        )}
+                        {item.outcome && (
+                          <div className="px-4 pb-3">
+                            <p className="text-xs text-purple-300">Outcome: {item.outcome}</p>
+                          </div>
                         )}
                       </div>
-                    </div>
-                    {body && (
-                      <div className="px-4 py-3">
-                        <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
-                      </div>
-                    )}
-                    {item.outcome && (
-                      <div className="px-4 pb-3">
-                        <p className="text-xs text-purple-300">Outcome: {item.outcome}</p>
-                      </div>
-                    )}
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
                   </div>
-                );
-              })}
+                  <h3 className="text-lg font-semibold text-white mb-2">No history yet</h3>
+                  <p className="text-gray-400 text-sm max-w-sm mx-auto">
+                    No staff pings or comms log entries for this student in this bootcamp.
+                    Engagement badges can still reflect bot activity once logs exist.
+                  </p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">No history yet</h3>
-              <p className="text-gray-400 text-sm max-w-sm mx-auto">
-                No staff pings or comms log entries for this student in this bootcamp.
-                Engagement badges can still reflect bot activity once logs exist.
-              </p>
-            </div>
-          )}
-        </div>
+          </>
+        )}
 
         {/* Footer */}
         <div className="p-5 border-t border-gray-800">
