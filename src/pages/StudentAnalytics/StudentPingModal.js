@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Modal } from "react-bootstrap";
 import { pingStudent, sendDiscordDM, trackWhatsAppMessage } from "../../api/company";
-import { setStudentOutcome } from "../../api/student";
+import { setStudentOutcome, getBootcampCommsLogs } from "../../api/student";
+import { formatDate, formatTime } from "../../utils/dateUtils";
 
 const OUTCOME_OPTIONS = [
   { value: "taken_over", label: "Take over", color: "bg-purple-600 hover:bg-purple-500", confirmRequired: false },
@@ -10,8 +11,6 @@ const OUTCOME_OPTIONS = [
   { value: "leaving", label: "Leaving", color: "bg-gray-800 hover:bg-gray-700", confirmRequired: true },
   { value: "clear", label: "Clear", color: "bg-gray-700/50 text-gray-300 hover:bg-gray-700", confirmRequired: false },
 ];
-import { useUserStore } from "../../store/UserProvider";
-import { formatDate, formatTime } from "../../utils/dateUtils";
 
 const PingStudent = ({ showModal, setShowModal, bootcampId, getAnalytics }) => {
   const [loading, setLoading] = useState(false);
@@ -20,7 +19,6 @@ const PingStudent = ({ showModal, setShowModal, bootcampId, getAnalytics }) => {
   const [whatsappMessage, setWhatsappMessage] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
   const [copied, setCopied] = useState(null);
-  const { user } = useUserStore();
 
   const handleClose = () => {
     setShowModal(false);
@@ -616,16 +614,98 @@ const getChannelLabel = (channel) => {
       return { text: "WhatsApp", color: "text-green-400 bg-green-600/20" };
     case "discord":
       return { text: "Discord", color: "text-indigo-400 bg-indigo-600/20" };
+    case "phone":
+      return { text: "Phone", color: "text-amber-400 bg-amber-600/20" };
+    case "in_person":
+      return { text: "In person", color: "text-violet-400 bg-violet-600/20" };
     default:
-      return { text: "Message", color: "text-gray-400 bg-gray-600/20" };
+      return { text: channel ? String(channel) : "Message", color: "text-gray-400 bg-gray-600/20" };
   }
 };
+
+function parseHistoryTime(value, fallbackMs) {
+  if (value == null || value === "") return fallbackMs;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : fallbackMs;
+}
+
+/** Staff pings (bootcamp enrollment) + comms log entries, newest first. */
+function buildHistoryTimeline(pingStatusDetails, commsLogs) {
+  const now = Date.now();
+  const pings = (pingStatusDetails || []).map((item, idx) => {
+    const sortAt = parseHistoryTime(item.pingedAt, now - idx);
+    return {
+      id: `ping-${idx}-${item.pingedAt || idx}`,
+      sortAt,
+      channel: item.channel || "email",
+      subject: item.subject,
+      message: item.message,
+      sentBy: item.sentBy,
+      pingedAt: item.pingedAt || new Date(sortAt).toISOString(),
+      source: "staff",
+      direction: "outbound",
+      category: null,
+    };
+  });
+  const comms = (commsLogs || []).map((log, idx) => {
+    const sortAt = parseHistoryTime(log.createdAt || log.updatedAt, now - pings.length - idx);
+    return {
+      id: log._id || `comms-${log.createdAt}-${idx}`,
+      sortAt,
+      channel: log.channel || "other",
+      subject: log.subject,
+      message: log.message || log.reason || "",
+      sentBy: log.sentBy || log.createdBySource,
+      pingedAt: log.createdAt || log.updatedAt,
+      source: log.createdBySource === "bot" ? "bot" : "comms",
+      direction: log.direction || "outbound",
+      category: log.category,
+      outcome: log.outcome,
+      stage: log.stage,
+    };
+  });
+  return [...pings, ...comms].sort((a, b) => b.sortAt - a.sortAt);
+}
 
 const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics, refreshEngagement }) => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
   const [outcomeNote, setOutcomeNote] = useState("");
   const [confirmOutcome, setConfirmOutcome] = useState(null);
+  const [commsLogs, setCommsLogs] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const studentUserId = showModal?.userid?._id;
+
+  useEffect(() => {
+    if (!showModal || !bootcampId || !studentUserId) {
+      setCommsLogs([]);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      setHistoryLoading(true);
+      try {
+        const res = await getBootcampCommsLogs(bootcampId, {
+          userid: studentUserId,
+          limit: 100,
+        });
+        if (!cancelled) {
+          setCommsLogs(Array.isArray(res?.data) ? res.data : []);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showModal, bootcampId, studentUserId]);
+
+  const historyItems = useMemo(
+    () => buildHistoryTimeline(showModal?.pingStatusDetails, commsLogs),
+    [showModal?.pingStatusDetails, commsLogs]
+  );
 
   const handleClose = () => {
     setShowModal(false);
@@ -667,12 +747,11 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
 
   const currentOutcome = showModal?.engagementData?.suhanasOutcome;
 
-  // Count messages by channel
-  const messageCounts = showModal?.pingStatusDetails?.reduce((acc, item) => {
+  const messageCounts = historyItems.reduce((acc, item) => {
     const channel = item.channel || "email";
     acc[channel] = (acc[channel] || 0) + 1;
     return acc;
-  }, {}) || {};
+  }, {});
   
     return (
       <Modal
@@ -688,7 +767,8 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
           <div>
             <h2 className="text-xl font-bold text-white mb-1">Message History</h2>
             <p className="text-gray-400 text-sm">
-              All messages sent to <span className="text-blue-400">{showModal?.userid?.email}</span>
+              Staff pings and comms log for{" "}
+              <span className="text-blue-400">{showModal?.userid?.email}</span>
             </p>
           </div>
           <button
@@ -702,12 +782,12 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
         </div>
 
         {/* Stats Bar */}
-        {showModal?.pingStatusDetails?.length > 0 && (
+        {historyItems.length > 0 && (
           <div className="px-5 py-3 bg-[#0D1117] border-b border-gray-800">
             <div className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-500">Total:</span>
-                <span className="text-white font-medium">{showModal?.pingStatusDetails?.length} messages</span>
+                <span className="text-white font-medium">{historyItems.length} entries</span>
               </div>
               {messageCounts.email > 0 && (
                 <div className="flex items-center gap-1.5 text-sm">
@@ -813,31 +893,51 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
 
         {/* History List */}
         <div className="p-5">
-          {showModal?.pingStatusDetails?.length ? (
+          <h3 className="text-sm font-semibold text-white mb-3">Ping &amp; comms history</h3>
+          {historyLoading ? (
+            <p className="text-gray-400 text-sm py-6 text-center">Loading comms log…</p>
+          ) : historyItems.length ? (
             <div className="space-y-3">
-              {showModal?.pingStatusDetails?.map((item, idx) => {
+              {historyItems.map((item) => {
                 const channel = item.channel || "email";
                 const channelInfo = getChannelLabel(channel);
-                
-                        return (
+                const body = (item.message || "").split("Best regards")[0].trim();
+
+                return (
                   <div
-                    key={idx}
+                    key={item.id}
                     className="bg-[#0D1117] rounded-lg border border-gray-800 overflow-hidden"
                   >
-                    {/* Header with timestamp and channel */}
-                    <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <ChannelIcon channel={channel} />
-                        <div>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${channelInfo.color}`}>
-                            {channelInfo.text}
-                          </span>
+                    <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <ChannelIcon channel={channel === "phone" || channel === "in_person" ? "email" : channel} />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${channelInfo.color}`}>
+                              {channelInfo.text}
+                            </span>
+                            {item.direction === "inbound" && (
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full text-cyan-300 bg-cyan-600/20">
+                                Inbound
+                              </span>
+                            )}
+                            {item.source === "bot" && (
+                              <span className="text-xs font-medium px-2 py-0.5 rounded-full text-gray-300 bg-gray-600/30">
+                                Bot
+                              </span>
+                            )}
+                            {item.category && (
+                              <span className="text-xs text-gray-500 capitalize">
+                                {String(item.category).replace(/_/g, " ")}
+                              </span>
+                            )}
+                          </div>
                           {item.subject && (
-                            <p className="text-sm text-gray-300 mt-1 font-medium">{item.subject}</p>
+                            <p className="text-sm text-gray-300 mt-1 font-medium truncate">{item.subject}</p>
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex-shrink-0">
                         <div className="flex items-center gap-1.5 text-sm text-gray-400">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -849,12 +949,16 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
                         )}
                       </div>
                     </div>
-                    {/* Message Content */}
-                    <div className="px-4 py-3">
-                      <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">
-                        {item.message.split('Best regards')[0].trim()}
-                      </p>
-                    </div>
+                    {body && (
+                      <div className="px-4 py-3">
+                        <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">{body}</p>
+                      </div>
+                    )}
+                    {item.outcome && (
+                      <div className="px-4 pb-3">
+                        <p className="text-xs text-purple-300">Outcome: {item.outcome}</p>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -866,8 +970,11 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">No History Yet</h3>
-              <p className="text-gray-400">No messages have been sent to this student yet</p>
+              <h3 className="text-lg font-semibold text-white mb-2">No history yet</h3>
+              <p className="text-gray-400 text-sm max-w-sm mx-auto">
+                No staff pings or comms log entries for this student in this bootcamp.
+                Engagement badges can still reflect bot activity once logs exist.
+              </p>
             </div>
           )}
         </div>

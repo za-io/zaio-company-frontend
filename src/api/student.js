@@ -3,6 +3,14 @@ import axios from "axios";
 const API_URL = process.env.REACT_APP_BACKEND_URL + "/student-analytics";
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
+/** Company panel routes (comms / engagement) require auth-token from login. */
+const companyAuthHeaders = (json = false) => {
+  const token = localStorage.getItem("TOKEN");
+  const headers = token ? { "auth-token": token } : {};
+  if (json) headers["Content-Type"] = "application/json";
+  return headers;
+};
+
 // Get detailed items (lectures, MCQs, challenges) for a course
 export const getCourseItemDetails = (courseId, userId, type) =>
   axios
@@ -993,18 +1001,44 @@ export const getTutorRefreshStats = (tutorId, bootcampId, courseId) =>
       return { success: false };
     });
 
-export const getEngagementStatus = (bootcampId) =>
-  axios
-    .get(`${BASE_URL}/bootcamp/${bootcampId}/engagement-status`)
+export const getBootcampCommsLogs = (bootcampId, params = {}) => {
+  const q = new URLSearchParams();
+  if (params.userid) q.set("userid", params.userid);
+  if (params.page) q.set("page", String(params.page));
+  if (params.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/comms-logs${qs ? `?${qs}` : ""}`, {
+      headers: companyAuthHeaders(),
+    })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);
-      return null;
+      return { success: false, data: [] };
+    });
+};
+
+export const getEngagementStatus = (bootcampId) =>
+  axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/engagement-status`, {
+      headers: companyAuthHeaders(),
+    })
+    .then((res) => {
+      const body = res.data;
+      if (Array.isArray(body)) return body;
+      if (body?.success && Array.isArray(body.data)) return body.data;
+      return [];
+    })
+    .catch((err) => {
+      console.log(err);
+      return [];
     });
 
 export const setStudentOutcome = (bootcampId, payload) =>
   axios
-    .post(`${BASE_URL}/bootcamp/${bootcampId}/student-outcome`, payload)
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/student-outcome`, payload, {
+      headers: companyAuthHeaders(true),
+    })
     .then((res) => res.data)
     .catch((err) => {
       console.log(err);

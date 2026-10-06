@@ -14,16 +14,16 @@ import { SORTING } from "./learningpath.index";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
 import { EngagementBadge, isNeedsAttention, getEngagementSortRank } from "./EngagementBadge";
-
-const SORTING_ENGAGEMENT = {
-  ENGAGEMENT_ASC: "ENGAGEMENT_ASC",
-};
 import { getAllTutors, getEditTilesToken, updateBootcampAllocatedTutors, syncStudentToAthena } from "../../api/company";
 import { checkStudentGraduateEligibility, overrideStudentGraduateEligibility } from "../../api/student";
 import { StudentMoreActionsModal } from "./StudentMoreActions";
 import GraduateReportModal from "./GraduateReportModal";
 import { RxCheckCircled } from "react-icons/rx";
 import { HiOutlineClipboardDocument, HiOutlineBanknotes } from "react-icons/hi2";
+
+const SORTING_ENGAGEMENT = {
+  ENGAGEMENT_ASC: "ENGAGEMENT_ASC",
+};
 
 const getClassroomConnectionStatus = (row) => {
   const linked =
@@ -272,14 +272,16 @@ const AnalyticsTable = ({
     if (!bootcampIdForEngagement) return;
     try {
       const result = await getEngagementStatus(bootcampIdForEngagement);
-      if (result && Array.isArray(result)) {
+      if (Array.isArray(result) && result.length > 0) {
         const engagementMap = {};
         result.forEach((item) => {
-          if (item.userid) {
-            engagementMap[item.userid] = item;
+          if (item.userid != null) {
+            engagementMap[String(item.userid)] = item;
           }
         });
         setEngagementData(engagementMap);
+      } else {
+        setEngagementData({});
       }
     } catch (err) {
       console.error("Failed to fetch engagement status:", err);
@@ -417,7 +419,7 @@ const AnalyticsTable = ({
           ba?.userid?.email?.toLowerCase()?.includes(searchQuery?.toLowerCase()) ||
           (ba?.userid?.studentNumber || "")?.toLowerCase()?.includes(searchQuery?.toLowerCase())) &&
         (!showNeedsAttentionOnly ||
-          isNeedsAttention(engagementData[ba?.userid?._id]?.state))
+          isNeedsAttention(engagementData[String(ba?.userid?._id)]?.state))
     );
     return [...filtered].sort((a, b) => {
       const aTotalProgress = a?.isbootCampPassed ? 100 : (a?.completedPercentage || 0);
@@ -436,8 +438,8 @@ const AnalyticsTable = ({
         return Number(isDeferredEnrollment(a)) - Number(isDeferredEnrollment(b));
       }
       if (sortBy === SORTING_ENGAGEMENT.ENGAGEMENT_ASC) {
-        const aRank = getEngagementSortRank(engagementData[a?.userid?._id]);
-        const bRank = getEngagementSortRank(engagementData[b?.userid?._id]);
+        const aRank = getEngagementSortRank(engagementData[String(a?.userid?._id)]);
+        const bRank = getEngagementSortRank(engagementData[String(b?.userid?._id)]);
         return aRank - bRank;
       }
       return 0;
@@ -1028,12 +1030,12 @@ const AnalyticsTable = ({
                         {Object.keys(engagementData).length > 0 && (
                           <td className="px-2 py-2">
                             <EngagementBadge
-                              engagement={engagementData[ba?.userid?._id]}
+                              engagement={engagementData[String(ba?.userid?._id)]}
                               onClick={() => {
                                 setStudentPingModalConfig({
                                   ...ba,
                                   viewHistory: true,
-                                  engagementData: engagementData[ba?.userid?._id],
+                                  engagementData: engagementData[String(ba?.userid?._id)],
                                 });
                               }}
                             />
@@ -1214,7 +1216,7 @@ const AnalyticsTable = ({
                                   setStudentPingModalConfig({
                                     ...ba,
                                     viewHistory: true,
-                                    engagementData: engagementData[ba?.userid?._id],
+                                    engagementData: engagementData[String(ba?.userid?._id)],
                                   });
                                 }}
                               >
