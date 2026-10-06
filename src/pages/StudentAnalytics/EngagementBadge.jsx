@@ -2,17 +2,18 @@ import { useState } from "react";
 
 const ENGAGEMENT_STATES = {
   replied: { label: "Replied", color: "bg-blue-500", textColor: "text-white", sortRank: 0, needsAttention: true },
-  taken_over: { label: "Taken over", color: "bg-purple-500", textColor: "text-white", sortRank: 1, needsAttention: false },
-  catching_up: { label: "Catching up", color: "bg-teal-500", textColor: "text-white", sortRank: 2, needsAttention: false },
-  transferred: { label: "Transfer", color: "bg-gray-500", textColor: "text-white", sortRank: 3, needsAttention: false },
-  leaving: { label: "Leaving", color: "bg-gray-700", textColor: "text-white", sortRank: 4, needsAttention: false },
-  not_responding: { label: "Not responding", color: "bg-red-500", textColor: "text-white", sortRank: 5, needsAttention: true },
-  at_risk: { label: "At risk", color: "bg-white border-2 border-red-500", textColor: "text-red-500", sortRank: 6, needsAttention: true },
-  behind: { label: "Behind", color: "bg-amber-500", textColor: "text-white", sortRank: 7, needsAttention: true },
-  on_track: { label: "On track", color: "bg-green-500", textColor: "text-white", sortRank: 8, needsAttention: false },
-  not_started: { label: "Not started", color: "bg-gray-300", textColor: "text-gray-700", sortRank: 9, needsAttention: false },
-  onboarded: { label: "Onboarded", color: "bg-green-500", textColor: "text-white", sortRank: 8, needsAttention: false },
-  missing: { label: "Missing", color: "bg-amber-500", textColor: "text-white", sortRank: 7, needsAttention: true },
+  coaching: { label: "Coaching", color: "bg-indigo-600", textColor: "text-white", sortRank: 1, needsAttention: false },
+  taken_over: { label: "Taken over", color: "bg-purple-500", textColor: "text-white", sortRank: 2, needsAttention: false },
+  catching_up: { label: "Catching up", color: "bg-teal-500", textColor: "text-white", sortRank: 3, needsAttention: false },
+  transferred: { label: "Transfer", color: "bg-gray-500", textColor: "text-white", sortRank: 4, needsAttention: false },
+  leaving: { label: "Leaving", color: "bg-gray-700", textColor: "text-white", sortRank: 5, needsAttention: false },
+  not_responding: { label: "Not responding", color: "bg-red-500", textColor: "text-white", sortRank: 6, needsAttention: true },
+  at_risk: { label: "At risk", color: "bg-white border-2 border-red-500", textColor: "text-red-500", sortRank: 7, needsAttention: true },
+  behind: { label: "Behind", color: "bg-amber-500", textColor: "text-white", sortRank: 8, needsAttention: true },
+  on_track: { label: "On track", color: "bg-green-500", textColor: "text-white", sortRank: 9, needsAttention: false },
+  not_started: { label: "Not started", color: "bg-gray-300", textColor: "text-gray-700", sortRank: 10, needsAttention: false },
+  onboarded: { label: "Onboarded", color: "bg-green-500", textColor: "text-white", sortRank: 9, needsAttention: false },
+  missing: { label: "Missing", color: "bg-amber-500", textColor: "text-white", sortRank: 8, needsAttention: true },
 };
 
 const formatTooltipDate = (dateStr) => {
@@ -23,6 +24,18 @@ const formatTooltipDate = (dateStr) => {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+  });
+};
+
+const formatSASTDate = (dateStr) => {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
   });
 };
 
@@ -37,7 +50,8 @@ const EngagementTooltip = ({ engagement, visible }) => {
     suhanasOutcome,
     stage,
     steps,
-    nudges
+    nudges,
+    coaching,
   } = engagement;
 
   return (
@@ -112,6 +126,42 @@ const EngagementTooltip = ({ engagement, visible }) => {
         </div>
       )}
 
+      {coaching && coaching.active && (
+        <div className="border-t border-gray-700 pt-2 mt-2">
+          <div className="font-semibold text-indigo-300">Coaching</div>
+          <div className="space-y-1 mt-1">
+            {coaching.startedAt && (
+              <div>
+                <span className="text-gray-400">Started:</span>{" "}
+                {formatSASTDate(coaching.startedAt)}
+              </div>
+            )}
+            {coaching.stepDeadline && (
+              <div className={coaching.deadlinePassed ? "text-red-400" : ""}>
+                <span className="text-gray-400">Step deadline:</span>{" "}
+                {formatSASTDate(coaching.stepDeadline)}
+                {coaching.deadlinePassed && " (deadline passed)"}
+              </div>
+            )}
+            {coaching.lastCoachMessageAt && (
+              <div>
+                <span className="text-gray-400">Last from Suhana:</span>{" "}
+                {formatSASTDate(coaching.lastCoachMessageAt)}
+              </div>
+            )}
+            {coaching.lastStudentMessageAt && (
+              <div>
+                <span className="text-gray-400">Last from student:</span>{" "}
+                {formatSASTDate(coaching.lastStudentMessageAt)}
+              </div>
+            )}
+            <div className="text-gray-400 text-xs mt-1">
+              Messages: {coaching.coachMessages || 0} sent, {coaching.studentMessages || 0} received
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="absolute left-0 top-4 -ml-1 w-2 h-2 bg-gray-900 transform rotate-45" />
     </div>
   );
@@ -176,13 +226,31 @@ export const EngagementBadge = ({ engagement, onClick }) => {
   );
 };
 
-export const isNeedsAttention = (state) => {
+export const isNeedsAttention = (stateOrEngagement) => {
+  if (!stateOrEngagement) return false;
+  
+  const state = typeof stateOrEngagement === 'string' 
+    ? stateOrEngagement 
+    : stateOrEngagement.state;
+  const engagement = typeof stateOrEngagement === 'object' ? stateOrEngagement : null;
+  
+  if (state === 'coaching' && engagement?.coaching) {
+    return engagement.coaching.deadlinePassed || false;
+  }
+  
+  if (state === 'replied' && engagement?.coaching?.active) {
+    return true;
+  }
+  
   const stateConfig = ENGAGEMENT_STATES[state];
   return stateConfig?.needsAttention || false;
 };
 
 export const getEngagementSortRank = (engagement) => {
   if (!engagement) return 999;
+  if (engagement.state === 'coaching') {
+    return ENGAGEMENT_STATES.coaching.sortRank;
+  }
   return engagement.sortRank ?? ENGAGEMENT_STATES[engagement.state]?.sortRank ?? 999;
 };
 
