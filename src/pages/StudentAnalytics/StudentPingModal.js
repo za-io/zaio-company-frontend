@@ -3,6 +3,7 @@ import { Modal } from "react-bootstrap";
 import { pingStudent, sendDiscordDM, trackWhatsAppMessage } from "../../api/company";
 import { setStudentOutcome, getBootcampCommsLogs, getCoachingThread } from "../../api/student";
 import { formatDate, formatTime } from "../../utils/dateUtils";
+import { resolveStudentUserId, selectCoachingThreadEntries } from "../../utils/coachingThread";
 
 const OUTCOME_OPTIONS = [
   { value: "taken_over", label: "Take over", color: "bg-purple-600 hover:bg-purple-500", confirmRequired: false },
@@ -643,15 +644,29 @@ const MESSAGE_KIND_STYLES = {
   tutor_tag: { bg: "bg-amber-600/10", border: "border-amber-500/40" },
 };
 
-const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
+const CoachingChatView = ({ bootcampId, userid, hasCoaching, logs = [], logsLoading = false }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const fromLogs = selectCoachingThreadEntries(logs);
+    if (fromLogs.length > 0) {
+      setMessages(fromLogs);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     const fetchThread = async () => {
       if (!bootcampId || !userid) {
-        setLoading(false);
+        setMessages([]);
+        setLoading(logsLoading);
+        return;
+      }
+
+      if (logsLoading) {
+        setLoading(true);
         return;
       }
 
@@ -670,6 +685,7 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
         }
       } catch (err) {
         console.error("Failed to fetch coaching thread:", err);
+        setMessages([]);
         setError("Unable to load coaching chat. The endpoint may not be available yet.");
       } finally {
         setLoading(false);
@@ -677,7 +693,7 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
     };
 
     fetchThread();
-  }, [bootcampId, userid]);
+  }, [bootcampId, userid, logs, logsLoading]);
 
   if (loading) {
     return (
@@ -688,7 +704,7 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
     );
   }
 
-  if (error) {
+  if (error && messages.length === 0) {
     return (
       <div className="bg-amber-600/10 border border-amber-500/30 rounded-lg p-4 text-amber-200">
         <p className="font-medium">Coaching chat unavailable</p>
@@ -697,7 +713,7 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
     );
   }
 
-  if (!hasCoaching) {
+  if (messages.length === 0 && !hasCoaching) {
     return (
       <div className="bg-[#0D1117] border border-gray-800 rounded-lg p-4 text-gray-400 text-center">
         <p className="font-medium text-gray-300">No coaching session</p>
@@ -836,7 +852,7 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
   const [historyLoading, setHistoryLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("history");
 
-  const studentUserId = showModal?.userid?._id;
+  const studentUserId = resolveStudentUserId(showModal?.userid);
   const hasCoaching =
     showModal?.engagementData?.coaching?.active ||
     showModal?.engagementData?.state === "coaching";
@@ -987,6 +1003,8 @@ const PingStudentHistory = ({ showModal, setShowModal, bootcampId, getAnalytics,
               bootcampId={bootcampId}
               userid={studentUserId}
               hasCoaching={hasCoaching}
+              logs={commsLogs}
+              logsLoading={historyLoading}
             />
           </div>
         )}

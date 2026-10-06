@@ -1050,8 +1050,4 @@ export const getCoachingThread = (bootcampId, userid) =>
     .get(`${BASE_URL}/bootcamp/${bootcampId}/student/${userid}/coaching-thread`, {
       headers: companyAuthHeaders(),
     })
-    .then((res) => res.data)
-    .catch((err) => {
-      console.log(err);
-      return null;
-    });
+    .then((res) => res.data);
