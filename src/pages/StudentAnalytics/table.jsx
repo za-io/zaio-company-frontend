@@ -1,13 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { roundOff } from "../../utils/mathUtils";
-import { blockUser, unblockUser } from "../../api/student";
+import { blockUser, unblockUser, getEngagementStatus } from "../../api/student";
 import Loader from "../../components/loader/loader";
 import { SORTING } from "./learningpath.index";
 import { WarningModal } from "./WarningModal";
 import { StudentDeferredModal } from "./StudentDeferredModal";
 import { formatDate } from "../../utils/dateUtils";
 import { StudentPingModal } from "./StudentPingModal";
+import { EngagementBadge, isNeedsAttention, getEngagementSortRank } from "./EngagementBadge";
+
+const SORTING_ENGAGEMENT = {
+  ENGAGEMENT_ASC: "ENGAGEMENT_ASC",
+};
 
 const AnalyticsTable = ({
   data,
@@ -25,6 +30,39 @@ const AnalyticsTable = ({
     useState(null);
   const [studentPingModalConfig, setStudentPingModalConfig] =
     useState(null);
+  const [engagementData, setEngagementData] = useState({});
+  const [showNeedsAttentionOnly, setShowNeedsAttentionOnly] = useState(false);
+
+  const bootcampId = data?.bootcampDetails?._id;
+
+  const fetchEngagementStatus = async () => {
+    if (!bootcampId) return;
+    try {
+      const result = await getEngagementStatus(bootcampId);
+      if (result && Array.isArray(result)) {
+        const engagementMap = {};
+        result.forEach((item) => {
+          if (item.userid) {
+            engagementMap[item.userid] = item;
+          }
+        });
+        setEngagementData(engagementMap);
+      }
+    } catch (err) {
+      console.error("Failed to fetch engagement status:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchEngagementStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootcampId]);
+
+  const needsAttentionCount = useMemo(() => {
+    return Object.values(engagementData).filter((e) =>
+      isNeedsAttention(e)
+    ).length;
+  }, [engagementData]);
 
   const navigate = useNavigate();
   const handleBootcamp = (bootcampId, learningpathId, userid) => {
@@ -85,6 +123,7 @@ const AnalyticsTable = ({
         showModal={studentPingModalConfig}
         setShowModal={setStudentPingModalConfig}
         getAnalytics={getAnalytics}
+        refreshEngagement={fetchEngagementStatus}
       />
       {data?.analytics?.length > 0 && (
         <>
@@ -123,7 +162,23 @@ const AnalyticsTable = ({
             <option value={SORTING.DEFERRED_DESC} className="text-black-500">
               DEFERRED DESC
             </option>
+            <option value={SORTING_ENGAGEMENT.ENGAGEMENT_ASC} className="text-black-500">
+              Engagement (worst first)
+            </option>
           </select>
+
+          {Object.keys(engagementData).length > 0 && (
+            <button
+              onClick={() => setShowNeedsAttentionOnly(!showNeedsAttentionOnly)}
+              className={`ml-3 px-3 py-2 rounded font-medium text-sm ${
+                showNeedsAttentionOnly
+                  ? "bg-red-500 text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              Needs attention ({needsAttentionCount})
+            </button>
+          )}
 
           <p className="text-white mt-3">
             {
@@ -161,6 +216,11 @@ const AnalyticsTable = ({
                 <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   Progress
                 </th>
+                {Object.keys(engagementData).length > 0 && (
+                  <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
+                    Engagement
+                  </th>
+                )}
                 <th className="px-1 py-3 text-xs font-bold text-left text-gray-500 uppercase">
                   View Progress
                 </th>
@@ -192,12 +252,14 @@ const AnalyticsTable = ({
                 {data.analytics
                   ?.filter(
                     (ba) =>
-                      ba?.userid?.username
+                      (ba?.userid?.username
                         ?.toLowerCase()
                         ?.includes(searchQuery?.toLowerCase()) ||
                       ba?.userid?.email
                         ?.toLowerCase()
-                        ?.includes(searchQuery?.toLowerCase())
+                        ?.includes(searchQuery?.toLowerCase())) &&
+                      (!showNeedsAttentionOnly ||
+                        isNeedsAttention(engagementData[ba?.userid?._id]))
                   )
                   ?.sort((a, b) => {
                     const aTotalProgress =
@@ -236,7 +298,12 @@ const AnalyticsTable = ({
                         Boolean(a?.deferredDetails?.studentDeferred) -
                         Boolean(b?.deferredDetails?.studentDeferred)
                       );
+                    } else if (sortBy === SORTING_ENGAGEMENT.ENGAGEMENT_ASC) {
+                      const aRank = getEngagementSortRank(engagementData[a?.userid?._id]);
+                      const bRank = getEngagementSortRank(engagementData[b?.userid?._id]);
+                      return aRank - bRank;
                     }
+                    return 0;
                   })
                   ?.map((ba) => {
                     // const classes =
@@ -308,6 +375,20 @@ const AnalyticsTable = ({
                         <td className="px-1 py-4 text-sm font-medium text-gray-800">
                           {roundOff(totalProgress)}%
                         </td>
+                        {Object.keys(engagementData).length > 0 && (
+                          <td className="px-1 py-4 text-sm font-medium text-gray-800">
+                            <EngagementBadge
+                              engagement={engagementData[ba?.userid?._id]}
+                              onClick={() => {
+                                setStudentPingModalConfig({
+                                  ...ba,
+                                  viewHistory: true,
+                                  engagementData: engagementData[ba?.userid?._id],
+                                });
+                              }}
+                            />
+                          </td>
+                        )}
                         <td className="px-2 py-4 text-sm font-medium text-gray-800">
                           <button
                             className="bg-blue-200 py-2 px-5 my-2 rounded font-small"
