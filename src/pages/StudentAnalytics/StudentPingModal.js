@@ -627,6 +627,7 @@ const getChannelLabel = (channel) => {
 const formatSASTTime = (dateStr) => {
   if (!dateStr) return "";
   const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleString("en-ZA", {
     day: "numeric",
     month: "short",

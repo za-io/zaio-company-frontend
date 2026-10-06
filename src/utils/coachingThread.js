@@ -20,13 +20,28 @@ function parentExternalId(log) {
   return log?.signals?.inReplyToExternalId || "";
 }
 
+function parseTimeMs(value) {
+  if (value == null || value === "") return NaN;
+  const t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : NaN;
+}
+
+/** Prefer API timestamps; bot `signals.sentAt` is often human text (e.g. "2026-10-06 15:33 SAST"). */
+export function resolveCoachingMessageTime(log) {
+  const candidates = [log?.time, log?.occurredAt, log?.createdAt, log?.updatedAt, log?.signals?.sentAt];
+  for (const raw of candidates) {
+    const ms = parseTimeMs(raw);
+    if (Number.isFinite(ms)) return new Date(ms).toISOString();
+  }
+  return null;
+}
+
 export function formatCoachingChatMessage(log) {
-  const time = log.time || log.occurredAt || log.signals?.sentAt || log.createdAt;
   const messageText = log.messageText || log.text || log.signals?.messageText || log.message || "";
   const sentBy = log.sentBy ?? log.from;
   return {
     ...log,
-    time: time ? new Date(time).toISOString() : null,
+    time: resolveCoachingMessageTime(log),
     direction: log.direction || "outbound",
     sentBy,
     from: sentBy,
