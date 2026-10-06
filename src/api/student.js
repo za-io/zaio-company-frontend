@@ -74,3 +74,21 @@ export const checkAuthToken = (payload) =>
     .post(`${BASE_URL}/company/checkAuthToken`, payload)
     .then((res) => res.data)
     .catch((err) => console.log(err));
+
+export const getEngagementStatus = (bootcampId) =>
+  axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/engagement-status`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return null;
+    });
+
+export const setStudentOutcome = (bootcampId, payload) =>
+  axios
+    .post(`${BASE_URL}/bootcamp/${bootcampId}/student-outcome`, payload)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      throw err;
+    });
