@@ -45,7 +45,9 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
       setError(null);
       try {
         const result = await getCoachingThread(bootcampId, userid);
-        if (result && Array.isArray(result.messages)) {
+        if (result && Array.isArray(result.data)) {
+          setMessages(result.data);
+        } else if (result && Array.isArray(result.messages)) {
           setMessages(result.messages);
         } else if (result && Array.isArray(result)) {
           setMessages(result);
@@ -108,8 +110,11 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
         
         const kindStyle = MESSAGE_KIND_STYLES[msg.kind] || MESSAGE_KIND_STYLES.coaching;
         
+        const senderName = msg.sentBy ?? msg.from;
+        const messageBody = msg.messageText ?? msg.text;
+        
         return (
-          <div key={msg.externalMessageId || idx}>
+          <div key={msg._id || msg.externalMessageId || idx}>
             {msg.stepDeadline && (
               <div className="text-center my-2">
                 <span className="inline-block bg-red-100 text-red-700 text-xs px-3 py-1 rounded-full">
@@ -155,14 +160,14 @@ const CoachingChatView = ({ bootcampId, userid, hasCoaching }) => {
                   </span>
                 </div>
                 
-                {msg.from && (
+                {senderName && (
                   <p className="text-xs text-gray-600 font-medium mb-1">
-                    {msg.from}
+                    {senderName}
                   </p>
                 )}
                 
                 <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">
-                  {msg.text}
+                  {messageBody}
                 </p>
               </div>
             </div>

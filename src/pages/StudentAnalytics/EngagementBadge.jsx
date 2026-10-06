@@ -248,6 +248,9 @@ export const isNeedsAttention = (stateOrEngagement) => {
 
 export const getEngagementSortRank = (engagement) => {
   if (!engagement) return 999;
+  if (engagement.state === 'coaching') {
+    return ENGAGEMENT_STATES.coaching.sortRank;
+  }
   return engagement.sortRank ?? ENGAGEMENT_STATES[engagement.state]?.sortRank ?? 999;
 };
 
