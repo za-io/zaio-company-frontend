@@ -4,6 +4,7 @@ import { useUserStore } from "../../store/UserProvider";
 import { getUserBootcampAnalyticsForTutor } from "../../api/student";
 import { RxCheckCircled } from "react-icons/rx";
 import Loader from "../../components/loader/loader";
+import { getLearnerAppBaseUrl } from "../../utils/learnerAppUrl";
 
 export default function TutorStudents() {
   const [bootcamps, setBootcamps] = useState([]);
@@ -193,7 +194,7 @@ export default function TutorStudents() {
                             <td className="px-4 py-2">
                               <div className="flex items-center gap-3 flex-wrap">
                                 <a
-                                  href={`https://www.zaio.io/app/zaio-profile/${student?.userid?.email}`}
+                                  href={`${getLearnerAppBaseUrl()}/app/zaio-profile/${student?.userid?.email}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-400 hover:underline text-sm"

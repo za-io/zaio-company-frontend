@@ -4,6 +4,7 @@ import { getBootcampDetails } from "../../api/company";
 import { Pie } from "react-chartjs-2";
 import { MoreDetailsModal } from "./MoreDetailsModal";
 import { useUserStore } from "../../store/UserProvider";
+import { getLearnerAppBaseUrl } from "../../utils/learnerAppUrl";
 
 /** Same roles as Manage Bootcamps — use Student Analytics (new) instead of legacy progress table */
 const PROGRAM_ANALYTICS_ROLES = ["COMPANY_ADMIN", "SUPER_ADMIN", "SUPER_STUDENT_ADMIN"];
@@ -84,7 +85,7 @@ const Program = () => {
 
   const openProfile = (user) => {
     window.open(
-      `https://www.zaio.io/app/zaio-profile/${user?.userid?.email}`,
+      `${getLearnerAppBaseUrl()}/app/zaio-profile/${user?.userid?.email}`,
       "_blank"
     );
   };

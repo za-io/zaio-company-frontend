@@ -6,6 +6,7 @@ import { useUserStore } from "../../store/UserProvider";
 import { FaPlay, FaFileAlt, FaBook, FaTools } from "react-icons/fa";
 import QctoSubmissionSummary from "./QctoSubmissionSummary";
 import styles from "./OCModuleDetails.module.css";
+import { getLearnerAppBaseUrl } from "../../utils/learnerAppUrl";
 
 /** Resolve QCTOSA / PMT / Learner Workbook id for API + assessor links */
 function getQctoTaskSpec(item) {
@@ -164,9 +165,7 @@ const OCModuleDetails = () => {
   const handleLectureClick = (lecture, unit) => {
     if (!lecture || typeof lecture !== 'object') return;
     
-    const baseUrl = window.location.hostname === "localhost"
-      ? "http://localhost:3000"
-      : "https://www.zaio.io";
+    const baseUrl = getLearnerAppBaseUrl();
     
     // Check if it's a QCTO Summative Assessment - if so, open assessor view
     if (lecture.type === "qctosa" || lecture.isQCTOAssessment) {
@@ -208,9 +207,7 @@ const OCModuleDetails = () => {
 
   // Handle assignment click - open assignment page
   const handleAssignmentClick = (assignment) => {
-    const baseUrl = window.location.hostname === "localhost"
-      ? "http://localhost:3000"
-      : "https://www.zaio.io";
+    const baseUrl = getLearnerAppBaseUrl();
     
     // Get the user token from localStorage to pass as auth
     const token = localStorage.getItem("TOKEN");

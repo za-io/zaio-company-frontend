@@ -1,4 +1,5 @@
 import { useUserStore } from "../../store/UserProvider";
+import { getLearnerAppBaseUrl } from "../../utils/learnerAppUrl";
 
 const calcClasses = (type, mc) => {
   if (type === "MCQ") {
@@ -17,11 +18,7 @@ const MCQTable = ({ loading, data, type, userId }) => {
 
   const showSubmittedCode = (code) => {
     window.open(
-      `${
-        window.location.hostname === "localhost"
-          ? "http://localhost:3001/"
-          : "https://www.zaio.io/"
-      }watch/${code?.courseid}/${code?.courseunitid}/${
+      `${getLearnerAppBaseUrl()}/app/watch/${code?.courseid}/${code?.courseunitid}/${
         code?.lectureid
       }?userid=${userId}${user?.role === "TUTOR" ? "&tutor=true" : ""}`,
       "_blank"

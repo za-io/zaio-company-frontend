@@ -19,6 +19,7 @@ import {
   paystackRowStatusLabel,
 } from "./paystackEftChoices";
 import CustomInstallmentActions from "./CustomInstallmentActions";
+import { getLearnerAppBaseUrl } from "../../utils/learnerAppUrl";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "—";
@@ -196,22 +197,6 @@ const canSplitInstallmentRow = (inst) =>
 
 const formatTotal = (num) =>
   new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num);
-
-/**
- * zaio-frontend base URL for “Open student dashboard” (impersonate). Baked in at build time.
- * Defaults to production learner; override with REACT_APP_LEARNER_APP_URL (e.g. http://localhost:3000 for local dev).
- */
-function getLearnerAppBaseUrl() {
-  const fromEnv = (
-    process.env.REACT_APP_LEARNER_APP_URL ||
-    process.env.REACT_APP_STUDENT_APP_URL ||
-    ""
-  )
-    .trim()
-    .replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  return "https://www.zaio.io";
-}
 
 const StudentProfile = () => {
   const { userId } = useParams();
@@ -821,7 +806,7 @@ const StudentProfile = () => {
   const openLearnerProgressProfile = async () => {
     const email = String(student?.email || "").trim();
     if (!email) return;
-    const baseUrl = `https://www.zaio.io/app/zaio-profile/${email}`;
+    const baseUrl = `${getLearnerAppBaseUrl()}/app/zaio-profile/${email}`;
     try {
       const res = await getEditTilesToken(email);
       const qs = res?.success && res?.token ? `?editTiles=${encodeURIComponent(res.token)}` : "";

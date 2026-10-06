@@ -1,3 +1,5 @@
+import { getLearnerAppBaseUrl } from "../../utils/learnerAppUrl";
+
 /**
  * Same learner-app assessor URLs as OCModuleDetails (qctolw / qcto-assessment / qcto-pmt).
  * @param {{ kind: 'qctolw' | 'qctosa' | 'qctopmt', id: string, lectureId?: string }} ref
@@ -7,10 +9,7 @@
  */
 export function buildQctoAssessorUrl(ref, studentId, readOnly) {
   if (!ref?.id || !studentId) return null;
-  const baseUrl =
-    typeof window !== "undefined" && window.location.hostname === "localhost"
-      ? "http://localhost:3000"
-      : "https://www.zaio.io";
+  const baseUrl = getLearnerAppBaseUrl();
   const token = typeof window !== "undefined" ? localStorage.getItem("TOKEN") || "" : "";
   const readOnlyParam = readOnly ? "&readOnly=true" : "";
   const lectureIdParam = ref.lectureId
