@@ -60,7 +60,7 @@ const AnalyticsTable = ({
 
   const needsAttentionCount = useMemo(() => {
     return Object.values(engagementData).filter((e) =>
-      isNeedsAttention(e.state)
+      isNeedsAttention(e)
     ).length;
   }, [engagementData]);
 
@@ -259,7 +259,7 @@ const AnalyticsTable = ({
                         ?.toLowerCase()
                         ?.includes(searchQuery?.toLowerCase())) &&
                       (!showNeedsAttentionOnly ||
-                        isNeedsAttention(engagementData[ba?.userid?._id]?.state))
+                        isNeedsAttention(engagementData[ba?.userid?._id]))
                   )
                   ?.sort((a, b) => {
                     const aTotalProgress =

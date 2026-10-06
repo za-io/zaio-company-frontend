@@ -92,3 +92,12 @@ export const setStudentOutcome = (bootcampId, payload) =>
       console.log(err);
       throw err;
     });
+
+export const getCoachingThread = (bootcampId, userid) =>
+  axios
+    .get(`${BASE_URL}/bootcamp/${bootcampId}/student/${userid}/coaching-thread`)
+    .then((res) => res.data)
+    .catch((err) => {
+      console.log(err);
+      return null;
+    });
