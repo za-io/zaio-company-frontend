@@ -1,8 +1,8 @@
-const PRODUCTION_COMPANY_HOSTS = new Set([
-  "zaio-companies.netlify.app",
-  "companies.zaio.io",
-  "company.zaio.io",
-]);
+const LEARNER_APP_PRODUCTION = "https://learn.zaio.io";
+
+function isLoopbackUrl(url) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
+}
 
 export function getLearnerAppBaseUrl() {
   const fromEnv = (
@@ -12,16 +12,12 @@ export function getLearnerAppBaseUrl() {
   )
     .trim()
     .replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return "http://localhost:3000";
-    }
-    if (PRODUCTION_COMPANY_HOSTS.has(host)) {
-      return "https://www.zaio.io";
-    }
-    return "https://learn.zaio.io";
-  }
-  return "https://www.zaio.io";
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const onLoopback = host === "localhost" || host === "127.0.0.1";
+
+  // A localhost value in .env is for local dev. Ignore it when this app is
+  // served from a real host, otherwise profile links open localhost:3000.
+  if (fromEnv && (onLoopback || !isLoopbackUrl(fromEnv))) return fromEnv;
+  if (onLoopback) return "http://localhost:3000";
+  return LEARNER_APP_PRODUCTION;
 }
