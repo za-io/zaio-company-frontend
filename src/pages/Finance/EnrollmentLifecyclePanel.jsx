@@ -7,6 +7,7 @@ import {
   postEnrollmentLifecycleFinanceConfirmTransfer,
   postEnrollmentLifecycleCompleteTransfer,
 } from "../../api/enrollmentLifecycle";
+import { formatLifecycleEnrolmentStatus } from "../../utils/enrollmentLifecycleDisplay";
 
 const FILTERS = [
   ["all", "All"],
@@ -25,10 +26,19 @@ function formatDate(iso) {
 
 function FinanceReviewModal({ item, onClose, onUpdated }) {
   const [auditNotes, setAuditNotes] = useState("");
-  const [proposedRefundCents, setProposedRefundCents] = useState("");
-  const [proposedCreditCents, setProposedCreditCents] = useState("");
-  const [priceDifferenceCents, setPriceDifferenceCents] = useState("");
-  const [paymentsReceivedSummary, setPaymentsReceivedSummary] = useState("");
+  const [proposedRefundCents, setProposedRefundCents] = useState(
+    item?.proposedRefundCents != null ? String(item.proposedRefundCents) : ""
+  );
+  const [balanceCentsAtReview, setBalanceCentsAtReview] = useState(
+    item?.balanceCentsAtReview != null ? String(item.balanceCentsAtReview) : ""
+  );
+  const [proposedCreditCents, setProposedCreditCents] = useState(
+    item?.proposedCreditCents != null ? String(item.proposedCreditCents) : ""
+  );
+  const [priceDifferenceCents, setPriceDifferenceCents] = useState(
+    item?.priceDifferenceCents != null ? String(item.priceDifferenceCents) : ""
+  );
+  const [paymentsReceivedSummary, setPaymentsReceivedSummary] = useState(item?.paymentsReceivedSummary || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -64,6 +74,28 @@ function FinanceReviewModal({ item, onClose, onUpdated }) {
           <Row label="Student" value={item.studentEmail} />
           <Row label="Current enrolment" value={item.bootcampName} />
           {isTransfer && <Row label="Requested enrolment" value={item.destinationBootcampName || "—"} />}
+          <Row
+            label="Enrolment status (source)"
+            value={formatLifecycleEnrolmentStatus(item.sourceEnrollmentStatus)}
+          />
+          {isTransfer && (
+            <Row
+              label="Destination enrolment status"
+              value={formatLifecycleEnrolmentStatus(item.destinationEnrollmentStatus)}
+            />
+          )}
+          {item.transferLinks && (
+            <>
+              <Row label="Source enrolment ID" value={item.transferLinks.sourceEnrollmentId || "—"} />
+              {isTransfer && (
+                <>
+                  <Row label="Source bootcamp ID" value={item.transferLinks.sourceBootcampId || "—"} />
+                  <Row label="Destination bootcamp ID" value={item.transferLinks.destinationBootcampId || "—"} />
+                  <Row label="Destination enrolment ID" value={item.transferLinks.destinationEnrollmentId || "—"} />
+                </>
+              )}
+            </>
+          )}
           <Row label="Reason" value={item.reasonLabel} />
           <Row label="Suhana's notes" value={item.triageNotes || "—"} />
           <Row label="Orientation" value={formatDate(item.orientationDateResolved)} />
@@ -82,12 +114,16 @@ function FinanceReviewModal({ item, onClose, onUpdated }) {
           <Row label="Payments received" value={item.paymentsReceivedSummary || "—"} />
         </dl>
         {!isTransfer && (
-          <Field label="Proposed refund (cents)" value={proposedRefundCents} onChange={setProposedRefundCents} />
+          <>
+            <Field label="Proposed refund (cents)" value={proposedRefundCents} onChange={setProposedRefundCents} />
+            <Field label="Balance at review (cents)" value={balanceCentsAtReview} onChange={setBalanceCentsAtReview} />
+          </>
         )}
         {isTransfer && (
           <>
             <Field label="Proposed credit (cents)" value={proposedCreditCents} onChange={setProposedCreditCents} />
             <Field label="Price difference (cents)" value={priceDifferenceCents} onChange={setPriceDifferenceCents} />
+            <Field label="Balance at review (cents)" value={balanceCentsAtReview} onChange={setBalanceCentsAtReview} />
             <label className="block text-xs text-gray-400 mb-1 mt-2">Payments received summary</label>
             <textarea
               className="w-full min-h-[60px] rounded-lg bg-[#0b1120] border border-white/10 text-sm text-white p-2 mb-2"
@@ -136,6 +172,7 @@ function FinanceReviewModal({ item, onClose, onUpdated }) {
                     postEnrollmentLifecycleFinanceApprove(item._id, {
                       auditNotes,
                       proposedRefundCents: proposedRefundCents ? Number(proposedRefundCents) : undefined,
+                      balanceCentsAtReview: balanceCentsAtReview ? Number(balanceCentsAtReview) : undefined,
                     })
                   )
                 }
@@ -154,6 +191,7 @@ function FinanceReviewModal({ item, onClose, onUpdated }) {
                       auditNotes,
                       proposedCreditCents: proposedCreditCents ? Number(proposedCreditCents) : undefined,
                       priceDifferenceCents: priceDifferenceCents ? Number(priceDifferenceCents) : undefined,
+                      balanceCentsAtReview: balanceCentsAtReview ? Number(balanceCentsAtReview) : undefined,
                       paymentsReceivedSummary,
                     })
                   )
@@ -262,6 +300,16 @@ export default function EnrollmentLifecyclePanel() {
                   <td className="px-4 py-3">
                     <div>{row.studentEmail}</div>
                     <div className="text-gray-500 text-xs">{row.bootcampName}</div>
+                    {row.sourceEnrollmentStatus && (
+                      <div className="text-gray-500 text-xs">
+                        Enrolment: {formatLifecycleEnrolmentStatus(row.sourceEnrollmentStatus)}
+                      </div>
+                    )}
+                    {row.transferLinks?.destinationEnrollmentId && (
+                      <div className="text-gray-500 text-xs">
+                        Dest enrolment: {row.transferLinks.destinationEnrollmentId}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 max-w-xs truncate">{row.triageNotes || "—"}</td>
                   <td className="px-4 py-3">{formatDate(row.escalatedAt || row.submittedAt)}</td>

@@ -6,6 +6,7 @@ import {
   postEnrollmentLifecycleEscalate,
   postEnrollmentLifecycleTransferHandoff,
 } from "../../api/enrollmentLifecycle";
+import { formatLifecycleEnrolmentStatus } from "../../utils/enrollmentLifecycleDisplay";
 
 function formatDate(iso) {
   if (!iso) return "—";
@@ -73,6 +74,12 @@ function ReviewModal({ item, bootcamps, onClose, onUpdated }) {
             <dt className="text-gray-500">Enrolment</dt>
             <dd className="text-right">{item.bootcampName}</dd>
           </div>
+          {item.sourceEnrollmentStatus && (
+            <div className="flex justify-between gap-4 border-b border-white/5 pb-2">
+              <dt className="text-gray-500">Enrolment status</dt>
+              <dd className="text-right">{formatLifecycleEnrolmentStatus(item.sourceEnrollmentStatus)}</dd>
+            </div>
+          )}
           <div className="flex justify-between gap-4 border-b border-white/5 pb-2">
             <dt className="text-gray-500">Reason</dt>
             <dd className="text-right">{item.reasonLabel}</dd>
@@ -203,7 +210,14 @@ export default function CancellationsTriagePage() {
             {rows.map((row) => (
               <tr key={row._id} className="border-t border-white/5 text-gray-200">
                 <td className="px-4 py-3">{row.studentEmail}</td>
-                <td className="px-4 py-3">{row.bootcampName}</td>
+                <td className="px-4 py-3">
+                  <div>{row.bootcampName}</div>
+                  {row.sourceEnrollmentStatus && (
+                    <div className="text-xs text-gray-500">
+                      {formatLifecycleEnrolmentStatus(row.sourceEnrollmentStatus)}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3">{row.reasonLabel}</td>
                 <td className="px-4 py-3">{formatDate(row.submittedAt)}</td>
                 <td className="px-4 py-3">{statusBadge(row.status)}</td>
