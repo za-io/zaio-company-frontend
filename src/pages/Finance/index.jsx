@@ -28,6 +28,7 @@ import { useUserStore } from "../../store/UserProvider";
 import Loader from "../../components/loader/loader";
 import CopyableEmailCell from "../../components/CopyableEmailCell";
 import CollectionsBoard from "./collections/CollectionsBoard";
+import EnrollmentLifecyclePanel from "./EnrollmentLifecyclePanel";
 
 const FINANCE_ROLES = ["SUPER_STUDENT_ADMIN", "SUPER_ADMIN", "COMPANY_ADMIN"];
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend);
@@ -436,7 +437,10 @@ const Finance = () => {
   const [financeView, setFinanceView] = useState(() => {
     if (typeof window === "undefined") return "monthly";
     const params = new URLSearchParams(window.location.search);
-    return params.get("tab") === "collections" ? "collections" : "monthly";
+    const tab = params.get("tab");
+    if (tab === "collections") return "collections";
+    if (tab === "cancellations-transfers") return "cancellations-transfers";
+    return "monthly";
   });
 
   const load = useCallback(async () => {
@@ -752,6 +756,7 @@ const Finance = () => {
         {[
           ["monthly", "Monthly summary"],
           ["collections", "Collections"],
+          ["cancellations-transfers", "Cancellations & transfers"],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -769,6 +774,8 @@ const Finance = () => {
 
       {financeView === "collections" ? (
         <CollectionsBoard includeExcluded={includeExcluded} />
+      ) : financeView === "cancellations-transfers" ? (
+        <EnrollmentLifecyclePanel />
       ) : (
       <>
       <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/25 p-3 mb-6 text-[11px] text-cyan-100/90 leading-relaxed max-w-4xl">

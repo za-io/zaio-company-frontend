@@ -495,6 +495,15 @@ const Dashboard = () => {
             {user?.role !== "COMPANY_ADMIN" && (
               <div className="flex flex-wrap gap-2 shrink-0">
                 <Link
+                  to="/cancellations-triage"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600/70 to-pink-600/70 hover:from-rose-500 hover:to-pink-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Cancellations
+                </Link>
+                <Link
                   to="/finance"
                   className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/80 to-teal-600/80 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm border border-white/10 shadow-lg"
                 >
