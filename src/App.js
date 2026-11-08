@@ -56,6 +56,7 @@ import OCLateSubmissions from "./pages/OCLateSubmissions";
 import OCLateVerifications from "./pages/OCLateVerifications";
 import QCTOPayments from "./pages/QCTOPayments";
 import Finance from "./pages/Finance";
+import CancellationsTriage from "./pages/CancellationsTriage";
 import FinancePasswordGate from "./components/FinancePasswordGate";
 import DeferredStudents from "./pages/DeferredStudents";
 import RosterPaymentCheck from "./pages/RosterPaymentCheck";
@@ -476,6 +477,12 @@ const AppHelper = () => {
                 </FinancePasswordGate>
               }
             />
+          }
+        />
+        <Route
+          path="/cancellations-triage"
+          element={
+            <ProtectedRoute path="/cancellations-triage" component={<CancellationsTriage />} />
           }
         />
         <Route
